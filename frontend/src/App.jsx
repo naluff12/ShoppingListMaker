@@ -12,7 +12,7 @@ import Auth from './Auth';
 
 function App() {
     // Cambia el estado inicial a 'register' para mostrar el formulario de registro al iniciar
-    const [view, setView] = useState('register');
+    const [view, setView] = useState('login');
     const [user, setUser] = useState(null); // { username, isAdmin, family }
     const [calendar, setCalendar] = useState(null); // nombre del calendario
     const [list, setList] = useState(null); // nombre de la lista

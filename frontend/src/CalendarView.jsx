@@ -30,23 +30,25 @@ function CalendarView({ calendar, onSelectList, onBack }) {
         listas.forEach(l => {
             if (l.list_for_date) {
                 const key = new Date(l.list_for_date).toISOString().slice(0, 10);
-                map[key] = l;
+                if (!map[key]) {
+                    map[key] = [];
+                }
+                map[key].push(l);
             }
         });
         return map;
     }, [listas]);
 
     const dateKey = selectedDate.toISOString().slice(0, 10);
-    const list = listasPorFecha[dateKey];
+    const listsForSelectedDate = listasPorFecha[dateKey] || [];
     // Estilos para días en el calendario
     function getTileClassName({ date, view }) {
         if (view !== 'month') return '';
         const key = date.toISOString().slice(0, 10);
-        const l = listasPorFecha[key];
-        if (l) {
-            if (l.status === 'pending') return 'calendar-day-pending';
-            if (l.status === 'reviewed') return 'calendar-day-reviewed';
-            if (l.status === 'not-reviewed') return 'calendar-day-not-reviewed';
+        const listsOnDate = listasPorFecha[key];
+        if (listsOnDate && listsOnDate.length > 0) {
+            // Podríamos mejorar la lógica para colorear según el estado de las listas
+            // Por ahora, solo marcamos que hay una lista.
             return 'calendar-day-has-list';
         }
         return '';
@@ -99,16 +101,21 @@ function CalendarView({ calendar, onSelectList, onBack }) {
                 </div>
                 <div className="col-md-5">
                     <h4 className="mt-3">{selectedDate.toLocaleDateString()}</h4>
-                    {list ? (
-                        <div className="card p-3 mb-2">
-                            <b>{list.name}</b>
-                            <span className="badge ms-2">{list.status || 'Pendiente'}</span>
-                            <button className="btn btn-primary btn-sm mt-2" onClick={() => onSelectList(list)}>Ver lista</button>
+                            <button className="btn btn-success btn-sm mt-2" onClick={() => setShowForm(true)}>Crear lista para este día</button>
+                    <hr />
+                    {listsForSelectedDate.length > 0 ? (
+                        <div className="list-group">
+                            {listsForSelectedDate.map(list => (
+                                <button key={list.id}
+                                        className="list-group-item list-group-item-action"
+                                        onClick={() => onSelectList(list)}>
+                                    Ver lista "{list.name}"
+                                </button>
+                            ))}
                         </div>
                     ) : (
                         <div className="alert alert-info mt-3">
                             No hay lista de compras para este día.<br />
-                            <button className="btn btn-success btn-sm mt-2" onClick={() => setShowForm(true)}>Crear lista para este día</button>
                         </div>
                     )}
                     {showForm && (
