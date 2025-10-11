@@ -64,9 +64,21 @@ CREATE TABLE shopping_lists (
     FOREIGN KEY (owner_id) REFERENCES users (id)
 );
 
+CREATE TABLE products (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    family_id INT,
+    image_url LONGTEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    UNIQUE KEY (name, family_id)
+);
+
 CREATE TABLE list_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     list_id INT,
+    product_id INT NULL,
     nombre VARCHAR(255) NOT NULL,
     comentario TEXT,
     cantidad VARCHAR(50) DEFAULT '1',
@@ -81,7 +93,8 @@ CREATE TABLE list_items (
     image_url LONGTEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (list_id) REFERENCES shopping_lists (id),
-    FOREIGN KEY (creado_por_id) REFERENCES users (id)
+    FOREIGN KEY (creado_por_id) REFERENCES users (id),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
 CREATE TABLE blames (

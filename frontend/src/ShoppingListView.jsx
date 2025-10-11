@@ -1,6 +1,6 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { Button, Spinner, Form, InputGroup } from 'react-bootstrap';
-import React, { useState } from 'react';
+import { Button, Spinner, Form, InputGroup, Card, Badge } from 'react-bootstrap';
+import React, { useState, useEffect, useMemo } from 'react';
 
 function ShoppingListView({ list, onBack }) {
     const [items, setItems] = useState([]);
@@ -14,12 +14,13 @@ function ShoppingListView({ list, onBack }) {
     const [loadingItemBlame, setLoadingItemBlame] = useState(false);
     const [newItemComment, setNewItemComment] = useState('');
     const [newListComment, setNewListComment] = useState('');
+    const [products, setProducts] = useState([]);
 
     const fetchListAndBlame = () => {
         if (!list || !list.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
-    
+
         Promise.all([
             fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
             fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
@@ -28,6 +29,12 @@ function ShoppingListView({ list, onBack }) {
                 setListDetails(listData);
                 setItems(Array.isArray(listData.items) ? listData.items : []);
                 setBlame(Array.isArray(blameData) ? blameData : []);
+                if (listData.calendar && listData.calendar.family_id) {
+                    fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
+                        .then(res => res.json())
+                        .then(data => setProducts(data))
+                        .catch(() => setProducts([]));
+                }
             })
             .catch(err => {
                 console.error("Error fetching list data:", err);
@@ -36,7 +43,7 @@ function ShoppingListView({ list, onBack }) {
             .finally(() => setLoading(false));
     };
 
-    React.useEffect(() => {
+    useEffect(() => {
         fetchListAndBlame();
         setItemBlames({});
         setShowItemBlame(null);
@@ -93,14 +100,15 @@ function ShoppingListView({ list, onBack }) {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': 'Bearer ' + token
-                },
-                body: JSON.stringify({ status })
-            });
+            const res = await fetch(`/api/items/${id}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ status })
+                });
 
             if (!res.ok) throw new Error('Error al actualizar estado');
             await res.json();
@@ -127,10 +135,11 @@ function ShoppingListView({ list, onBack }) {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
+            const res = await fetch(`/api/items/${id}`,
+                {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
             if (!res.ok) throw new Error('Error al eliminar item');
             fetchListAndBlame(); // Recargar todo
         } catch (err) {
@@ -188,14 +197,15 @@ function ShoppingListView({ list, onBack }) {
 
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${itemId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ [field]: parsedValue })
-            });
+            const res = await fetch(`/api/items/${itemId}`,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ [field]: parsedValue })
+                });
             if (!res.ok) throw new Error('Error al actualizar el precio');
             const updatedItem = await res.json();
-            
+
             // Actualizar estado localmente para una UI más rápida
             setItems(items.map(i => i.id === itemId ? updatedItem : i));
 
@@ -210,11 +220,12 @@ function ShoppingListView({ list, onBack }) {
     const handleListStatusChange = async (newStatus) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${list.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ status: newStatus })
-            });
+            const res = await fetch(`/api/listas/${list.id}`,
+                {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ status: newStatus })
+                });
             if (!res.ok) throw new Error('Error al actualizar estado de la lista');
             const updatedList = await res.json();
             setListDetails(updatedList);
@@ -234,77 +245,101 @@ function ShoppingListView({ list, onBack }) {
         // setLoadingItemImage(itemId);
 
         try {
-            const res = await fetch(`/api/items/${itemId}/upload-image`, {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + token },
-                body: formData,
-            });
+            const res = await fetch(`/api/items/${itemId}/upload-image`,
+                {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    body: formData,
+                });
             if (!res.ok) throw new Error('Error al subir la imagen');
             const updatedItem = await res.json();
-            setItems(items.map(i => i.id === itemId ? updatedItem : i));
+            console.log(updatedItem)
+            setItems(items.map(i => {
+                if (i.id === itemId) {
+                    return {
+                        ...i,
+                        product: {
+                            ...i.product,
+                            image_url: updatedItem.image_url
+                        }
+                    };
+                }
+                return i;
+            }));
+            console.log(items)
         } catch (err) {
             alert(err.message);
         }
     }
 
+    const totalEstimado = useMemo(() => items.reduce((acc, item) => acc + (item.precio_estimado || 0), 0), [items]);
+    const totalConfirmado = useMemo(() => items.reduce((acc, item) => item.status === 'comprado' ? acc + (item.precio_confirmado || item.precio_estimado || 0) : acc, 0), [items]);
+
     return (
-        <div className="container mt-4" style={{ maxWidth: 600 }}>
+        <div className="container mt-4" style={{ maxWidth: 800 }}>
             <Button variant="secondary" className="mb-3" onClick={onBack}>Volver</Button>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2 className="mb-0">{listDetails?.name || list?.name || ''}</h2>
-                {listDetails && (
-                    <select className="form-select w-auto" value={listDetails.status} onChange={e => handleListStatusChange(e.target.value)}>
-                        <option value="pendiente">Pendiente</option>
-                        <option value="revisada">Revisada</option>
-                        <option value="no revisada">No Revisada</option>
-                    </select>
-                )}
-            </div>
-            <form onSubmit={handleAdd} className="mb-3 d-flex">
-                <input type="text" className="form-control me-2" placeholder="Nuevo producto" value={newItem} onChange={e => setNewItem(e.target.value)} />
-                <Button type="submit" variant="primary" disabled={loading}>Agregar</Button>
-            </form>
+            <Card className="mb-4">
+                <Card.Body>
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                        <h2 className="mb-0">{listDetails?.name || list?.name || ''}</h2>
+                        {listDetails && (
+                            <select className="form-select w-auto" value={listDetails.status} onChange={e => handleListStatusChange(e.target.value)}>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="revisada">Revisada</option>
+                                <option value="no revisada">No Revisada</option>
+                            </select>
+                        )}
+                    </div>
+                    <Form onSubmit={handleAdd} className="mb-3">
+                        <InputGroup>
+                            <Form.Control list="product-suggestions" type="text" placeholder="Nuevo producto" value={newItem} onChange={e => setNewItem(e.target.value)} />
+                            <Button type="submit" variant="primary" disabled={loading}>Agregar</Button>
+                        </InputGroup>
+                        <datalist id="product-suggestions">
+                            {products.map(p => <option key={p.id} value={p.name} />)}
+                        </datalist>
+                    </Form>
+                    <div className="d-flex justify-content-end gap-3">
+                        <h5>Total Estimado: <Badge bg="info">${totalEstimado.toFixed(2)}</Badge></h5>
+                        <h5>Total Comprado: <Badge bg="success">${totalConfirmado.toFixed(2)}</Badge></h5>
+                    </div>
+                </Card.Body>
+            </Card>
 
             <ul className="list-group">
                 <TransitionGroup>
                     {items.map(item => (
                         <CSSTransition key={item.id} timeout={400} classNames="fade">
-                            <li className="list-group-item mb-2">
+                            <li className="list-group-item mb-2 shadow-sm">
                                 <div className="d-flex align-items-center justify-content-between">
-                                    <div>
+                                    <div className="d-flex align-items-center">
+                                        {item.product.image_url && <img src={`data:image/webp;base64,${item.product.image_url}`} alt={item.nombre} style={{ width: 40, height: 40, objectFit: 'cover', marginRight: 15, borderRadius: 4 }} />}
                                         <div>
-                                            {item.image_url && <img src={item.image_url} alt={item.nombre} style={{ width: 50, height: 50, objectFit: 'cover', marginRight: 10, borderRadius: 4 }} />}
-                                            <b>{item.nombre}</b> <span className="text-muted">{item.creado_por ? `(${item.creado_por.username})` : ''}</span>
+                                            <b>{item.nombre}</b>
+                                            <div className="text-muted small">{item.creado_por ? `agregado por ${item.creado_por.username}` : ''}</div>
                                         </div>
-                                        <div className="d-flex align-items-center mt-2">
-                                            <small className="me-3" onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_estimado' })}>
-                                                Est: ${editingPrice?.id === item.id && editingPrice?.field === 'precio_estimado' ?
-                                                    <input type="number" step="0.01" defaultValue={item.precio_estimado} autoFocus onBlur={(e) => handlePriceChange(item.id, 'precio_estimado', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: 70 }} />
-                                                    : (item.precio_estimado || '0.00')}
-                                            </small>
-                                            <small onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })}>
-                                                Real: ${editingPrice?.id === item.id && editingPrice?.field === 'precio_confirmado' ?
-                                                    <input type="number" step="0.01" defaultValue={item.precio_confirmado} autoFocus onBlur={(e) => handlePriceChange(item.id, 'precio_confirmado', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: 70 }} />
-                                                    : (item.precio_confirmado || '0.00')}
-                                            </small>
-                                        </div>
-                                        {/* Placeholder for image upload */}
-                                        <Form.Group controlId={`formFileSm-${item.id}`} className="mt-2">
-                                            <Form.Label><small>Subir imagen (WEBP)</small></Form.Label>
-                                            <Form.Control type="file" size="sm" accept="image/jpeg,image/png" onChange={(e) => handleImageUpload(item.id, e.target.files[0])} />
-                                        </Form.Group>
                                     </div>
                                     <div className="d-flex align-items-center">
-                                        <select className="form-select me-2" value={item.status || 'needed'} onChange={e => handleStatus(item.id, e.target.value)} style={{ width: 130 }}>
+                                        <small className="me-3" onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_estimado' })}>
+                                            Est: ${editingPrice?.id === item.id && editingPrice?.field === 'precio_estimado' ?
+                                                <input type="number" step="0.01" defaultValue={item.precio_estimado} autoFocus onBlur={(e) => handlePriceChange(item.id, 'precio_estimado', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: 70 }} />
+                                                : (item.precio_estimado || '0.00')}
+                                        </small>
+                                        <small onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })}>
+                                            Real: ${editingPrice?.id === item.id && editingPrice?.field === 'precio_confirmado' ?
+                                                <input type="number" step="0.01" defaultValue={item.precio_confirmado} autoFocus onBlur={(e) => handlePriceChange(item.id, 'precio_confirmado', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: 70 }} />
+                                                : (item.precio_confirmado || '0.00')}
+                                        </small>
+                                        <Form.Group controlId={`formFileSm-${item.id}`} className="ms-3">
+                                            <Form.Control type="file" size="sm" accept="image/jpeg,image/png" onChange={(e) => handleImageUpload(item.id, e.target.files[0])} />
+                                        </Form.Group>
+                                        <select className="form-select mx-2" value={item.status || 'needed'} onChange={e => handleStatus(item.id, e.target.value)} style={{ width: 130 }}>
                                             <option value="pendiente">Pendiente</option>
                                             <option value="comprado">Comprado</option>
                                             <option value="ya no se necesita">No necesario</option>
                                         </select>
-                                        <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)} disabled={loading}>Eliminar</Button>
-                                        <Button variant="outline-info" size="sm" className="ms-2" onClick={() => handleShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id}>
-                                            {showItemBlame === item.id ? 'Ocultar' : 'Historial'}
-                                            {loadingItemBlame && showItemBlame === item.id && <Spinner animation="border" size="sm" className="ms-1" />}
-                                        </Button>
+                                        <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)} disabled={loading}>&times;</Button>
+                                        <Button variant="outline-info" size="sm" className="ms-2" onClick={() => handleShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id}>H</Button>
                                     </div>
                                 </div>
                                 {showItemBlame === item.id && (

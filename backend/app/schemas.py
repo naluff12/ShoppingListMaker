@@ -23,11 +23,16 @@ class Family(BaseModel):
         from_attributes = True
 
 # ---------- PRODUCT ----------
-class Product(BaseModel):
-    id: int
+class ProductBase(BaseModel):
     name: str
-    description: Optional[str] = None
     image_url: Optional[str] = None
+    family_id: Optional[int] = None
+
+class ProductCreate(ProductBase):
+    pass
+
+class Product(ProductBase):
+    id: int
 
     class Config:
         from_attributes = True
@@ -35,17 +40,20 @@ class Product(BaseModel):
 
 # ---------- LIST ITEMS ----------
 class ListItemBase(BaseModel):
-    nombre: str
     comentario: Optional[str] = None
     cantidad: str
     status: str
+    product_id: Optional[int] = None
+    nombre: str
+    image_url: Optional[str] = None
 
 
 class ListItemCreate(BaseModel):
-    nombre: str
+    nombre: str # Frontend will send the name of the product
     cantidad: str
     list_id: int
     comentario: Optional[str] = None
+    precio_estimado: Optional[float] = None
 
 
 class ListItem(ListItemBase):
@@ -53,19 +61,18 @@ class ListItem(ListItemBase):
     creado_por: Optional[UserInDBBase] = None
     precio_estimado: Optional[float] = None
     precio_confirmado: Optional[float] = None
-    image_url: Optional[str] = None
+    product: Optional[Product] = None # Nested product information
 
     class Config:
         from_attributes = True
 
 class ListItemUpdate(BaseModel):
-    nombre: Optional[str] = None
+    product_id: Optional[int] = None
     comentario: Optional[str] = None
     cantidad: Optional[str] = None
     status: Optional[str] = None
     precio_estimado: Optional[float] = None
     precio_confirmado: Optional[float] = None
-    image_url: Optional[str] = None
 
 
 class ListItemStatusUpdate(BaseModel):
@@ -95,6 +102,7 @@ class ShoppingList(ShoppingListBase):
     owner_id: int
     list_for_date: Optional[datetime] = None
     items: List[ListItem] = []
+    calendar: Optional["Calendar"] = None
 
     class Config:
         from_attributes = True
@@ -202,3 +210,8 @@ class Blame(BlameBase):
 
 User.model_rebuild()
 Blame.model_rebuild()
+ShoppingList.model_rebuild()
+
+class BlameCreate(BaseModel):
+    action: Optional[str] = None
+    detalles: Optional[str] = None

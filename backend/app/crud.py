@@ -1,6 +1,24 @@
-
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from . import models, schemas, security
+
+# CRUD for Products
+def get_or_create_product(db: Session, product_name: str, family_id: int) -> models.Product:
+    # Check if product exists
+    db_product = db.query(models.Product).filter(models.Product.name == product_name, models.Product.family_id == family_id).first()
+    if db_product:
+        return db_product
+    # Create new product if not found
+    db_product = models.Product(name=product_name, family_id=family_id)
+    db.add(db_product)
+    db.commit()
+    db.refresh(db_product)
+    return db_product
+
+def search_products(db: Session, name: str, family_id: int, skip: int = 0, limit: int = 10):
+    return db.query(models.Product).filter(models.Product.family_id == family_id, models.Product.name.ilike(f"%{name}%")).offset(skip).limit(limit).all()
+
+def get_products_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100):
+    return db.query(models.Product).filter(models.Product.family_id == family_id).offset(skip).limit(limit).all()
 
 # CRUD for Users
 def get_user(db: Session, user_id: int):
@@ -21,7 +39,7 @@ def create_user(db: Session, user: schemas.UserCreate):
         email=user.email,
         username=user.username,
         hashed_password=hashed_password,
-        is_admin=False,  # Los usuarios creados por esta vía no son admins
+        is_admin=False,  # Default user is not admin
         nombre=user.nombre,
         direccion=user.direccion,
         telefono=user.telefono
@@ -33,15 +51,16 @@ def create_user(db: Session, user: schemas.UserCreate):
 
 def authenticate_user(db: Session, username: str, password: str):
     user = get_user_by_username(db, username)
-    if not user:
-        return False
-    if not security.verify_password(password, user.hashed_password):
+    if not user or not security.verify_password(password, user.hashed_password):
         return False
     return user
 
 # CRUD for Shopping Lists
 def get_list(db: Session, list_id: int):
-    return db.query(models.ShoppingList).filter(models.ShoppingList.id == list_id).first()
+    return db.query(models.ShoppingList).options(
+        joinedload(models.ShoppingList.items).joinedload(models.ListItem.product),
+        joinedload(models.ShoppingList.calendar)
+    ).filter(models.ShoppingList.id == list_id).first()
 
 def get_lists_by_calendar(db: Session, calendar_id: int):
     return db.query(models.ShoppingList).filter(models.ShoppingList.calendar_id == calendar_id).all()
@@ -90,21 +109,28 @@ def update_shopping_list(db: Session, list_id: int, list_update: schemas.Shoppin
     db.commit()
     db.refresh(db_list)
     return db_list
+
 # CRUD for Items
 def get_item(db: Session, item_id: int):
-    return db.query(models.ListItem).filter(models.ListItem.id == item_id).first()
+    return db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
 
+def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, family_id: int):
+    # Find or create the product
+    product = get_or_create_product(db, item.nombre, family_id)
 
-def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int):
     db_item = models.ListItem(
-        **item.dict(),
+        list_id=item.list_id,
+        product_id=product.id,
+        nombre=item.nombre,
+        cantidad=item.cantidad,
+        comentario=item.comentario,
+        precio_estimado=item.precio_estimado,
         status='pendiente',
         creado_por_id=user_id
     )
     db.add(db_item)
-    db.flush()  # Flush to get the ID of the new item
+    db.flush()  # Flush to get the ID
 
-    # Blame entry for item creation
     blame_entry = models.Blame(
         user_id=user_id,
         action="create",
@@ -116,10 +142,12 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int):
 
     db.commit()
     db.refresh(db_item)
+    # Eagerly load product for the return value
+    db.refresh(db_item, attribute_names=['product'])
     return db_item
 
 def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, user_id: int):
-    db_item = db.query(models.ListItem).filter(models.ListItem.id == item_id).first()
+    db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
     if not db_item:
         return None
 
@@ -128,8 +156,9 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
     for key, value in update_data.items():
         original_value = getattr(db_item, key)
         if original_value != value:
-            if key == 'image_url':
-                blame_details.append("'image_url' ha sido actualizada.")
+            if key == 'product_id':
+                new_product = db.query(models.Product).filter(models.Product.id == value).first()
+                blame_details.append(f"'producto' cambiado de '{db_item.product.name}' a '{new_product.name}'")
             else:
                 blame_details.append(f"'{key}' cambiado de '{original_value}' a '{value}'")
         setattr(db_item, key, value)
@@ -149,7 +178,7 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
     return db_item
 
 def update_item_status(db: Session, item_id: int, status: str, user_id: int):
-    db_item = db.query(models.ListItem).filter(models.ListItem.id == item_id).first()
+    db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
     if db_item:
         original_status = db_item.status
         db_item.status = status
@@ -159,7 +188,7 @@ def update_item_status(db: Session, item_id: int, status: str, user_id: int):
             action="update",
             entity_type="item",
             entity_id=item_id,
-            detalles=f"Estado del producto '{db_item.nombre}' cambiado de '{original_status}' a '{status}'."
+            detalles=f"Estado del producto '{db_item.product.name}' cambiado de '{original_status}' a '{status}'."
         )
         db.add(blame_entry)
 
@@ -168,14 +197,14 @@ def update_item_status(db: Session, item_id: int, status: str, user_id: int):
     return db_item
 
 def delete_item(db: Session, item_id: int, user_id: int):
-    db_item = db.query(models.ListItem).filter(models.ListItem.id == item_id).first()
+    db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
     if db_item:
         blame_entry = models.Blame(
             user_id=user_id,
             action="delete",
             entity_type="item",
             entity_id=item_id,
-            detalles=f"Item '{db_item.nombre}' eliminado de la lista."
+            detalles=f"Item '{db_item.product.name}' eliminado de la lista."
         )
         db.add(blame_entry)
 
@@ -184,35 +213,33 @@ def delete_item(db: Session, item_id: int, user_id: int):
     return db_item
 
 def delete_shopping_list(db: Session, list_id: int):
-    # Considerar eliminar items y blames asociados si es necesario (ON DELETE CASCADE en DB)
     db_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == list_id).first()
     if db_list:
         db.delete(db_list)
         db.commit()
     return db_list
 
-def create_blame_for_item(db: Session, item_id: int, user_id: int, blame: schemas.BlameCreate, action: str = "blame"):
-    db_blame = models.Blame(
-        user_id=user_id,
-        action=action,
-        entity_type="item",
-        entity_id=item_id,
-        detalles=blame.detalles
-    )
-    db.add(db_blame)
-    db.commit()
-    db.refresh(db_blame)
-    return db_blame
+def get_blame_for_list(db: Session, list_id: int):
+    return db.query(models.Blame).filter(
+        models.Blame.entity_type == "lista",
+        models.Blame.entity_id == list_id
+    ).order_by(models.Blame.timestamp.desc()).all()
 
-def create_blame_for_list(db: Session, list_id: int, user_id: int, blame: schemas.BlameCreate, action: str = "blame"):
-    db_blame = models.Blame(
+def get_blame_for_item(db: Session, item_id: int):
+    return db.query(models.Blame).filter(
+        models.Blame.entity_type == "item",
+        models.Blame.entity_id == item_id
+    ).order_by(models.Blame.timestamp.desc()).all()
+
+def create_blame(db: Session, user_id: int, entity_type: str, entity_id: int, action: str, detalles: str):
+    blame = models.Blame(
         user_id=user_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
         action=action,
-        entity_type="lista",
-        entity_id=list_id,
-        detalles=blame.detalles
+        detalles=detalles
     )
-    db.add(db_blame)
+    db.add(blame)
     db.commit()
-    db.refresh(db_blame)
-    return db_blame
+    db.refresh(blame)
+    return blame

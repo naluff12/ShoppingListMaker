@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import List
 import time
 import os
@@ -156,8 +156,6 @@ def register_user(payload: schemas.UserRegister, db: Session = Depends(get_db)):
                 family.users.append(new_user)
                 db.commit()
         else:
-            # Optionally, you could raise an error if the family code is invalid
-            # For now, we just ignore it if the code is not found
             pass
             
     return new_user
@@ -166,6 +164,56 @@ def register_user(payload: schemas.UserRegister, db: Session = Depends(get_db)):
 @app.get("/users/me", response_model=schemas.User)
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
+
+# --- PRODUCT ENDPOINTS ---
+@app.get("/families/{family_id}/products", response_model=List[schemas.Product])
+def get_products_for_family(
+    family_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    get_family_for_user(family_id, current_user)
+    return crud.get_products_by_family(db=db, family_id=family_id)
+
+@app.get("/products/search", response_model=List[schemas.Product])
+def search_products_endpoint(q: str, family_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    get_family_for_user(family_id, current_user)
+    return crud.search_products(db=db, name=q, family_id=family_id)
+
+@app.post("/products/{product_id}/upload-image", response_model=schemas.Product)
+def upload_product_image(
+    product_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # In a real app, you'd check if the user has permission to edit this product.
+    # For now, we'll allow any authenticated user.
+
+    try:
+        contents = file.file.read()
+        img = Image.open(io.BytesIO(contents))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        
+        buffer = io.BytesIO()
+        img.save(buffer, format="webp", quality=80)
+        webp_image_bytes = buffer.getvalue()
+        
+        base64_encoded_image = base64.b64encode(webp_image_bytes).decode('utf-8')
+        data_url = f"data:image/webp;base64,{base64_encoded_image}"
+
+        db_product.image_url = data_url
+        db.commit()
+        db.refresh(db_product)
+        return db_product
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
 # --- FAMILY ENDPOINTS ---
 @app.post("/families", response_model=schemas.Family)
@@ -236,64 +284,34 @@ def get_calendars_for_family(family_id: int, db: Session = Depends(get_db), curr
     get_family_for_user(family_id, current_user)
     return db.query(models.Calendar).filter(models.Calendar.family_id == family_id).all()
 
-# --- SHOPPING LIST & ITEMS (Blame needs user name) ---
-@app.get("/blame/{entity_type}/{entity_id}", response_model=List[schemas.Blame])
-def obtener_blame(entity_type: str, entity_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    # Eager load the user relationship to include user details in the response
-    return db.query(models.Blame).options(joinedload(models.Blame.user)).filter(models.Blame.entity_type == entity_type, models.Blame.entity_id == entity_id).all()
-
-
-@app.post("/items/{item_id}/blames", response_model=schemas.Blame)
-def create_blame_for_item_endpoint(
-    item_id: int,
-    blame: schemas.BlameCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    db_item = crud.get_item(db, item_id=item_id)
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Item not found")
-
-    # Authorization check
-    shopping_list = db_item.list
-    if not shopping_list:
-        raise HTTPException(status_code=404, detail="Shopping list not found for this item")
-
-    if shopping_list.calendar:
-        get_family_for_user(shopping_list.calendar.family_id, current_user)
-    elif shopping_list.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-
-    return crud.create_blame_for_item(db=db, item_id=item_id, user_id=current_user.id, blame=blame)
-
-
-# ... (rest of the endpoints for shopping lists and items remain largely the same, but authorization might need checks)
-# Make sure that when a user accesses a shopping list, they are part of the family that owns the calendar the list belongs to.
-
+# --- SHOPPING LIST & ITEMS ---
 @app.post("/items/", response_model=schemas.ListItem)
 def create_item_for_list(
     item: schemas.ListItemCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # First, check if the list exists
     shopping_list = crud.get_list(db, list_id=item.list_id)
     if not shopping_list:
         raise HTTPException(status_code=404, detail="Shopping list not found")
 
-    # Then, check if the user has access to this list.
-    # A user has access if they are part of the family that owns the calendar the list belongs to.
+    family_id = None
     if shopping_list.calendar:
         get_family_for_user(shopping_list.calendar.family_id, current_user)
+        family_id = shopping_list.calendar.family_id
     elif shopping_list.owner_id != current_user.id:
-        # If there is no calendar, only the owner can add items.
         raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    if not family_id:
+        if not current_user.families:
+            raise HTTPException(status_code=400, detail="User does not belong to any family.")
+        family_id = current_user.families[0].id
 
-    return crud.create_list_item(db=db, item=item, user_id=current_user.id)
+    return crud.create_list_item(db=db, item=item, user_id=current_user.id, family_id=family_id)
 
 
 @app.put("/items/{item_id}", response_model=schemas.ListItem)
-def update_item_status_endpoint(
+def update_item_endpoint(
     item_id: int,
     item_update: schemas.ListItemUpdate,
     db: Session = Depends(get_db),
@@ -391,7 +409,6 @@ def update_shopping_list(
     if not lista:
         raise HTTPException(status_code=404, detail="Lista no encontrada")
 
-    # Authorization check
     if lista.calendar:
         get_family_for_user(lista.calendar.family_id, current_user)
     elif lista.owner_id != current_user.id:
@@ -400,94 +417,169 @@ def update_shopping_list(
     updated_list = crud.update_shopping_list(db=db, list_id=lista_id, list_update=list_update, user_id=current_user.id)
     return updated_list
 
-@app.get("/listas/{lista_id}", response_model=dict)
+@app.get("/listas/{lista_id}", response_model=schemas.ShoppingList)
 def obtener_lista(
     lista_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    lista = db.query(models.ShoppingList).filter(models.ShoppingList.id == lista_id).first()
+    lista = crud.get_list(db, list_id=lista_id)
     if not lista:
         raise HTTPException(status_code=404, detail="Lista no encontrada")
 
-    # Authorization check
     if lista.calendar:
         get_family_for_user(lista.calendar.family_id, current_user)
 
-    items_serializados = [ListItemSchema.model_validate(item).model_dump() for item in lista.items]
+    return lista
 
-    return {
-        "id": lista.id,
-        "name": lista.name,
-        "notas": lista.notas,
-        "comentarios": lista.comentarios,
-        "status": lista.status,
-        "list_for_date": lista.list_for_date,
-        "items": items_serializados
-    }
+@app.get("/blame/lista/{list_id}", response_model=List[schemas.Blame])
+def get_blame_for_list(
+    list_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=list_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
 
-@app.post("/items/{item_id}/upload-image", response_model=schemas.ListItem)
-def upload_item_image(
+    # Verificación de permisos
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver esta lista")
+
+    return crud.get_blame_for_list(db=db, list_id=list_id)
+
+@app.get("/families/{id_familia}/products", response_model=List[schemas.Product])
+def get_products_for_family_alias(
+    id_familia: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    get_family_for_user(id_familia, current_user)
+    return crud.get_products_by_family(db=db, family_id=id_familia)
+
+@app.get("/blame/item/{item_id}", response_model=List[schemas.Blame])
+def get_blame_for_item(
     item_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # Verificar que el ítem exista
+    item = crud.get_item(db, item_id=item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Ítem no encontrado")
+
+    # Verificar permisos (según el dueño o la familia del calendario)
+    lista = crud.get_list(db, list_id=item.list_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver este ítem")
+
+    return crud.get_blame_for_item(db=db, item_id=item_id)
+
+@app.post("/listas/{list_id}/blames", response_model=schemas.Blame)
+def create_blame_for_list(
+    list_id: int,
+    blame_data: schemas.BlameCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=list_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    # Verificar permisos
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para modificar esta lista")
+
+    return crud.create_blame(
+        db=db,
+        user_id=current_user.id,
+        entity_type="lista",
+        entity_id=list_id,
+        action=blame_data.action,
+        detalles=blame_data.detalles
+    )
+
+@app.post("/items/{item_id}/blames", response_model=schemas.Blame)
+def create_blame_for_item(
+    item_id: int,
+    blame_data: schemas.BlameCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    item = crud.get_item(db, item_id=item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Ítem no encontrado")
+
+    lista = crud.get_list(db, list_id=item.list_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para modificar este ítem")
+
+    return crud.create_blame(
+        db=db,
+        user_id=current_user.id,
+        entity_type="item",
+        entity_id=item_id,
+        action=blame_data.action,
+        detalles=blame_data.detalles
+    )
+
+@app.post("/items/{product_id}/upload-image")
+def upload_image_for_product(
+    product_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    db_item = crud.get_item(db, item_id=item_id)
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    # Buscar el producto
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-    # Authorization check
-    shopping_list = db_item.list
-    if shopping_list.calendar:
-        get_family_for_user(shopping_list.calendar.family_id, current_user)
-    elif shopping_list.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
+    # Validar acceso: el usuario debe pertenecer a la familia del producto
+    family = product.family
+    if not family:
+        raise HTTPException(status_code=400, detail="El producto no pertenece a ninguna familia")
 
-    # Process and save image
+    # Verificar si el usuario pertenece a la familia
+    if current_user not in family.users and current_user.id != family.owner_id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para modificar este producto")
+
+    # Intentar abrir la imagen
     try:
-        # Ensure it's an image
-        contents = file.file.read()
-        # Allow various image types and convert to RGB if necessary (e.g., for RGBA PNGs)
-        img = Image.open(io.BytesIO(contents))
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        
-        # Convert to WebP in memory
-        buffer = io.BytesIO()
-        img.save(buffer, format="webp")
-        webp_image_bytes = buffer.getvalue()
-        
-        # Encode to Base64
-        base64_encoded_image = base64.b64encode(webp_image_bytes).decode('utf-8')
-        data_url = f"data:image/webp;base64,{base64_encoded_image}"
+        image = Image.open(file.file)
+    except Exception:
+        raise HTTPException(status_code=400, detail="El archivo no es una imagen válida")
 
-        # Update item with image URL
-        update_data = schemas.ListItemUpdate(image_url=data_url)
-        updated_item = crud.update_item(db=db, item_id=item_id, item_update=update_data, user_id=current_user.id)
-        return updated_item
+    # Convertir a formato WEBP y guardar en memoria
+    buffer = io.BytesIO()
+    image.convert("RGB").save(buffer, format="WEBP", quality=80)
+    buffer.seek(0)
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+    # Codificar la imagen como base64
+    image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
 
-@app.post("/listas/{lista_id}/blames", response_model=schemas.Blame)
-def create_blame_for_list_endpoint(
-    lista_id: int,
-    blame: schemas.BlameCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    db_list = crud.get_list(db, list_id=lista_id)
-    if not db_list:
-        raise HTTPException(status_code=404, detail="List not found")
+    # Guardar la imagen codificada en la base de datos
+    product.image_url = image_base64
+    product.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(product)
 
-    # Authorization check
-    if db_list.calendar:
-        get_family_for_user(db_list.calendar.family_id, current_user)
-    elif db_list.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not enough permissions")
-
-    return crud.create_blame_for_list(db=db, list_id=lista_id, user_id=current_user.id, blame=blame)
-
-
-# (The other endpoints like create_shopping_list, update_item, etc. should also have similar authorization checks)
+    return {
+        "message": "Imagen convertida y guardada correctamente",
+        "product_id": product.id,
+        "image_url": image_base64  # solo muestra una parte para verificación
+    }

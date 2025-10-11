@@ -84,10 +84,22 @@ class ShoppingList(Base):
 
 
 
+class Product(Base):
+    __tablename__ = 'products'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    family_id = Column(Integer, ForeignKey('families.id'))
+    image_url = Column(LONGTEXT)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    family = relationship("Family")
+
 class ListItem(Base):
     __tablename__ = 'list_items'
     id = Column(Integer, primary_key=True, index=True)
     list_id = Column(Integer, ForeignKey('shopping_lists.id'))
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=True)
     nombre = Column(String(255), nullable=False)
     comentario = Column(Text)
     cantidad = Column(String(50), default='1')
@@ -99,6 +111,7 @@ class ListItem(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     list = relationship("ShoppingList", back_populates="items")
+    product = relationship("Product")
     creado_por = relationship("User", back_populates="items_creados")
     blame = relationship(
         "Blame",
