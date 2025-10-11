@@ -51,9 +51,21 @@ class ListItemCreate(BaseModel):
 class ListItem(ListItemBase):
     id: int
     creado_por: Optional[UserInDBBase] = None
+    precio_estimado: Optional[float] = None
+    precio_confirmado: Optional[float] = None
+    image_url: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+class ListItemUpdate(BaseModel):
+    nombre: Optional[str] = None
+    comentario: Optional[str] = None
+    cantidad: Optional[str] = None
+    status: Optional[str] = None
+    precio_estimado: Optional[float] = None
+    precio_confirmado: Optional[float] = None
+    image_url: Optional[str] = None
 
 
 class ListItemStatusUpdate(BaseModel):
@@ -70,6 +82,12 @@ class ShoppingListBase(BaseModel):
 
 class ShoppingListCreate(ShoppingListBase):
     list_for_date: Optional[date] = None  # permite enviar la fecha deseada
+
+class ShoppingListUpdate(BaseModel):
+    name: Optional[str] = None
+    notas: Optional[str] = None
+    comentarios: Optional[str] = None
+    status: Optional[str] = None
 
 
 class ShoppingList(ShoppingListBase):
@@ -184,4 +202,3 @@ class Blame(BlameBase):
 
 User.model_rebuild()
 Blame.model_rebuild()
-

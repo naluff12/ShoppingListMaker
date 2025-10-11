@@ -1,13 +1,19 @@
 from datetime import timedelta
 from typing import List
 import time
+import os
 import random
+import base64
 import string
+import io
+from PIL import Image
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import OperationalError
 from .schemas import ListItem as ListItemSchema
 
-from fastapi import Depends, FastAPI, HTTPException, status, Body
+from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File
+from fastapi.staticfiles import StaticFiles
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -16,6 +22,11 @@ from . import crud, models, schemas, security
 from .database import SessionLocal, engine
 
 app = FastAPI()
+
+# --- Static files for images ---
+UPLOAD_DIR = "static/images"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS Middleware
 app.add_middleware(
@@ -284,7 +295,7 @@ def create_item_for_list(
 @app.put("/items/{item_id}", response_model=schemas.ListItem)
 def update_item_status_endpoint(
     item_id: int,
-    status_update: schemas.ListItemStatusUpdate,
+    item_update: schemas.ListItemUpdate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -301,7 +312,7 @@ def update_item_status_endpoint(
     elif shopping_list.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    return crud.update_item_status(db=db, item_id=item_id, status=status_update.status, user_id=current_user.id)
+    return crud.update_item(db=db, item_id=item_id, item_update=item_update, user_id=current_user.id)
 
 
 @app.delete("/items/{item_id}", response_model=schemas.ListItem)
@@ -353,6 +364,41 @@ def get_shopping_lists(
     get_family_for_user(calendar.family_id, current_user)
     return crud.get_lists_by_calendar(db=db, calendar_id=calendar_id)
 
+@app.delete("/listas/{lista_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_shopping_list_endpoint(
+    lista_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=lista_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    
+    crud.delete_shopping_list(db=db, list_id=lista_id)
+    return
+
+@app.put("/listas/{lista_id}", response_model=schemas.ShoppingList)
+def update_shopping_list(
+    lista_id: int,
+    list_update: schemas.ShoppingListUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=lista_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    # Authorization check
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    updated_list = crud.update_shopping_list(db=db, list_id=lista_id, list_update=list_update, user_id=current_user.id)
+    return updated_list
 
 @app.get("/listas/{lista_id}", response_model=dict)
 def obtener_lista(
@@ -375,9 +421,54 @@ def obtener_lista(
         "name": lista.name,
         "notas": lista.notas,
         "comentarios": lista.comentarios,
+        "status": lista.status,
         "list_for_date": lista.list_for_date,
         "items": items_serializados
     }
+
+@app.post("/items/{item_id}/upload-image", response_model=schemas.ListItem)
+def upload_item_image(
+    item_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_item = crud.get_item(db, item_id=item_id)
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    # Authorization check
+    shopping_list = db_item.list
+    if shopping_list.calendar:
+        get_family_for_user(shopping_list.calendar.family_id, current_user)
+    elif shopping_list.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    # Process and save image
+    try:
+        # Ensure it's an image
+        contents = file.file.read()
+        # Allow various image types and convert to RGB if necessary (e.g., for RGBA PNGs)
+        img = Image.open(io.BytesIO(contents))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        
+        # Convert to WebP in memory
+        buffer = io.BytesIO()
+        img.save(buffer, format="webp")
+        webp_image_bytes = buffer.getvalue()
+        
+        # Encode to Base64
+        base64_encoded_image = base64.b64encode(webp_image_bytes).decode('utf-8')
+        data_url = f"data:image/webp;base64,{base64_encoded_image}"
+
+        # Update item with image URL
+        update_data = schemas.ListItemUpdate(image_url=data_url)
+        updated_item = crud.update_item(db=db, item_id=item_id, item_update=update_data, user_id=current_user.id)
+        return updated_item
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
 @app.post("/listas/{lista_id}/blames", response_model=schemas.Blame)
 def create_blame_for_list_endpoint(

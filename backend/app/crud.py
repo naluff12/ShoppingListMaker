@@ -67,6 +67,29 @@ def create_shopping_list(db: Session, list_data: schemas.ShoppingListCreate, own
     db.refresh(db_list)
     return db_list
 
+def update_shopping_list(db: Session, list_id: int, list_update: schemas.ShoppingListUpdate, user_id: int):
+    db_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == list_id).first()
+    if not db_list:
+        return None
+
+    update_data = list_update.model_dump(exclude_unset=True)
+    blame_details = []
+    for key, value in update_data.items():
+        original_value = getattr(db_list, key)
+        if original_value != value:
+            blame_details.append(f"'{key}' de la lista cambiado de '{original_value}' a '{value}'")
+        setattr(db_list, key, value)
+
+    if blame_details:
+        blame_entry = models.Blame(
+            user_id=user_id, action="update", entity_type="lista",
+            entity_id=list_id, detalles=". ".join(blame_details)
+        )
+        db.add(blame_entry)
+
+    db.commit()
+    db.refresh(db_list)
+    return db_list
 # CRUD for Items
 def get_item(db: Session, item_id: int):
     return db.query(models.ListItem).filter(models.ListItem.id == item_id).first()
@@ -90,6 +113,36 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int):
         detalles=f"Producto '{item.nombre}' agregado a la lista."
     )
     db.add(blame_entry)
+
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, user_id: int):
+    db_item = db.query(models.ListItem).filter(models.ListItem.id == item_id).first()
+    if not db_item:
+        return None
+
+    update_data = item_update.model_dump(exclude_unset=True)
+    blame_details = []
+    for key, value in update_data.items():
+        original_value = getattr(db_item, key)
+        if original_value != value:
+            if key == 'image_url':
+                blame_details.append("'image_url' ha sido actualizada.")
+            else:
+                blame_details.append(f"'{key}' cambiado de '{original_value}' a '{value}'")
+        setattr(db_item, key, value)
+
+    if blame_details:
+        blame_entry = models.Blame(
+            user_id=user_id,
+            action="update",
+            entity_type="item",
+            entity_id=item_id,
+            detalles=". ".join(blame_details)
+        )
+        db.add(blame_entry)
 
     db.commit()
     db.refresh(db_item)
@@ -129,6 +182,14 @@ def delete_item(db: Session, item_id: int, user_id: int):
         db.delete(db_item)
         db.commit()
     return db_item
+
+def delete_shopping_list(db: Session, list_id: int):
+    # Considerar eliminar items y blames asociados si es necesario (ON DELETE CASCADE en DB)
+    db_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == list_id).first()
+    if db_list:
+        db.delete(db_list)
+        db.commit()
+    return db_list
 
 def create_blame_for_item(db: Session, item_id: int, user_id: int, blame: schemas.BlameCreate, action: str = "blame"):
     db_blame = models.Blame(

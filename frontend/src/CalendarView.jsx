@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+import './custom-calendar.css'; // Asegúrate que la ruta es correcta
 
 function CalendarView({ calendar, onSelectList, onBack }) {
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -11,8 +11,7 @@ function CalendarView({ calendar, onSelectList, onBack }) {
     const [nuevaListaComentarios, setNuevaListaComentarios] = useState('');
     const [showForm, setShowForm] = useState(false);
 
-    // Cargar listas del calendario seleccionado
-    useEffect(() => {
+    const fetchLists = () => {
         if (!calendar || !calendar.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
@@ -22,6 +21,11 @@ function CalendarView({ calendar, onSelectList, onBack }) {
             .then(res => res.json())
             .then(data => setListas(Array.isArray(data) ? data : []))
             .finally(() => setLoading(false));
+    };
+
+    // Cargar listas del calendario seleccionado
+    useEffect(() => {
+        fetchLists();
     }, [calendar]);
 
     // Mapear listas por list_for_date
@@ -46,9 +50,15 @@ function CalendarView({ calendar, onSelectList, onBack }) {
         if (view !== 'month') return '';
         const key = date.toISOString().slice(0, 10);
         const listsOnDate = listasPorFecha[key];
+
         if (listsOnDate && listsOnDate.length > 0) {
-            // Podríamos mejorar la lógica para colorear según el estado de las listas
-            // Por ahora, solo marcamos que hay una lista.
+            // Lógica de coloreado mejorada
+            const isReviewed = listsOnDate.some(l => l.status === 'revisada');
+            const isNotReviewed = listsOnDate.some(l => l.status === 'no revisada');
+            
+            if (isReviewed) return 'calendar-day-reviewed';
+            if (isNotReviewed) return 'calendar-day-not-reviewed';
+            if (listsOnDate.some(l => l.status === 'pendiente')) return 'calendar-day-pending';
             return 'calendar-day-has-list';
         }
         return '';
@@ -86,6 +96,24 @@ function CalendarView({ calendar, onSelectList, onBack }) {
         }
     };
 
+    const handleDeleteLista = async (listId) => {
+        if (!window.confirm('¿Estás seguro de que quieres eliminar esta lista?')) return;
+        setLoading(true);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/listas/${listId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (!res.ok) throw new Error('Error al eliminar la lista');
+            fetchLists(); // Recargar las listas
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="container mt-4">
             <button className="btn btn-secondary mb-3" onClick={onBack}>Volver</button>
@@ -106,11 +134,17 @@ function CalendarView({ calendar, onSelectList, onBack }) {
                     {listsForSelectedDate.length > 0 ? (
                         <div className="list-group">
                             {listsForSelectedDate.map(list => (
-                                <button key={list.id}
-                                        className="list-group-item list-group-item-action"
-                                        onClick={() => onSelectList(list)}>
-                                    Ver lista "{list.name}"
-                                </button>
+                                <div key={list.id} className="list-group-item d-flex justify-content-between align-items-center">
+                                    <span onClick={() => onSelectList(list)} style={{ cursor: 'pointer' }}>
+                                        {list.name} <span className={`badge bg-${list.status === 'revisada' ? 'success' : 'warning'}`}>{list.status}</span>
+                                    </span>
+                                    <div>
+                                        <button className="btn btn-sm btn-primary me-2" onClick={() => onSelectList(list)}>Ver</button>
+                                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteLista(list.id)} disabled={loading}>
+                                            {loading ? <span className="spinner-border spinner-border-sm"></span> : 'X'}
+                                        </button>
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     ) : (

@@ -51,6 +51,11 @@ CREATE TABLE shopping_lists (
     name VARCHAR(255) NOT NULL,
     notas TEXT,
     comentarios TEXT,
+    status ENUM(
+        'pendiente',
+        'revisada',
+        'no revisada'
+    ) DEFAULT 'pendiente',
     calendar_id INT,
     owner_id INT,
     list_for_date DATE,
@@ -73,6 +78,7 @@ CREATE TABLE list_items (
     precio_estimado FLOAT,
     precio_confirmado FLOAT,
     creado_por_id INT,
+    image_url LONGTEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (list_id) REFERENCES shopping_lists (id),
     FOREIGN KEY (creado_por_id) REFERENCES users (id)

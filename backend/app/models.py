@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Boolean, Float, Text, DateTime, Table
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.ext.declarative import declarative_base
 import datetime
 
@@ -61,6 +62,7 @@ class ShoppingList(Base):
     name = Column(String(255), nullable=False)
     notas = Column(Text)
     comentarios = Column(Text)
+    status = Column(Enum('pendiente', 'revisada', 'no revisada', name='list_status'), default='pendiente')
     calendar_id = Column(Integer, ForeignKey('calendars.id'))
     owner_id = Column(Integer, ForeignKey('users.id'))
     list_for_date = Column(DateTime, default=datetime.datetime.utcnow)
@@ -93,6 +95,7 @@ class ListItem(Base):
     precio_estimado = Column(Float)
     precio_confirmado = Column(Float)
     creado_por_id = Column(Integer, ForeignKey('users.id'))
+    image_url = Column(LONGTEXT)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     list = relationship("ShoppingList", back_populates="items")
