@@ -85,6 +85,7 @@ class ShoppingListBase(BaseModel):
     notas: Optional[str] = None
     comentarios: Optional[str] = None
     calendar_id: Optional[int] = None
+    status: Optional[str] = None
 
 
 class ShoppingListCreate(ShoppingListBase):
@@ -212,6 +213,4 @@ User.model_rebuild()
 Blame.model_rebuild()
 ShoppingList.model_rebuild()
 
-class BlameCreate(BaseModel):
-    action: Optional[str] = None
-    detalles: Optional[str] = None
+

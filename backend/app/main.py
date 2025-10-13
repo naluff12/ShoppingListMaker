@@ -504,7 +504,7 @@ def create_blame_for_list(
         user_id=current_user.id,
         entity_type="lista",
         entity_id=list_id,
-        action=blame_data.action,
+        action="comment",
         detalles=blame_data.detalles
     )
 
@@ -533,7 +533,7 @@ def create_blame_for_item(
         user_id=current_user.id,
         entity_type="item",
         entity_id=item_id,
-        action=blame_data.action,
+        action="comment",
         detalles=blame_data.detalles
     )
 
