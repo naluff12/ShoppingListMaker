@@ -1,10 +1,14 @@
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from . import models, schemas, security
 
 # CRUD for Products
 def get_or_create_product(db: Session, product_name: str, family_id: int) -> models.Product:
-    # Check if product exists
-    db_product = db.query(models.Product).filter(models.Product.name == product_name, models.Product.family_id == family_id).first()
+    # Check if product exists (case-insensitive)
+    db_product = db.query(models.Product).filter(
+        func.lower(models.Product.name) == func.lower(product_name),
+        models.Product.family_id == family_id
+    ).first()
     if db_product:
         return db_product
     # Create new product if not found

@@ -15,6 +15,8 @@ function ShoppingListView({ list, onBack }) {
     const [newItemComment, setNewItemComment] = useState('');
     const [newListComment, setNewListComment] = useState('');
     const [products, setProducts] = useState([]);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
 
     const fetchListAndBlame = () => {
         if (!list || !list.id) return;
@@ -290,15 +292,138 @@ function ShoppingListView({ list, onBack }) {
                             </select>
                         )}
                     </div>
-                    <Form onSubmit={handleAdd} className="mb-3">
-                        <InputGroup>
-                            <Form.Control list="product-suggestions" type="text" placeholder="Nuevo producto" value={newItem} onChange={e => setNewItem(e.target.value)} />
-                            <Button type="submit" variant="primary" disabled={loading}>Agregar</Button>
-                        </InputGroup>
-                        <datalist id="product-suggestions">
-                            {products.map(p => <option key={p.id} value={p.name} />)}
-                        </datalist>
-                    </Form>
+                    {/* 🔹 AUTOCOMPLETADO CON IMÁGENES */}
+{/* 🔹 AUTOCOMPLETADO CON IMÁGENES + NAVEGACIÓN */}
+<Form onSubmit={handleAdd} className="mb-3 position-relative" style={{ zIndex: 10 }}>
+    <InputGroup>
+        <Form.Control
+            type="text"
+            placeholder="Nuevo producto"
+            value={newItem}
+            onChange={async (e) => {
+                const value = e.target.value;
+                setNewItem(value);
+                setHighlightedIndex(-1);
+
+                if (!value.trim() || !listDetails?.calendar?.family_id) {
+                    setProducts([]);
+                    return;
+                }
+
+                const token = localStorage.getItem('token');
+                try {
+                    const res = await fetch(
+                        `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(value)}`,
+                        { headers: { 'Authorization': 'Bearer ' + token } }
+                    );
+                    if (res.ok) {
+                        const data = await res.json();
+                        setProducts(Array.isArray(data) ? data : []);
+                    } else {
+                        setProducts([]);
+                    }
+                } catch {
+                    setProducts([]);
+                }
+            }}
+            onKeyDown={(e) => {
+                if (products.length === 0) return;
+                if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setHighlightedIndex((prev) => (prev + 1) % products.length);
+                } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
+                } else if (e.key === "Enter" && highlightedIndex >= 0) {
+                    e.preventDefault();
+                    const selected = products[highlightedIndex];
+                    if (selected) {
+                        setNewItem(selected.name);
+                        setProducts([]);
+                    }
+                }
+            }}
+            onFocus={(e) => {
+                if (products.length > 0) e.target.parentElement.classList.add("show");
+            }}
+            onBlur={() => {
+                setTimeout(() => {
+                    const dropdown = document.querySelector(".autocomplete-dropdown");
+                    if (dropdown) dropdown.style.display = "none";
+                }, 200);
+            }}
+        />
+        <Button type="submit" variant="primary" disabled={loading}>
+            Agregar
+        </Button>
+    </InputGroup>
+
+    {products.length > 0 && newItem.trim() !== "" && (
+        <div
+            className="autocomplete-dropdown position-absolute bg-white border rounded shadow-sm mt-1 w-100"
+            style={{ maxHeight: "250px", overflowY: "auto" }}
+        >
+            {products.map((p, index) => {
+                // 🔸 Función para resaltar coincidencias
+                const highlightMatch = (text, query) => {
+                    const regex = new RegExp(`(${query})`, "gi");
+                    const parts = text.split(regex);
+                    return parts.map((part, i) =>
+                        part.toLowerCase() === query.toLowerCase() ? (
+                            <span key={i} style={{ fontWeight: "bold", color: "#007bff" }}>
+                                {part}
+                            </span>
+                        ) : (
+                            part
+                        )
+                    );
+                };
+
+                return (
+                    <div
+                        key={p.id}
+                        className={`d-flex align-items-center p-2 hover-bg-light ${
+                            index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""
+                        }`}
+                        style={{ cursor: "pointer" }}
+                        onMouseDown={() => {
+                            setNewItem(p.name);
+                            setProducts([]);
+                        }}
+                        onMouseEnter={() => setHighlightedIndex(index)}
+                    >
+                        {p.image_url ? (
+                            <img
+                                src={`data:image/webp;base64,${p.image_url}`}
+                                alt={p.name}
+                                style={{
+                                    width: 40,
+                                    height: 40,
+                                    objectFit: "cover",
+                                    borderRadius: 4,
+                                    marginRight: 10,
+                                }}
+                            />
+                        ) : (
+                            <div
+                                style={{
+                                    width: 40,
+                                    height: 40,
+                                    backgroundColor: "#eee",
+                                    borderRadius: 4,
+                                    marginRight: 10,
+                                }}
+                            />
+                        )}
+                        <span>{highlightMatch(p.name, newItem)}</span>
+                    </div>
+                );
+            })}
+        </div>
+    )}
+</Form>
+
+
                     <div className="d-flex justify-content-end gap-3">
                         <h5>Total Estimado: <Badge bg="info">${totalEstimado.toFixed(2)}</Badge></h5>
                         <h5>Total Comprado: <Badge bg="success">${totalConfirmado.toFixed(2)}</Badge></h5>
