@@ -127,6 +127,7 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
         product_id=product.id,
         nombre=item.nombre,
         cantidad=item.cantidad,
+        unit=item.unit,
         comentario=item.comentario,
         precio_estimado=item.precio_estimado,
         status='pendiente',

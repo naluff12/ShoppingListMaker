@@ -81,7 +81,8 @@ CREATE TABLE list_items (
     product_id INT NULL,
     nombre VARCHAR(255) NOT NULL,
     comentario TEXT,
-    cantidad VARCHAR(50) DEFAULT '1',
+    cantidad FLOAT DEFAULT 1.0,
+    unit VARCHAR(50) NULL,
     status ENUM(
         'pendiente',
         'comprado',

@@ -41,7 +41,8 @@ class Product(ProductBase):
 # ---------- LIST ITEMS ----------
 class ListItemBase(BaseModel):
     comentario: Optional[str] = None
-    cantidad: str
+    cantidad: float
+    unit: Optional[str] = None
     status: str
     product_id: Optional[int] = None
     nombre: str
@@ -50,7 +51,8 @@ class ListItemBase(BaseModel):
 
 class ListItemCreate(BaseModel):
     nombre: str # Frontend will send the name of the product
-    cantidad: str
+    cantidad: float
+    unit: Optional[str] = None
     list_id: int
     comentario: Optional[str] = None
     precio_estimado: Optional[float] = None
@@ -69,7 +71,8 @@ class ListItem(ListItemBase):
 class ListItemUpdate(BaseModel):
     product_id: Optional[int] = None
     comentario: Optional[str] = None
-    cantidad: Optional[str] = None
+    cantidad: Optional[float] = None
+    unit: Optional[str] = None
     status: Optional[str] = None
     precio_estimado: Optional[float] = None
     precio_confirmado: Optional[float] = None

@@ -1,12 +1,15 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { Button, Spinner, Form, InputGroup, Card, Badge } from 'react-bootstrap';
 import React, { useState, useEffect, useMemo } from 'react';
+import ImageUploader from './ImageUploader';
 
 function ShoppingListView({ list, onBack }) {
     const [items, setItems] = useState([]);
     const [listDetails, setListDetails] = useState(null);
     const [blame, setBlame] = useState([]);
     const [newItem, setNewItem] = useState('');
+    const [newQuantity, setNewQuantity] = useState(1);
+    const [newUnit, setNewUnit] = useState('piezas');
     const [loading, setLoading] = useState(false);
     const [itemBlames, setItemBlames] = useState({});
     const [editingPrice, setEditingPrice] = useState(null);
@@ -16,6 +19,8 @@ function ShoppingListView({ list, onBack }) {
     const [newListComment, setNewListComment] = useState('');
     const [products, setProducts] = useState([]);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [editingItem, setEditingItem] = useState(null);
+
 
 
     const fetchListAndBlame = () => {
@@ -85,11 +90,13 @@ function ShoppingListView({ list, onBack }) {
             const res = await fetch('/api/items/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ list_id: list.id, nombre: newItem, cantidad: '1' })
+                body: JSON.stringify({ list_id: list.id, nombre: newItem, cantidad: newQuantity, unit: newUnit })
             });
             if (!res.ok) throw new Error('Error al agregar item');
             await res.json();
             setNewItem('');
+            setNewQuantity(1);
+            setNewUnit('piezas');
             fetchListAndBlame(); // Recargar todo
         } catch (err) {
             alert(err.message);
@@ -146,8 +153,6 @@ function ShoppingListView({ list, onBack }) {
             fetchListAndBlame(); // Recargar todo
         } catch (err) {
             alert(err.message);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -274,8 +279,26 @@ function ShoppingListView({ list, onBack }) {
         }
     }
 
-    const totalEstimado = useMemo(() => items.reduce((acc, item) => acc + (item.precio_estimado || 0), 0), [items]);
-    const totalConfirmado = useMemo(() => items.reduce((acc, item) => item.status === 'comprado' ? acc + (item.precio_confirmado || item.precio_estimado || 0) : acc, 0), [items]);
+    const handleItemUpdate = async (itemId, data) => {
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/items/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Error al actualizar el item');
+            const updatedItem = await res.json();
+            setItems(items.map(i => i.id === itemId ? updatedItem : i));
+            setEditingItem(null);
+        } catch (err) {
+            alert(err.message);
+            fetchListAndBlame(); // Recargar si hay error
+        }
+    };
+
+    const totalEstimado = useMemo(() => items.reduce((acc, item) => acc + (item.precio_estimado || 0) * item.cantidad, 0), [items]);
+    const totalConfirmado = useMemo(() => items.reduce((acc, item) => item.status === 'comprado' ? acc + (item.precio_confirmado || item.precio_estimado || 0) * item.cantidad : acc, 0), [items]);
 
     return (
         <div className="container mt-4" style={{ maxWidth: 800 }}>
@@ -353,6 +376,23 @@ function ShoppingListView({ list, onBack }) {
                 }, 200);
             }}
         />
+        <Form.Control
+            type="number"
+            value={newQuantity}
+            onChange={(e) => setNewQuantity(parseFloat(e.target.value))}
+            style={{ maxWidth: '80px' }}
+        />
+        <Form.Select
+            value={newUnit}
+            onChange={(e) => setNewUnit(e.target.value)}
+            style={{ maxWidth: '100px' }}
+        >
+            <option value="piezas">piezas</option>
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="L">L</option>
+            <option value="ml">ml</option>
+        </Form.Select>
         <Button type="submit" variant="primary" disabled={loading}>
             Agregar
         </Button>
@@ -438,10 +478,40 @@ function ShoppingListView({ list, onBack }) {
                             <li className="list-group-item mb-2 shadow-sm">
                                 <div className="d-flex align-items-center justify-content-between">
                                     <div className="d-flex align-items-center">
-                                        {item.product.image_url && <img src={`data:image/webp;base64,${item.product.image_url}`} alt={item.nombre} style={{ width: 40, height: 40, objectFit: 'cover', marginRight: 15, borderRadius: 4 }} />}
-                                        <div>
-                                            <b>{item.nombre}</b>
-                                            <div className="text-muted small">{item.creado_por ? `agregado por ${item.creado_por.username}` : ''}</div>
+                                        <ImageUploader
+                                            itemId={item.id}
+                                            imageUrl={item.product.image_url}
+                                            onImageUpload={handleImageUpload}
+                                        />
+                                        <div onDoubleClick={() => setEditingItem({ ...item })}>
+                                            {editingItem && editingItem.id === item.id ? (
+                                                <InputGroup>
+                                                    <Form.Control
+                                                        type="number"
+                                                        value={editingItem.cantidad}
+                                                        onChange={(e) => setEditingItem({ ...editingItem, cantidad: parseFloat(e.target.value) || 0 })}
+                                                        style={{ maxWidth: '80px' }}
+                                                    />
+                                                    <Form.Select
+                                                        value={editingItem.unit}
+                                                        onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
+                                                        style={{ maxWidth: '100px' }}
+                                                    >
+                                                        <option value="piezas">piezas</option>
+                                                        <option value="kg">kg</option>
+                                                        <option value="g">g</option>
+                                                        <option value="L">L</option>
+                                                        <option value="ml">ml</option>
+                                                    </Form.Select>
+                                                    <Button variant="success" size="sm" onClick={() => handleItemUpdate(editingItem.id, { cantidad: editingItem.cantidad, unit: editingItem.unit })}>Guardar</Button>
+                                                    <Button variant="secondary" size="sm" onClick={() => setEditingItem(null)}>Cancelar</Button>
+                                                </InputGroup>
+                                            ) : (
+                                                <>
+                                                    <b>{item.nombre}</b> ({item.cantidad} {item.unit})
+                                                    <div className="text-muted small">{item.creado_por ? `agregado por ${item.creado_por.username}` : ''}</div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="d-flex align-items-center">
@@ -455,9 +525,7 @@ function ShoppingListView({ list, onBack }) {
                                                 <input type="number" step="0.01" defaultValue={item.precio_confirmado} autoFocus onBlur={(e) => handlePriceChange(item.id, 'precio_confirmado', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: 70 }} />
                                                 : (item.precio_confirmado || '0.00')}
                                         </small>
-                                        <Form.Group controlId={`formFileSm-${item.id}`} className="ms-3">
-                                            <Form.Control type="file" size="sm" accept="image/jpeg,image/png" onChange={(e) => handleImageUpload(item.id, e.target.files[0])} />
-                                        </Form.Group>
+
                                         <select className="form-select mx-2" value={item.status || 'needed'} onChange={e => handleStatus(item.id, e.target.value)} style={{ width: 130 }}>
                                             <option value="pendiente">Pendiente</option>
                                             <option value="comprado">Comprado</option>
