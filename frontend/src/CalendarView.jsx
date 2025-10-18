@@ -22,7 +22,7 @@ function CalendarView() {
         if (!calendar || !calendar.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
-        fetch(`${API_URL}/listas/?calendar_id=${calendar.id}`, {
+        fetch(`/api/listas/?calendar_id=${calendar.id}`, {
             headers: { 'Authorization': 'Bearer ' + token }
         })
             .then(res => res.json())
@@ -78,7 +78,7 @@ function CalendarView() {
         const token = localStorage.getItem('token');
         const dateKeyActual = selectedDate.toISOString().slice(0, 10);
         try {
-            const res = await fetch(`${API_URL}/listas/`, {
+            const res = await fetch(`/api/listas/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({
@@ -108,7 +108,7 @@ function CalendarView() {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/listas/${listId}`, {
+            const res = await fetch(`/api/listas/${listId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': 'Bearer ' + token }
             });

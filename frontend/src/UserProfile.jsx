@@ -12,7 +12,7 @@ function UserProfile() {
   const fetchUserProfile = async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/users/me`, {
+      const response = await fetch(`/api/users/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -39,7 +39,7 @@ function UserProfile() {
     e.preventDefault();
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/users/me`, {
+      const response = await fetch(`/api/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -67,7 +67,7 @@ function UserProfile() {
     }
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/users/me/change-password`, {
+      const response = await fetch(`/api/users/me/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

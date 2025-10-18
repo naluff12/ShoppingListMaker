@@ -39,7 +39,7 @@ function Setup() {
     };
 
     try {
-      const response = await fetch(`${API_URL}/setup`, {
+      const response = await fetch(`/api/setup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

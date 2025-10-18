@@ -62,7 +62,7 @@ def get_db():
     finally:
         db.close()
 
-@app.get("/api/status")
+@app.get("/status")
 def get_status(db: Session = Depends(get_db)):
     return {"needs_setup": db.query(models.User).count() == 0}
 
@@ -765,10 +765,10 @@ def upload_image_for_item(
         "image_url": image_base64
     }
 
-@app.get("/api/home/last-lists", response_model=List[schemas.ShoppingList])
+@app.get("/home/last-lists", response_model=List[schemas.ShoppingList])
 def get_last_lists(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_last_lists_for_user_families(db=db, user=current_user)
 
-@app.get("/api/home/last-products", response_model=List[schemas.Product])
+@app.get("/home/last-products", response_model=List[schemas.Product])
 def get_last_products(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_last_products_for_user_families(db=db, user=current_user)

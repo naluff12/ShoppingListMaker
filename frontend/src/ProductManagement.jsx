@@ -16,7 +16,7 @@ function ProductManagement() {
   const fetchFamilies = async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/admin/families`, {
+      const response = await fetch(`/api/admin/families`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -35,7 +35,7 @@ function ProductManagement() {
   const fetchProducts = async (familyId) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/families/${familyId}/products`, {
+      const response = await fetch(`/api/families/${familyId}/products`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -74,7 +74,7 @@ function ProductManagement() {
     if (!selectedFamily) return;
 
     try {
-      const response = await fetch(`${API_URL}/families/${selectedFamily.id}/products/${productId}`, {
+      const response = await fetch(`/api/families/${selectedFamily.id}/products/${productId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -96,8 +96,8 @@ function ProductManagement() {
 
     const method = currentProduct ? 'PUT' : 'POST';
     const url = currentProduct
-      ? `${API_URL}/families/${selectedFamily.id}/products/${currentProduct.id}`
-      : `${API_URL}/families/${selectedFamily.id}/products`;
+      ? `/api/families/${selectedFamily.id}/products/${currentProduct.id}`
+      : `/api/families/${selectedFamily.id}/products`;
 
     try {
       const response = await fetch(url, {
@@ -135,7 +135,7 @@ function ProductManagement() {
     formData.append('file', file);
 
     try {
-        const res = await fetch(`${API_URL}/products/${productId}/upload-image`, {
+        const res = await fetch(`/api/products/${productId}/upload-image`, {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + token },
             body: formData,

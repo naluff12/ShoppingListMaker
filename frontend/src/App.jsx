@@ -28,7 +28,7 @@ function App() {
         const token = localStorage.getItem('token');
         if (token) {
             try {
-                const response = await fetch(`${API_URL}/users/me`, {
+                const response = await fetch(`/api/users/me`, {
                     headers: {
                         'Authorization': `Bearer ${token}`,
                     },
@@ -52,7 +52,7 @@ function App() {
     useEffect(() => {
         const checkStatus = async () => {
             try {
-                const response = await fetch(`${API_URL}/api/status`);
+                const response = await fetch(`/api/api/status`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.needs_setup) {

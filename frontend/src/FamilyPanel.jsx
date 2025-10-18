@@ -26,7 +26,7 @@ function FamilyPanel() {
         const token = localStorage.getItem('token');
         try {
             setLoading(true);
-            const res = await fetch(`${API_URL}/families/my`, {
+            const res = await fetch(`/api/families/my`, {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             if (!res.ok) throw new Error('Could not fetch families');
@@ -56,7 +56,7 @@ function FamilyPanel() {
             }
             const token = localStorage.getItem('token');
             try {
-                const res = await fetch(`${API_URL}/families/${selectedFamily.id}/calendars`, {
+                const res = await fetch(`/api/families/${selectedFamily.id}/calendars`, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
                 const data = await res.json();
@@ -73,7 +73,7 @@ function FamilyPanel() {
         e.preventDefault();
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/families`, {
+            const res = await fetch(`/api/families`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ nombre: newFamilyName })
@@ -91,7 +91,7 @@ function FamilyPanel() {
         e.preventDefault();
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/families/join`, {
+            const res = await fetch(`/api/families/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ code: joinCode })
@@ -110,7 +110,7 @@ function FamilyPanel() {
         if (!selectedFamily) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/families/${selectedFamily.id}/calendars`, {
+            const res = await fetch(`/api/families/${selectedFamily.id}/calendars`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ nombre: newCalendarName })

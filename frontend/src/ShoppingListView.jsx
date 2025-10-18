@@ -36,15 +36,15 @@ function ShoppingListView() {
         setLoading(true);
 
         Promise.all([
-            fetch(`${API_URL}/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
-            fetch(`${API_URL}/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
+            fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
+            fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
         ])
             .then(([listData, blameData]) => {
                 setListDetails(listData);
                 setItems(Array.isArray(listData.items) ? listData.items : []);
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
-                    fetch(`${API_URL}/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
+                    fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
                         .then(res => res.json())
                         .then(data => setProducts(data))
                         .catch(() => setProducts([]));
@@ -75,7 +75,7 @@ function ShoppingListView() {
         setLoadingItemBlame(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/blame/item/${itemId}`, {
+            const res = await fetch(`/api/blame/item/${itemId}`, {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             const data = await res.json();
@@ -94,7 +94,7 @@ function ShoppingListView() {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/items/`, {
+            const res = await fetch(`/api/items/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ list_id: list.id, nombre: newItem, cantidad: newQuantity, unit: newUnit })
@@ -116,7 +116,7 @@ function ShoppingListView() {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/items/${id}`,
+            const res = await fetch(`/api/items/${id}`,
                 {
                     method: 'PUT',
                     headers: {
@@ -134,7 +134,7 @@ function ShoppingListView() {
 
             // 🔹 Si el historial de ese ítem está abierto, actualizarlo también
             if (showItemBlame === id) {
-                const resHist = await fetch(`${API_URL}/blame/item/${id}`, {
+                const resHist = await fetch(`/api/blame/item/${id}`, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
                 const dataHist = await resHist.json();
@@ -151,7 +151,7 @@ function ShoppingListView() {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/items/${id}`,
+            const res = await fetch(`/api/items/${id}`,
                 {
                     method: 'DELETE',
                     headers: { 'Authorization': 'Bearer ' + token }
@@ -167,7 +167,7 @@ function ShoppingListView() {
         if (!newItemComment) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/items/${itemId}/blames`,
+            const res = await fetch(`/api/items/${itemId}/blames`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -190,7 +190,7 @@ function ShoppingListView() {
         if (!newListComment) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/listas/${list.id}/blames`,
+            const res = await fetch(`/api/listas/${list.id}/blames`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -211,7 +211,7 @@ function ShoppingListView() {
 
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/items/${itemId}`,
+            const res = await fetch(`/api/items/${itemId}`,
                 {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -234,7 +234,7 @@ function ShoppingListView() {
     const handleListStatusChange = async (newStatus) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/listas/${list.id}`,
+            const res = await fetch(`/api/listas/${list.id}`,
                 {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -259,7 +259,7 @@ function ShoppingListView() {
         // setLoadingItemImage(itemId);
 
         try {
-            const res = await fetch(`${API_URL}/items/${itemId}/upload-image`,
+            const res = await fetch(`/api/items/${itemId}/upload-image`,
                 {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + token },
@@ -289,7 +289,7 @@ function ShoppingListView() {
     const handleItemUpdate = async (itemId, data) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`${API_URL}/items/${itemId}`, {
+            const res = await fetch(`/api/items/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify(data)
@@ -343,7 +343,7 @@ function ShoppingListView() {
                 const token = localStorage.getItem('token');
                 try {
                     const res = await fetch(
-                        `${API_URL}/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(value)}`,
+                        `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(value)}`,
                         { headers: { 'Authorization': 'Bearer ' + token } }
                     );
                     if (res.ok) {

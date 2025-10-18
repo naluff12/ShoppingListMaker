@@ -12,7 +12,7 @@ function UserManagement() {
   const fetchUsers = async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/admin/users`, {
+      const response = await fetch(`/api/admin/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -41,7 +41,7 @@ function UserManagement() {
   const handleDelete = async (userId) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`${API_URL}/admin/users/${userId}`, {
+      const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -60,7 +60,7 @@ function UserManagement() {
   const handleSave = async () => {
     const token = localStorage.getItem('token');
     const method = currentUser ? 'PUT' : 'POST';
-    const url = currentUser ? `${API_URL}/admin/users/${currentUser.id}` : `${API_URL}/admin/users`;
+    const url = currentUser ? `/api/admin/users/${currentUser.id}` : `/api/admin/users`;
 
     const body = {
         username: formData.username,

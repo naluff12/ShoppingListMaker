@@ -21,8 +21,8 @@ services:
     build: ./backend
     container_name: backend_shopping
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    # ports:
+    #   - "8000:8000"
     environment:
       DATABASE_URL: "mysql+pymysql://user:password@db/shopping_db"
     depends_on:
