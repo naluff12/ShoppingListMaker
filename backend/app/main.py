@@ -764,3 +764,11 @@ def upload_image_for_item(
         "product_id": product.id,
         "image_url": image_base64
     }
+
+@app.get("/api/home/last-lists", response_model=List[schemas.ShoppingList])
+def get_last_lists(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.get_last_lists_for_user_families(db=db, user=current_user)
+
+@app.get("/api/home/last-products", response_model=List[schemas.Product])
+def get_last_products(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.get_last_products_for_user_families(db=db, user=current_user)

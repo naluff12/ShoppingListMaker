@@ -362,3 +362,11 @@ def create_blame(db: Session, user_id: int, entity_type: str, entity_id: int, ac
     db.commit()
     db.refresh(blame)
     return blame
+
+def get_last_lists_for_user_families(db: Session, user: models.User, limit: int = 5):
+    family_ids = [family.id for family in user.families]
+    return db.query(models.ShoppingList).join(models.Calendar).filter(models.Calendar.family_id.in_(family_ids)).order_by(models.ShoppingList.created_at.desc()).limit(limit).all()
+
+def get_last_products_for_user_families(db: Session, user: models.User, limit: int = 5):
+    family_ids = [family.id for family in user.families]
+    return db.query(models.Product).filter(models.Product.family_id.in_(family_ids)).order_by(models.Product.created_at.desc()).limit(limit).all()
