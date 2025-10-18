@@ -24,6 +24,36 @@ def search_products(db: Session, name: str, family_id: int, skip: int = 0, limit
 def get_products_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100):
     return db.query(models.Product).filter(models.Product.family_id == family_id).offset(skip).limit(limit).all()
 
+def get_product(db: Session, product_id: int):
+    return db.query(models.Product).filter(models.Product.id == product_id).first()
+
+def create_family_product(db: Session, product: schemas.ProductCreate, family_id: int):
+    product_data = product.model_dump(exclude={'family_id'})
+    db_product = models.Product(**product_data, family_id=family_id)
+    db.add(db_product)
+    db.commit()
+    db.refresh(db_product)
+    return db_product
+
+def update_family_product(db: Session, product_id: int, product_update: schemas.ProductCreate):
+    db_product = get_product(db, product_id)
+    if not db_product:
+        return None
+    update_data = product_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_product, key, value)
+    db.commit()
+    db.refresh(db_product)
+    return db_product
+
+def delete_family_product(db: Session, product_id: int):
+    db_product = get_product(db, product_id)
+    if db_product:
+        db.delete(db_product)
+        db.commit()
+    return db_product
+
+
 # CRUD for Users
 def get_user(db: Session, user_id: int):
     return db.query(models.User).filter(models.User.id == user_id).first()
@@ -43,7 +73,7 @@ def create_user(db: Session, user: schemas.UserCreate):
         email=user.email,
         username=user.username,
         hashed_password=hashed_password,
-        is_admin=False,  # Default user is not admin
+        is_admin=user.is_admin,
         nombre=user.nombre,
         direccion=user.direccion,
         telefono=user.telefono
@@ -58,6 +88,90 @@ def authenticate_user(db: Session, username: str, password: str):
     if not user or not security.verify_password(password, user.hashed_password):
         return False
     return user
+
+def update_user(db: Session, user_id: int, user_update: schemas.UserUpdateByAdmin):
+    db_user = get_user(db, user_id=user_id)
+    if not db_user:
+        return None
+    update_data = user_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def delete_user(db: Session, user_id: int):
+    db_user = get_user(db, user_id=user_id)
+    if db_user:
+        db.delete(db_user)
+        db.commit()
+    return db_user
+
+def update_me(db: Session, user: models.User, user_update: schemas.UserUpdate):
+    update_data = user_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(user, key, value)
+    db.commit()
+    db.refresh(user)
+    return user
+
+def change_password(db: Session, user: models.User, new_password: str):
+    user.hashed_password = security.get_password_hash(new_password)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+
+# CRUD for Families
+def get_family(db: Session, family_id: int):
+    return db.query(models.Family).options(joinedload(models.Family.users)).filter(models.Family.id == family_id).first()
+
+def get_families(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Family).options(joinedload(models.Family.users)).offset(skip).limit(limit).all()
+
+def create_family_by_admin(db: Session, family: schemas.FamilyCreateByAdmin):
+    fam_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    while db.query(models.Family).filter(models.Family.code == fam_code).first():
+        fam_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    
+    db_family = models.Family(
+        nombre=family.nombre,
+        notas=family.notas,
+        code=fam_code,
+        owner_id=family.owner_id
+    )
+    db.add(db_family)
+    db.commit()
+    db.refresh(db_family)
+    return db_family
+
+def update_family(db: Session, family_id: int, family_update: schemas.FamilyUpdateByAdmin):
+    db_family = get_family(db, family_id=family_id)
+    if not db_family:
+        return None
+    update_data = family_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_family, key, value)
+    db.commit()
+    db.refresh(db_family)
+    return db_family
+
+def delete_family(db: Session, family_id: int):
+    db_family = get_family(db, family_id=family_id)
+    if db_family:
+        db.delete(db_family)
+        db.commit()
+    return db_family
+
+def transfer_ownership(db: Session, family: models.Family, new_owner_id: int):
+    family.owner_id = new_owner_id
+    db.commit()
+    db.refresh(family)
+    return family
+
+
+
 
 # CRUD for Shopping Lists
 def get_list(db: Session, list_id: int):

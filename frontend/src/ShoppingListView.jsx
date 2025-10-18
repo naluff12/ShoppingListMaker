@@ -1,9 +1,16 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { Button, Spinner, Form, InputGroup, Card, Badge } from 'react-bootstrap';
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 
-function ShoppingListView({ list, onBack }) {
+const API_URL = 'http://localhost:8000';
+
+function ShoppingListView() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const list = location.state?.list;
+
     const [items, setItems] = useState([]);
     const [listDetails, setListDetails] = useState(null);
     const [blame, setBlame] = useState([]);
@@ -29,15 +36,15 @@ function ShoppingListView({ list, onBack }) {
         setLoading(true);
 
         Promise.all([
-            fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
-            fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
+            fetch(`${API_URL}/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
+            fetch(`${API_URL}/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
         ])
             .then(([listData, blameData]) => {
                 setListDetails(listData);
                 setItems(Array.isArray(listData.items) ? listData.items : []);
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
-                    fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
+                    fetch(`${API_URL}/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
                         .then(res => res.json())
                         .then(data => setProducts(data))
                         .catch(() => setProducts([]));
@@ -68,7 +75,7 @@ function ShoppingListView({ list, onBack }) {
         setLoadingItemBlame(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/blame/item/${itemId}`, {
+            const res = await fetch(`${API_URL}/blame/item/${itemId}`, {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             const data = await res.json();
@@ -87,7 +94,7 @@ function ShoppingListView({ list, onBack }) {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('/api/items/', {
+            const res = await fetch(`${API_URL}/items/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ list_id: list.id, nombre: newItem, cantidad: newQuantity, unit: newUnit })
@@ -109,7 +116,7 @@ function ShoppingListView({ list, onBack }) {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${id}`,
+            const res = await fetch(`${API_URL}/items/${id}`,
                 {
                     method: 'PUT',
                     headers: {
@@ -127,7 +134,7 @@ function ShoppingListView({ list, onBack }) {
 
             // 🔹 Si el historial de ese ítem está abierto, actualizarlo también
             if (showItemBlame === id) {
-                const resHist = await fetch(`/api/blame/item/${id}`, {
+                const resHist = await fetch(`${API_URL}/blame/item/${id}`, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
                 const dataHist = await resHist.json();
@@ -144,7 +151,7 @@ function ShoppingListView({ list, onBack }) {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${id}`,
+            const res = await fetch(`${API_URL}/items/${id}`,
                 {
                     method: 'DELETE',
                     headers: { 'Authorization': 'Bearer ' + token }
@@ -160,7 +167,7 @@ function ShoppingListView({ list, onBack }) {
         if (!newItemComment) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${itemId}/blames`,
+            const res = await fetch(`${API_URL}/items/${itemId}/blames`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -183,7 +190,7 @@ function ShoppingListView({ list, onBack }) {
         if (!newListComment) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${list.id}/blames`,
+            const res = await fetch(`${API_URL}/listas/${list.id}/blames`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -204,7 +211,7 @@ function ShoppingListView({ list, onBack }) {
 
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${itemId}`,
+            const res = await fetch(`${API_URL}/items/${itemId}`,
                 {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -227,7 +234,7 @@ function ShoppingListView({ list, onBack }) {
     const handleListStatusChange = async (newStatus) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${list.id}`,
+            const res = await fetch(`${API_URL}/listas/${list.id}`,
                 {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -252,7 +259,7 @@ function ShoppingListView({ list, onBack }) {
         // setLoadingItemImage(itemId);
 
         try {
-            const res = await fetch(`/api/items/${itemId}/upload-image`,
+            const res = await fetch(`${API_URL}/items/${itemId}/upload-image`,
                 {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + token },
@@ -282,7 +289,7 @@ function ShoppingListView({ list, onBack }) {
     const handleItemUpdate = async (itemId, data) => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${itemId}`, {
+            const res = await fetch(`${API_URL}/items/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify(data)
@@ -302,7 +309,7 @@ function ShoppingListView({ list, onBack }) {
 
     return (
         <div className="container mt-4" style={{ maxWidth: 800 }}>
-            <Button variant="secondary" className="mb-3" onClick={onBack}>Volver</Button>
+            <Button variant="secondary" className="mb-3" onClick={() => navigate('/calendar', { state: { calendar: listDetails.calendar } })}>Volver</Button>
             <Card className="mb-4">
                 <Card.Body>
                     <div className="d-flex justify-content-between align-items-center mb-3">
@@ -336,7 +343,7 @@ function ShoppingListView({ list, onBack }) {
                 const token = localStorage.getItem('token');
                 try {
                     const res = await fetch(
-                        `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(value)}`,
+                        `${API_URL}/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(value)}`,
                         { headers: { 'Authorization': 'Bearer ' + token } }
                     );
                     if (res.ok) {

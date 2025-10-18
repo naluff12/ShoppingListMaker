@@ -25,6 +25,7 @@ class Family(BaseModel):
 # ---------- PRODUCT ----------
 class ProductBase(BaseModel):
     name: str
+    description: Optional[str] = None
     image_url: Optional[str] = None
     family_id: Optional[int] = None
 
@@ -126,6 +127,21 @@ class FamilyJoin(BaseModel):
 class FamilyWithDetails(Family):
     users: List[UserInDBBase] = []
 
+class FamilyUpdateByAdmin(BaseModel):
+    nombre: Optional[str] = None
+    notas: Optional[str] = None
+    owner_id: Optional[int] = None
+
+class FamilyCreateByAdmin(BaseModel):
+    nombre: str
+    owner_id: int
+    notas: Optional[str] = None
+
+class TransferOwnershipRequest(BaseModel):
+    new_owner_id: int
+
+
+
 
 # ---------- USER ----------
 class UserBase(BaseModel):
@@ -137,6 +153,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    is_admin: Optional[bool] = False
 
 class UserRegister(BaseModel):
     user: UserCreate
@@ -150,6 +167,23 @@ class User(UserBase):
 
     class Config:
         from_attributes = True
+
+class UserUpdateByAdmin(BaseModel):
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
+    nombre: Optional[str] = None
+    is_admin: Optional[bool] = None
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
+    nombre: Optional[str] = None
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 
 
 # ---------- CALENDAR ----------

@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Card, Modal, Form, Dropdown, Badge, ListGroup, Spinner, Alert } from 'react-bootstrap';
 
-function FamilyPanel({ user, onLogout, onSelectCalendar }) {
+const API_URL = 'http://localhost:8000';
+
+function FamilyPanel() {
     const [families, setFamilies] = useState([]);
     const [selectedFamily, setSelectedFamily] = useState(null);
     const [calendars, setCalendars] = useState([]);
@@ -17,11 +20,13 @@ function FamilyPanel({ user, onLogout, onSelectCalendar }) {
     const [showCreateCalendar, setShowCreateCalendar] = useState(false);
     const [newCalendarName, setNewCalendarName] = useState('');
 
+    const navigate = useNavigate();
+
     const fetchFamilies = useCallback(async () => {
         const token = localStorage.getItem('token');
         try {
             setLoading(true);
-            const res = await fetch('/api/families/my', {
+            const res = await fetch(`${API_URL}/families/my`, {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             if (!res.ok) throw new Error('Could not fetch families');
@@ -44,24 +49,31 @@ function FamilyPanel({ user, onLogout, onSelectCalendar }) {
     }, [fetchFamilies]);
 
     useEffect(() => {
-        if (!selectedFamily) {
-            setCalendars([]);
-            return;
-        }
-        const token = localStorage.getItem('token');
-        fetch(`/api/families/${selectedFamily.id}/calendars`, {
-            headers: { 'Authorization': 'Bearer ' + token }
-        })
-            .then(res => res.json())
-            .then(data => setCalendars(Array.isArray(data) ? data : []))
-            .catch(() => setCalendars([]));
+        const fetchCalendars = async () => {
+            if (!selectedFamily) {
+                setCalendars([]);
+                return;
+            }
+            const token = localStorage.getItem('token');
+            try {
+                const res = await fetch(`${API_URL}/families/${selectedFamily.id}/calendars`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                setCalendars(Array.isArray(data) ? data : []);
+            } catch (error) {
+                setCalendars([]);
+            }
+        };
+
+        fetchCalendars();
     }, [selectedFamily]);
 
     const handleCreateFamily = async (e) => {
         e.preventDefault();
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('/api/families', {
+            const res = await fetch(`${API_URL}/families`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ nombre: newFamilyName })
@@ -79,7 +91,7 @@ function FamilyPanel({ user, onLogout, onSelectCalendar }) {
         e.preventDefault();
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('/api/families/join', {
+            const res = await fetch(`${API_URL}/families/join`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ code: joinCode })
@@ -98,7 +110,7 @@ function FamilyPanel({ user, onLogout, onSelectCalendar }) {
         if (!selectedFamily) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/families/${selectedFamily.id}/calendars`, {
+            const res = await fetch(`${API_URL}/families/${selectedFamily.id}/calendars`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ nombre: newCalendarName })
@@ -113,19 +125,17 @@ function FamilyPanel({ user, onLogout, onSelectCalendar }) {
         }
     };
 
+    const handleSelectCalendar = (calendar) => {
+        navigate('/calendar', { state: { calendar } });
+    };
+
     if (loading) {
         return <Spinner animation="border" />;
     }
 
     return (
         <Card className="mx-auto mt-5 p-4" style={{ maxWidth: 800 }}>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2 className="mb-0">Panel de Familia</h2>
-                <div>
-                    <span>Bienvenido, <b>{user.username}</b></span>
-                    <Button variant="danger" size="sm" onClick={onLogout} className="ms-3">Logout</Button>
-                </div>
-            </div>
+            <h2 className="mb-3">Panel de Familia</h2>
 
             <div className="mb-3">
                 <Button variant="success" className="me-2" onClick={() => setShowCreateFamily(true)}>Crear Familia</Button>
@@ -162,7 +172,7 @@ function FamilyPanel({ user, onLogout, onSelectCalendar }) {
                     <Button variant="outline-success" size="sm" className="mb-2" onClick={() => setShowCreateCalendar(true)}>Crear Calendario</Button>
                     <ListGroup>
                         {calendars.map(cal => (
-                            <ListGroup.Item key={cal.id} action onClick={() => onSelectCalendar(cal)}>
+                            <ListGroup.Item key={cal.id} action onClick={() => handleSelectCalendar(cal)}>
                                 {cal.nombre} (Creador: {cal.owner?.username || 'N/A'})
                             </ListGroup.Item>
                         ))}

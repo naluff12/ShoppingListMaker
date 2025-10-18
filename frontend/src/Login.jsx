@@ -1,21 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import './Login.css';
 
-function Login({ onLogin, onNoUsers, onRegister }) {
+function Login({ onLogin }) {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        // Check if any user exists to decide if we should show the register/setup screen.
-        fetch('/api/users/me', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') } })
-            .catch(() => {
-                // A failure here could mean a lot of things, but for simplicity,
-                // we assume it might be because no users exist. A more robust check is needed.
-                // This is a temporary check. The backend logic for setup is the source of truth.
-            });
-    }, [onNoUsers]);
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -39,6 +31,7 @@ function Login({ onLogin, onNoUsers, onRegister }) {
             if (!userRes.ok) throw new Error('Could not fetch user data');
             const userData = await userRes.json();
             onLogin(userData);
+            navigate('/family-panel');
         } catch (err) {
             setError(err.message);
         } finally {
@@ -72,7 +65,7 @@ function Login({ onLogin, onNoUsers, onRegister }) {
             </form>
             {error && <div className="login-error">{error}</div>}
             <div className="create-admin-btn">
-                <button className="btn btn-link" onClick={onRegister}>¿No tienes una cuenta? Registrate</button>
+                <Link to="/register" className="btn btn-link">¿No tienes una cuenta? Registrate</Link>
             </div>
         </div>
     );

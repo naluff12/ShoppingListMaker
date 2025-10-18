@@ -1,8 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import './custom-calendar.css'; // Asegúrate que la ruta es correcta
 
-function CalendarView({ calendar, onSelectList, onBack }) {
+const API_URL = 'http://localhost:8000';
+
+function CalendarView() {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const calendar = location.state?.calendar;
+
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [listas, setListas] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -15,7 +22,7 @@ function CalendarView({ calendar, onSelectList, onBack }) {
         if (!calendar || !calendar.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
-        fetch('/api/listas/?calendar_id=' + calendar.id, {
+        fetch(`${API_URL}/listas/?calendar_id=${calendar.id}`, {
             headers: { 'Authorization': 'Bearer ' + token }
         })
             .then(res => res.json())
@@ -71,7 +78,7 @@ function CalendarView({ calendar, onSelectList, onBack }) {
         const token = localStorage.getItem('token');
         const dateKeyActual = selectedDate.toISOString().slice(0, 10);
         try {
-            const res = await fetch('/api/listas/', {
+            const res = await fetch(`${API_URL}/listas/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({
@@ -101,7 +108,7 @@ function CalendarView({ calendar, onSelectList, onBack }) {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${listId}`, {
+            const res = await fetch(`${API_URL}/listas/${listId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': 'Bearer ' + token }
             });
@@ -114,9 +121,13 @@ function CalendarView({ calendar, onSelectList, onBack }) {
         }
     };
 
+    const handleSelectList = (list) => {
+        navigate('/shopping-list', { state: { list } });
+    };
+
     return (
         <div className="container mt-4">
-            <button className="btn btn-secondary mb-3" onClick={onBack}>Volver</button>
+            <button className="btn btn-secondary mb-3" onClick={() => navigate('/family-panel')}>Volver</button>
             <h2>Calendario: {calendar?.nombre || ''}</h2>
             <div className="row">
                 <div className="col-md-7">
@@ -135,11 +146,11 @@ function CalendarView({ calendar, onSelectList, onBack }) {
                         <div className="list-group">
                             {listsForSelectedDate.map(list => (
                                 <div key={list.id} className="list-group-item d-flex justify-content-between align-items-center">
-                                    <span onClick={() => onSelectList(list)} style={{ cursor: 'pointer' }}>
+                                    <span onClick={() => handleSelectList(list)} style={{ cursor: 'pointer' }}>
                                         {list.name} <span className={`badge bg-${list.status === 'revisada' ? 'success' : 'warning'}`}>{list.status}</span>
                                     </span>
                                     <div>
-                                        <button className="btn btn-sm btn-primary me-2" onClick={() => onSelectList(list)}>Ver</button>
+                                        <button className="btn btn-sm btn-primary me-2" onClick={() => handleSelectList(list)}>Ver</button>
                                         <button className="btn btn-sm btn-danger" onClick={() => handleDeleteLista(list.id)} disabled={loading}>
                                             {loading ? <span className="spinner-border spinner-border-sm"></span> : 'X'}
                                         </button>

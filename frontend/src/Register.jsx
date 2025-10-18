@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Modal, Button } from 'react-bootstrap';
 
-function Register({ onRegistered, onBack }) {
+function Register() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [email, setEmail] = useState('');
@@ -9,6 +10,7 @@ function Register({ onRegistered, onBack }) {
     const [familyCode, setFamilyCode] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -29,8 +31,7 @@ function Register({ onRegistered, onBack }) {
                 throw new Error(data.detail || 'Error during registration');
             }
 
-            const newUser = await res.json();
-            onRegistered(newUser);
+            navigate('/login');
 
         } catch (err) {
             setError(err.message);
@@ -52,7 +53,7 @@ function Register({ onRegistered, onBack }) {
                     {loading ? 'Registering...' : 'Register'}
                 </Button>
             </form>
-            <Button variant="secondary" className="w-100 mt-3" onClick={onBack}>Back to Login</Button>
+            <Link to="/login" className="btn btn-secondary w-100 mt-3">Back to Login</Link>
 
             {error && (
                 <Modal show={true} onHide={() => setError('')} centered>

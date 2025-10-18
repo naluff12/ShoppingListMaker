@@ -67,6 +67,7 @@ CREATE TABLE shopping_lists (
 CREATE TABLE products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    description TEXT,
     family_id INT,
     image_url LONGTEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

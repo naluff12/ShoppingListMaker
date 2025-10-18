@@ -1,9 +1,9 @@
 import React from 'react';
-
+import { Link } from 'react-router-dom';
 import { CSSTransition } from 'react-transition-group';
 import { useState, useEffect, useRef } from 'react';
 
-function Welcome({ onLogin, onRegister }) {
+function Welcome() {
     const [show, setShow] = useState(false);
     const nodeRef = useRef(null);
     useEffect(() => { setShow(true); }, []);
@@ -12,8 +12,8 @@ function Welcome({ onLogin, onRegister }) {
             <div ref={nodeRef} className="text-center mt-5 fade">
                 <h1>Bienvenido a Family Shopping List</h1>
                 <p>Organiza tus compras en familia, por fechas y grupos.</p>
-                <button className="btn btn-primary m-2 px-4 py-2" onClick={onLogin}>Iniciar sesión</button>
-                <button className="btn btn-success m-2 px-4 py-2" onClick={onRegister}>Registrarse</button>
+                <Link to="/login" className="btn btn-primary m-2 px-4 py-2">Iniciar sesión</Link>
+                <Link to="/register" className="btn btn-success m-2 px-4 py-2">Registrarse</Link>
             </div>
         </CSSTransition>
     );

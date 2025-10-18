@@ -62,6 +62,10 @@ def get_db():
     finally:
         db.close()
 
+@app.get("/api/status")
+def get_status(db: Session = Depends(get_db)):
+    return {"needs_setup": db.query(models.User).count() == 0}
+
 def get_current_user(db: Session = Depends(get_db), token: str = Depends(security.oauth2_scheme)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -92,6 +96,68 @@ def get_family_for_user(family_id: int, user: models.User):
         if family.id == family_id:
             return family
     raise HTTPException(status_code=403, detail="User does not belong to this family")
+
+def get_family_owner(family_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    family = db.query(models.Family).filter(models.Family.id == family_id).first()
+    if not family:
+        raise HTTPException(status_code=404, detail="Family not found")
+    if family.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the family owner can perform this action")
+    return family
+
+# --- FAMILY ADMIN ---
+@app.delete("/families/{family_id}/members/{user_id}", response_model=schemas.FamilyWithDetails)
+async def remove_family_member(
+    family_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    family: models.Family = Depends(get_family_owner)
+):
+    user_to_remove = crud.get_user(db, user_id)
+    if not user_to_remove or user_to_remove not in family.users:
+        raise HTTPException(status_code=404, detail="User not found in this family")
+    if user_to_remove.id == family.owner_id:
+        raise HTTPException(status_code=400, detail="Cannot remove the family owner")
+
+    family.users.remove(user_to_remove)
+    db.commit()
+    db.refresh(family)
+    return family
+
+@app.post("/families/{family_id}/transfer-ownership", response_model=schemas.Family)
+async def transfer_family_ownership(
+    family_id: int,
+    request: schemas.TransferOwnershipRequest,
+    db: Session = Depends(get_db),
+    family: models.Family = Depends(get_family_owner)
+):
+    new_owner = crud.get_user(db, request.new_owner_id)
+    if not new_owner or new_owner not in family.users:
+        raise HTTPException(status_code=404, detail="New owner is not a member of this family.")
+    
+    updated_family = crud.transfer_ownership(db, family, request.new_owner_id)
+    return updated_family
+
+@app.post("/families/{family_id}/products", response_model=schemas.Product, dependencies=[Depends(get_family_owner)])
+def create_product_for_family(family_id: int, product: schemas.ProductCreate, db: Session = Depends(get_db)):
+    return crud.create_family_product(db=db, product=product, family_id=family_id)
+
+@app.put("/families/{family_id}/products/{product_id}", response_model=schemas.Product, dependencies=[Depends(get_family_owner)])
+def update_product_for_family(family_id: int, product_id: int, product: schemas.ProductCreate, db: Session = Depends(get_db)):
+    db_product = crud.get_product(db, product_id)
+    if not db_product or db_product.family_id != family_id:
+        raise HTTPException(status_code=404, detail="Product not found in this family")
+    return crud.update_family_product(db=db, product_id=product_id, product_update=product)
+
+@app.delete("/families/{family_id}/products/{product_id}", response_model=schemas.Product, dependencies=[Depends(get_family_owner)])
+def delete_product_for_family(family_id: int, product_id: int, db: Session = Depends(get_db)):
+    db_product = crud.get_product(db, product_id)
+    if not db_product or db_product.family_id != family_id:
+        raise HTTPException(status_code=404, detail="Product not found in this family")
+    return crud.delete_family_product(db=db, product_id=product_id)
+
+
+
 
 # --- Endpoints ---
 
@@ -165,7 +231,125 @@ def register_user(payload: schemas.UserRegister, db: Session = Depends(get_db)):
 def read_users_me(current_user: models.User = Depends(get_current_user)):
     return current_user
 
-# --- PRODUCT ENDPOINTS ---
+# --- USER PROFILE ---
+@app.put("/users/me", response_model=schemas.User)
+def update_current_user(
+    user_update: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return crud.update_me(db=db, user=current_user, user_update=user_update)
+
+@app.post("/users/me/change-password", response_model=schemas.User)
+def change_current_user_password(
+    password_change: schemas.PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if not security.verify_password(password_change.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    return crud.change_password(db=db, user=current_user, new_password=password_change.new_password)
+
+
+# --- ADMIN: USER MANAGEMENT ---
+@app.post("/admin/users", response_model=schemas.User, dependencies=[Depends(get_current_admin_user)])
+def admin_create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    db_user = crud.get_user_by_email(db, email=user.email)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    return crud.create_user(db=db, user=user)
+
+@app.get("/admin/users", response_model=List[schemas.User], dependencies=[Depends(get_current_admin_user)])
+def admin_get_all_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_users(db, skip=skip, limit=limit)
+
+@app.get("/admin/users/{user_id}", response_model=schemas.User, dependencies=[Depends(get_current_admin_user)])
+def admin_get_user(user_id: int, db: Session = Depends(get_db)):
+    db_user = crud.get_user(db, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
+
+@app.put("/admin/users/{user_id}", response_model=schemas.User, dependencies=[Depends(get_current_admin_user)])
+def admin_update_user(user_id: int, user: schemas.UserUpdateByAdmin, db: Session = Depends(get_db)):
+    db_user = crud.update_user(db, user_id=user_id, user_update=user)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
+
+@app.delete("/admin/users/{user_id}", response_model=schemas.User, dependencies=[Depends(get_current_admin_user)])
+def admin_delete_user(user_id: int, db: Session = Depends(get_db)):
+    db_user = crud.delete_user(db, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
+
+
+# --- ADMIN: FAMILY MANAGEMENT ---
+@app.post("/admin/families/{family_id}/members/{user_id}", response_model=schemas.Family, dependencies=[Depends(get_current_admin_user)])
+def admin_add_family_member(family_id: int, user_id: int, db: Session = Depends(get_db)):
+    family = crud.get_family(db, family_id=family_id)
+    if not family:
+        raise HTTPException(status_code=404, detail="Family not found")
+    user = crud.get_user(db, user_id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user in family.users:
+        raise HTTPException(status_code=400, detail="User is already in this family")
+
+    family.users.append(user)
+    db.commit()
+    db.refresh(family)
+    return family
+
+@app.delete("/admin/families/{family_id}/members/{user_id}", response_model=schemas.Family, dependencies=[Depends(get_current_admin_user)])
+def admin_remove_family_member(family_id: int, user_id: int, db: Session = Depends(get_db)):
+    family = crud.get_family(db, family_id=family_id)
+    if not family:
+        raise HTTPException(status_code=404, detail="Family not found")
+    user = crud.get_user(db, user_id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user not in family.users:
+        raise HTTPException(status_code=400, detail="User is not in this family")
+    
+    if user.id == family.owner_id:
+        raise HTTPException(status_code=400, detail="Cannot remove the family owner")
+
+    family.users.remove(user)
+    db.commit()
+    db.refresh(family)
+    return family
+@app.get("/admin/families", response_model=List[schemas.FamilyWithDetails], dependencies=[Depends(get_current_admin_user)])
+def admin_get_all_families(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_families(db, skip=skip, limit=limit)
+
+@app.post("/admin/families", response_model=schemas.Family, dependencies=[Depends(get_current_admin_user)])
+def admin_create_family(family: schemas.FamilyCreateByAdmin, db: Session = Depends(get_db)):
+    return crud.create_family_by_admin(db, family=family)
+
+@app.get("/admin/families/{family_id}", response_model=schemas.FamilyWithDetails, dependencies=[Depends(get_current_admin_user)])
+def admin_get_family(family_id: int, db: Session = Depends(get_db)):
+    db_family = crud.get_family(db, family_id=family_id)
+    if db_family is None:
+        raise HTTPException(status_code=404, detail="Family not found")
+    return db_family
+
+@app.put("/admin/families/{family_id}", response_model=schemas.Family, dependencies=[Depends(get_current_admin_user)])
+def admin_update_family(family_id: int, family: schemas.FamilyUpdateByAdmin, db: Session = Depends(get_db)):
+    db_family = crud.update_family(db, family_id=family_id, family_update=family)
+    if db_family is None:
+        raise HTTPException(status_code=404, detail="Family not found")
+    return db_family
+
+@app.delete("/admin/families/{family_id}", response_model=schemas.Family, dependencies=[Depends(get_current_admin_user)])
+def admin_delete_family(family_id: int, db: Session = Depends(get_db)):
+    db_family = crud.delete_family(db, family_id=family_id)
+    if db_family is None:
+        raise HTTPException(status_code=404, detail="Family not found")
+    return db_family
 @app.get("/families/{family_id}/products", response_model=List[schemas.Product])
 def get_products_for_family(
     family_id: int,
@@ -205,7 +389,7 @@ def upload_product_image(
         webp_image_bytes = buffer.getvalue()
         
         base64_encoded_image = base64.b64encode(webp_image_bytes).decode('utf-8')
-        data_url = f"data:image/webp;base64,{base64_encoded_image}"
+        data_url = f"{base64_encoded_image}"
 
         db_product.image_url = data_url
         db.commit()
@@ -537,42 +721,39 @@ def create_blame_for_item(
         detalles=blame_data.detalles
     )
 
-@app.post("/items/{product_id}/upload-image")
-def upload_image_for_product(
-    product_id: int,
+@app.post("/items/{item_id}/upload-image")
+def upload_image_for_item(
+    item_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    # Buscar el producto
-    product = db.query(models.Product).filter(models.Product.id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    item = crud.get_item(db, item_id=item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
 
-    # Validar acceso: el usuario debe pertenecer a la familia del producto
+    product = item.product
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found for this item")
+
     family = product.family
     if not family:
         raise HTTPException(status_code=400, detail="El producto no pertenece a ninguna familia")
 
-    # Verificar si el usuario pertenece a la familia
     if current_user not in family.users and current_user.id != family.owner_id:
         raise HTTPException(status_code=403, detail="No tienes permisos para modificar este producto")
 
-    # Intentar abrir la imagen
     try:
         image = Image.open(file.file)
     except Exception:
         raise HTTPException(status_code=400, detail="El archivo no es una imagen válida")
 
-    # Convertir a formato WEBP y guardar en memoria
     buffer = io.BytesIO()
     image.convert("RGB").save(buffer, format="WEBP", quality=80)
     buffer.seek(0)
 
-    # Codificar la imagen como base64
     image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
 
-    # Guardar la imagen codificada en la base de datos
     product.image_url = image_base64
     product.updated_at = datetime.utcnow()
     db.commit()
@@ -581,5 +762,5 @@ def upload_image_for_product(
     return {
         "message": "Imagen convertida y guardada correctamente",
         "product_id": product.id,
-        "image_url": image_base64  # solo muestra una parte para verificación
+        "image_url": image_base64
     }

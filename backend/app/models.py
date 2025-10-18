@@ -88,6 +88,7 @@ class Product(Base):
     __tablename__ = 'products'
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)
+    description = Column(Text)
     family_id = Column(Integer, ForeignKey('families.id'))
     image_url = Column(LONGTEXT)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
