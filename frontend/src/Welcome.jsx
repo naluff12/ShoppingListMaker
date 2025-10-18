@@ -20,8 +20,8 @@ function Welcome() {
 
             try {
                 const [listsRes, productsRes, userRes] = await Promise.all([
-                    fetch(`/api/api/home/last-lists`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`/api/api/home/last-products`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`/api/home/last-lists`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`/api/home/last-products`, { headers: { 'Authorization': `Bearer ${token}` } }),
                     fetch(`/api/users/me`, { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
 

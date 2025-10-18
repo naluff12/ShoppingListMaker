@@ -52,7 +52,7 @@ function App() {
     useEffect(() => {
         const checkStatus = async () => {
             try {
-                const response = await fetch(`/api/api/status`);
+                const response = await fetch(`/api/status`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data.needs_setup) {
