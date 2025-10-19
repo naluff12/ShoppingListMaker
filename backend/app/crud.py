@@ -200,6 +200,13 @@ def create_shopping_list(db: Session, list_data: schemas.ShoppingListCreate, own
     )
     db.add(blame_entry)
 
+    # Create notification
+    calendar = db.query(models.Calendar).filter(models.Calendar.id == db_list.calendar_id).first()
+    if calendar:
+        user = db.query(models.User).filter(models.User.id == owner_id).first()
+        message = f"{user.username} ha creado la lista de compras '{db_list.name}'."
+        create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=owner_id, link=f"/shopping-list/{db_list.id}")
+
     db.commit()
     db.refresh(db_list)
     return db_list
@@ -223,6 +230,13 @@ def update_shopping_list(db: Session, list_id: int, list_update: schemas.Shoppin
             entity_id=list_id, detalles=". ".join(blame_details)
         )
         db.add(blame_entry)
+
+        # Create notification
+        calendar = db.query(models.Calendar).filter(models.Calendar.id == db_list.calendar_id).first()
+        if calendar:
+            user = db.query(models.User).filter(models.User.id == user_id).first()
+            message = f"{user.username} ha actualizado la lista de compras '{db_list.name}'."
+            create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{db_list.id}")
 
     db.commit()
     db.refresh(db_list)
@@ -259,6 +273,15 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
     )
     db.add(blame_entry)
 
+    # Create notification
+    shopping_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == item.list_id).first()
+    if shopping_list:
+        calendar = db.query(models.Calendar).filter(models.Calendar.id == shopping_list.calendar_id).first()
+        if calendar:
+            user = db.query(models.User).filter(models.User.id == user_id).first()
+            message = f"{user.username} ha agregado el producto '{item.nombre}' a la lista '{shopping_list.name}'."
+            create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{shopping_list.id}")
+
     db.commit()
     db.refresh(db_item)
     # Eagerly load product for the return value
@@ -292,6 +315,15 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
         )
         db.add(blame_entry)
 
+        # Create notification
+        shopping_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == db_item.list_id).first()
+        if shopping_list:
+            calendar = db.query(models.Calendar).filter(models.Calendar.id == shopping_list.calendar_id).first()
+            if calendar:
+                user = db.query(models.User).filter(models.User.id == user_id).first()
+                message = f"{user.username} ha actualizado el producto '{db_item.nombre}' en la lista '{shopping_list.name}'."
+                create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{shopping_list.id}")
+
     db.commit()
     db.refresh(db_item)
     return db_item
@@ -311,6 +343,15 @@ def update_item_status(db: Session, item_id: int, status: str, user_id: int):
         )
         db.add(blame_entry)
 
+        # Create notification
+        shopping_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == db_item.list_id).first()
+        if shopping_list:
+            calendar = db.query(models.Calendar).filter(models.Calendar.id == shopping_list.calendar_id).first()
+            if calendar:
+                user = db.query(models.User).filter(models.User.id == user_id).first()
+                message = f"{user.username} ha cambiado el estado del producto '{db_item.product.name}' a '{status}' en la lista '{shopping_list.name}'."
+                create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{shopping_list.id}")
+
         db.commit()
         db.refresh(db_item)
     return db_item
@@ -318,6 +359,15 @@ def update_item_status(db: Session, item_id: int, status: str, user_id: int):
 def delete_item(db: Session, item_id: int, user_id: int):
     db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
     if db_item:
+        # Create notification before deleting the item to have access to its data
+        shopping_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == db_item.list_id).first()
+        if shopping_list:
+            calendar = db.query(models.Calendar).filter(models.Calendar.id == shopping_list.calendar_id).first()
+            if calendar:
+                user = db.query(models.User).filter(models.User.id == user_id).first()
+                message = f"{user.username} ha eliminado el producto '{db_item.product.name}' de la lista '{shopping_list.name}'."
+                create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{shopping_list.id}")
+
         blame_entry = models.Blame(
             user_id=user_id,
             action="delete",
@@ -331,9 +381,16 @@ def delete_item(db: Session, item_id: int, user_id: int):
         db.commit()
     return db_item
 
-def delete_shopping_list(db: Session, list_id: int):
+def delete_shopping_list(db: Session, list_id: int, user_id: int):
     db_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == list_id).first()
     if db_list:
+        # Create notification before deleting the list to have access to its data
+        calendar = db.query(models.Calendar).filter(models.Calendar.id == db_list.calendar_id).first()
+        if calendar:
+            user = db.query(models.User).filter(models.User.id == user_id).first()
+            message = f"{user.username} ha eliminado la lista de compras '{db_list.name}'."
+            create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id)
+
         db.delete(db_list)
         db.commit()
     return db_list
@@ -370,3 +427,31 @@ def get_last_lists_for_user_families(db: Session, user: models.User, limit: int 
 def get_last_products_for_user_families(db: Session, user: models.User, limit: int = 5):
     family_ids = [family.id for family in user.families]
     return db.query(models.Product).filter(models.Product.family_id.in_(family_ids)).order_by(models.Product.created_at.desc()).limit(limit).all()
+# CRUD for Notifications
+def create_notification_for_family_members(db: Session, family_id: int, message: str, created_by_id: int, link: str = None):
+    family = db.query(models.Family).options(joinedload(models.Family.users)).filter(models.Family.id == family_id).first()
+    if not family:
+        return
+
+    for user in family.users:
+        if user.id != created_by_id:
+            notification = models.Notification(
+                user_id=user.id,
+                family_id=family_id,
+                message=message,
+                created_by_id=created_by_id,
+                link=link
+            )
+            db.add(notification)
+    db.commit()
+
+def get_notifications_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
+    return db.query(models.Notification).filter(models.Notification.user_id == user_id).order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+
+def mark_notification_as_read(db: Session, notification_id: int, user_id: int):
+    notification = db.query(models.Notification).filter(models.Notification.id == notification_id, models.Notification.user_id == user_id).first()
+    if notification:
+        notification.is_read = True
+        db.commit()
+        db.refresh(notification)
+    return notification

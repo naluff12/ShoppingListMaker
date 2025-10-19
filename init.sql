@@ -109,3 +109,17 @@ CREATE TABLE blames (
     detalles TEXT,
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
+
+CREATE TABLE notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    family_id INT,
+    message TEXT NOT NULL,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    created_by_id INT,
+    link VARCHAR(255),
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (family_id) REFERENCES families (id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_id) REFERENCES users (id) ON DELETE SET NULL
+);

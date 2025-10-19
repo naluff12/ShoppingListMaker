@@ -1,14 +1,78 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Navbar, Nav, Button, Container } from 'react-bootstrap';
+import { Navbar, Nav, Button, Container, Dropdown, Badge } from 'react-bootstrap';
+import { Bell } from 'react-bootstrap-icons';
 
 function NavigationBar({ user, onLogout }) {
   const navigate = useNavigate();
+  const [notifications, setNotifications] = useState([]);
+
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('/api/notifications', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data);
+      } else {
+        console.error('Failed to fetch notifications');
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      // Set up polling
+      const intervalId = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
+
+      // Clean up interval on component unmount
+      return () => clearInterval(intervalId);
+    }
+  }, [user]);
 
   const handleLogout = () => {
     onLogout();
     navigate('/login');
   };
+
+  const handleNotificationClick = async (notification) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      // Mark as read only if it's not already read
+      if (!notification.is_read) {
+        await fetch(`/api/notifications/${notification.id}/mark-as-read`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        // Refresh notifications locally for immediate UI update
+        setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n));
+      }
+
+      // Navigate to the link if it exists
+      // if (notification.link) { //ajustar para no enviar enlace tal cual
+      //   navigate(notification.link);
+      // }
+
+    } catch (error) {
+      console.error('Error handling notification click:', error);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
     <Navbar bg="dark" variant="dark" expand="lg">
@@ -24,6 +88,30 @@ function NavigationBar({ user, onLogout }) {
           <Nav>
             {user ? (
               <>
+                <Dropdown align="end">
+                  <Dropdown.Toggle as={Nav.Link} id="dropdown-notifications" className="d-flex align-items-center">
+                    <Bell size={20} />
+                    {unreadCount > 0 && <Badge pill bg="danger" style={{ marginLeft: '5px' }}>{unreadCount}</Badge>}
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu>
+                    <Dropdown.Header>{unreadCount > 0 ? `${unreadCount} notificaciones nuevas` : 'No hay notificaciones nuevas'}</Dropdown.Header>
+                    {notifications.length > 0 ? (
+                      notifications.map(notification => (
+                        <Dropdown.Item 
+                          key={notification.id} 
+                          onClick={() => handleNotificationClick(notification)}
+                          className={!notification.is_read ? 'fw-bold' : ''}
+                        >
+                          <small>{new Date(notification.created_at).toLocaleString()}</small><br/>
+                          {notification.message}
+                        </Dropdown.Item>
+                      ))
+                    ) : (
+                      <Dropdown.Item disabled>No hay notificaciones</Dropdown.Item>
+                    )}
+                  </Dropdown.Menu>
+                </Dropdown>
+
                 <Nav.Link as={Link} to="/profile">Perfil</Nav.Link>
                 <Button variant="outline-light" onClick={handleLogout}>Logout</Button>
               </>

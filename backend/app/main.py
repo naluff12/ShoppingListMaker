@@ -579,7 +579,7 @@ def delete_shopping_list_endpoint(
     if lista.calendar:
         get_family_for_user(lista.calendar.family_id, current_user)
     
-    crud.delete_shopping_list(db=db, list_id=lista_id)
+    crud.delete_shopping_list(db=db, list_id=lista_id, user_id=current_user.id)
     return
 
 @app.put("/listas/{lista_id}", response_model=schemas.ShoppingList)
@@ -772,3 +772,23 @@ def get_last_lists(db: Session = Depends(get_db), current_user: models.User = De
 @app.get("/home/last-products", response_model=List[schemas.Product])
 def get_last_products(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_last_products_for_user_families(db=db, user=current_user)
+
+# --- NOTIFICATION ENDPOINTS ---
+@app.get("/notifications", response_model=List[schemas.Notification])
+def get_notifications(
+    skip: int = 0, limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return crud.get_notifications_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
+
+@app.post("/notifications/{notification_id}/mark-as-read", response_model=schemas.Notification)
+def mark_as_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    notification = crud.mark_notification_as_read(db, notification_id=notification_id, user_id=current_user.id)
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return notification

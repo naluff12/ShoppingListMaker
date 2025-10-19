@@ -246,6 +246,28 @@ class Blame(BlameBase):
         from_attributes = True
 
 
+# ---------- NOTIFICATION ----------
+class NotificationBase(BaseModel):
+    message: str
+    link: Optional[str] = None
+
+class NotificationCreate(NotificationBase):
+    user_id: int
+    family_id: int
+    created_by_id: int
+
+class Notification(NotificationBase):
+    id: int
+    is_read: bool
+    created_at: datetime
+    created_by: UserInDBBase
+
+    class Config:
+        from_attributes = True
+
+class NotificationUpdate(BaseModel):
+    is_read: bool
+
 User.model_rebuild()
 Blame.model_rebuild()
 ShoppingList.model_rebuild()

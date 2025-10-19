@@ -23,6 +23,7 @@ class Family(Base):
     owner = relationship("User", back_populates="owned_families")
     users = relationship("User", secondary=user_families, back_populates="families")
     calendars = relationship("Calendar", back_populates="family")
+    notifications = relationship("Notification", back_populates="family")
 
 class User(Base):
     __tablename__ = 'users'
@@ -41,6 +42,7 @@ class User(Base):
     lists = relationship("ShoppingList", back_populates="owner")
     blame = relationship("Blame", back_populates="user")
     items_creados = relationship("ListItem", back_populates="creado_por")
+    notifications = relationship("Notification", foreign_keys='[Notification.user_id]', back_populates="user")
 
 class Calendar(Base):
     __tablename__ = 'calendars'
@@ -153,3 +155,18 @@ class Blame(Base):
         uselist=False,
         viewonly=True
     )
+
+class Notification(Base):
+    __tablename__ = 'notifications'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    family_id = Column(Integer, ForeignKey('families.id'))
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_by_id = Column(Integer, ForeignKey('users.id'))
+    link = Column(String(255))
+
+    user = relationship("User", foreign_keys=[user_id], back_populates="notifications")
+    family = relationship("Family", back_populates="notifications")
+    created_by = relationship("User", foreign_keys=[created_by_id])
