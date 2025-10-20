@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Navbar, Nav, Button, Container, Dropdown, Badge } from 'react-bootstrap';
 import { Bell } from 'react-bootstrap-icons';
+import toast from 'react-hot-toast';
 
 function NavigationBar({ user, onLogout }) {
   const navigate = useNavigate();
@@ -62,10 +63,25 @@ function NavigationBar({ user, onLogout }) {
         setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n));
       }
 
-      // Navigate to the link if it exists
-      // if (notification.link) { //ajustar para no enviar enlace tal cual
-      //   navigate(notification.link);
-      // }
+      if (notification.link) {
+        const match = notification.link.match(/\/shopping-list\/(\d+)/);
+        if (match) {
+          const listId = match[1];
+          const response = await fetch(`/api/listas/${listId}`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          if (response.ok) {
+            const listData = await response.json();
+            navigate('/shopping-list', { state: { list: listData } });
+          } else {
+            toast.error('El contenido ya no está disponible.');
+          }
+        } else {
+            navigate(notification.link);
+        }
+      }
 
     } catch (error) {
       console.error('Error handling notification click:', error);

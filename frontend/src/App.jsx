@@ -10,6 +10,7 @@ import AdminDashboard from './AdminDashboard.jsx';
 import UserProfile from './UserProfile.jsx';
 import NavigationBar from './NavigationBar.jsx';
 import Setup from './Setup.jsx';
+import { Toaster } from 'react-hot-toast';
 
 const API_URL = 'http://localhost:8000';
 
@@ -84,6 +85,7 @@ function App() {
 
     return (
         <div>
+            <Toaster />
             <NavigationBar user={user} onLogout={handleLogout} />
             <Routes>
                 <Route path="/setup" element={<Setup />} />
