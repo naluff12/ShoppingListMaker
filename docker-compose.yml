@@ -25,6 +25,8 @@ services:
     environment:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      FRONTEND_URL: ${FRONTEND_URL}
+      VAPID_SUB_MAIL: ${VAPID_SUB_MAIL}
       DATABASE_URL: "mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db/${MYSQL_DATABASE}"
     depends_on:
       - db

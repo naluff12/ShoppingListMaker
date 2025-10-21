@@ -1,9 +1,15 @@
 self.addEventListener('push', event => {
-    const data = event.data.json();
+    let data;
+    try {
+        data = event.data.json();
+    } catch (e) {
+        data = { title: 'Notificación', body: event.data.text(), url: '/' };
+    }
+
     const options = {
         body: data.body,
-        icon: '/icon.png', // Optional: you can add an icon
-        badge: '/badge.png', // Optional: for Android
+        icon: '/icon.png',
+        badge: '/badge.png',
         data: {
             url: data.url
         }

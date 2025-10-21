@@ -1,9 +1,11 @@
+import os
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from . import models, schemas, security
 from .push_notifications import send_web_push
 import json
 
+VAPID_PUBLIC_KEY = os.environ.get("FRONTEND_URL")
 # CRUD for Products
 def get_or_create_product(db: Session, product_name: str, family_id: int) -> models.Product:
     # Check if product exists (case-insensitive)
@@ -336,9 +338,9 @@ def trigger_push_notification_for_item_creation(db: Session, family_id: int, mes
                 payload = {
                     "title": "Nuevo Producto en la Lista",
                     "body": message,
-                    "url": link
+                    "url": "https://shop-list.insanityblizz.net/"
                 }
-                send_web_push(subscription_data, json.dumps(payload))
+                send_web_push(subscription_data, payload)
 
 
 def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, user_id: int):

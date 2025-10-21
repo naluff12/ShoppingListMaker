@@ -5,10 +5,10 @@ from pywebpush import webpush, WebPushException
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY")
 VAPID_CLAIMS = {
-    "sub": "mailto:tucorreo@ejemplo.com"  # Asegúrate que este sea tu correo real
+    "sub": os.environ.get("VAPID_SUB_MAIL")
 }
 
-def send_web_push(subscription_information: dict, message_body: str):
+def send_web_push(subscription_information: dict, message_data: dict):
     """
     Sends a web push notification to a single subscriber.
     """
@@ -20,7 +20,7 @@ def send_web_push(subscription_information: dict, message_body: str):
     try:
         webpush(
             subscription_info=subscription_information,
-            data=message_body,
+            data=json.dumps(message_data),
             vapid_private_key=VAPID_PRIVATE_KEY,
             vapid_claims=VAPID_CLAIMS
         )
