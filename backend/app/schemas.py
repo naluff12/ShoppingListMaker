@@ -1,6 +1,15 @@
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, TypeVar, Generic
 from datetime import date, datetime
+
+T = TypeVar('T')
+
+class Page(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    size: int
+
 
 # Forward references for circular dependencies
 class UserInDBBase(BaseModel):
@@ -61,6 +70,7 @@ class ListItemCreate(BaseModel):
 
 class ListItem(ListItemBase):
     id: int
+    list_id: int
     creado_por: Optional[UserInDBBase] = None
     precio_estimado: Optional[float] = None
     precio_confirmado: Optional[float] = None

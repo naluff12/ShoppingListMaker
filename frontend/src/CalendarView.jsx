@@ -26,7 +26,7 @@ function CalendarView() {
             headers: { 'Authorization': 'Bearer ' + token }
         })
             .then(res => res.json())
-            .then(data => setListas(Array.isArray(data) ? data : []))
+            .then(data => setListas(Array.isArray(data?.items) ? data.items : []))
             .finally(() => setLoading(false));
     };
 
@@ -62,7 +62,7 @@ function CalendarView() {
             // Lógica de coloreado mejorada
             const isReviewed = listsOnDate.some(l => l.status === 'revisada');
             const isNotReviewed = listsOnDate.some(l => l.status === 'no revisada');
-            
+
             if (isReviewed) return 'calendar-day-reviewed';
             if (isNotReviewed) return 'calendar-day-not-reviewed';
             if (listsOnDate.some(l => l.status === 'pendiente')) return 'calendar-day-pending';
@@ -140,7 +140,7 @@ function CalendarView() {
                 </div>
                 <div className="col-md-5">
                     <h4 className="mt-3">{selectedDate.toLocaleDateString()}</h4>
-                            <button className="btn btn-success btn-sm mt-2" onClick={() => setShowForm(true)}>Crear lista para este día</button>
+                    <button className="btn btn-success btn-sm mt-2" onClick={() => setShowForm(true)}>Crear lista para este día</button>
                     <hr />
                     {listsForSelectedDate.length > 0 ? (
                         <div className="list-group">

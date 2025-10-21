@@ -350,19 +350,23 @@ def admin_delete_family(family_id: int, db: Session = Depends(get_db)):
     if db_family is None:
         raise HTTPException(status_code=404, detail="Family not found")
     return db_family
-@app.get("/families/{family_id}/products", response_model=List[schemas.Product])
+@app.get("/families/{family_id}/products", response_model=schemas.Page[schemas.Product])
 def get_products_for_family(
     family_id: int,
+    page: int = 1,
+    size: int = 10,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     get_family_for_user(family_id, current_user)
-    return crud.get_products_by_family(db=db, family_id=family_id)
+    result = crud.get_products_by_family(db=db, family_id=family_id, skip=(page - 1) * size, limit=size)
+    return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
 
-@app.get("/products/search", response_model=List[schemas.Product])
-def search_products_endpoint(q: str, family_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+@app.get("/products/search", response_model=schemas.Page[schemas.Product])
+def search_products_endpoint(q: str, family_id: int, page: int = 1, size: int = 10, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     get_family_for_user(family_id, current_user)
-    return crud.search_products(db=db, name=q, family_id=family_id)
+    result = crud.search_products(db=db, name=q, family_id=family_id, skip=(page - 1) * size, limit=size)
+    return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
 
 @app.post("/products/{product_id}/upload-image", response_model=schemas.Product)
 def upload_product_image(
@@ -554,9 +558,11 @@ def create_shopping_list_endpoint(
 
     return crud.create_shopping_list(db=db, list_data=list_data, owner_id=current_user.id)
 
-@app.get("/listas/", response_model=List[schemas.ShoppingList])
+@app.get("/listas/", response_model=schemas.Page[schemas.ShoppingList])
 def get_shopping_lists(
     calendar_id: int,
+    page: int = 1,
+    size: int = 10,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -564,7 +570,8 @@ def get_shopping_lists(
     if not calendar:
         raise HTTPException(status_code=404, detail="Calendar not found")
     get_family_for_user(calendar.family_id, current_user)
-    return crud.get_lists_by_calendar(db=db, calendar_id=calendar_id)
+    result = crud.get_lists_by_calendar(db=db, calendar_id=calendar_id, skip=(page - 1) * size, limit=size)
+    return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
 
 @app.delete("/listas/{lista_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_shopping_list_endpoint(
@@ -774,13 +781,15 @@ def get_last_products(db: Session = Depends(get_db), current_user: models.User =
     return crud.get_last_products_for_user_families(db=db, user=current_user)
 
 # --- NOTIFICATION ENDPOINTS ---
-@app.get("/notifications", response_model=List[schemas.Notification])
+@app.get("/notifications", response_model=schemas.Page[schemas.Notification])
 def get_notifications(
-    skip: int = 0, limit: int = 100,
+    page: int = 1,
+    size: int = 20,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    return crud.get_notifications_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
+    result = crud.get_notifications_by_user(db, user_id=current_user.id, skip=(page - 1) * size, limit=size)
+    return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
 
 @app.post("/notifications/{notification_id}/mark-as-read", response_model=schemas.Notification)
 def mark_as_read(
@@ -792,3 +801,21 @@ def mark_as_read(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
     return notification
+
+@app.post("/notifications/mark-all-as-read", response_model=List[schemas.Notification])
+def mark_all_as_read(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    return crud.mark_all_notifications_as_read(db, user_id=current_user.id)
+
+@app.delete("/notifications/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    notification = crud.delete_notification(db, notification_id=notification_id, user_id=current_user.id)
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return

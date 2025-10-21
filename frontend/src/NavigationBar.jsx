@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Navbar, Nav, Button, Container, Dropdown, Badge } from 'react-bootstrap';
 import { Bell } from 'react-bootstrap-icons';
@@ -6,7 +6,7 @@ import toast from 'react-hot-toast';
 
 function NavigationBar({ user, onLogout }) {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState({});
 
   const fetchNotifications = async () => {
     try {
@@ -79,7 +79,7 @@ function NavigationBar({ user, onLogout }) {
             toast.error('El contenido ya no está disponible.');
           }
         } else {
-            navigate(notification.link);
+          navigate(notification.link);
         }
       }
 
@@ -88,7 +88,60 @@ function NavigationBar({ user, onLogout }) {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const handleMarkAllRead = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('/api/notifications/mark-all-as-read', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        setNotifications(prev => {
+          const updatedItems = prev.items.map(item => ({ ...item, is_read: true }));
+          return { ...prev, items: updatedItems };
+        });
+      } else {
+        console.error('Failed to mark all notifications as read');
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  const handleDeleteNotification = async (notificationId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        setNotifications(prev => {
+          const updatedItems = prev.items.filter(item => item.id !== notificationId);
+          return { ...prev, items: updatedItems };
+        });
+      } else {
+        console.error('Failed to delete notification');
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
+  };
+
+  const unreadCount = useMemo(() => {
+    return notifications.items?.filter(n => !n?.is_read).length;
+  }, [notifications]);
+
 
   return (
     <Navbar bg="dark" variant="dark" expand="lg">
@@ -109,19 +162,26 @@ function NavigationBar({ user, onLogout }) {
                     <Bell size={20} />
                     {unreadCount > 0 && <Badge pill bg="danger" style={{ marginLeft: '5px' }}>{unreadCount}</Badge>}
                   </Dropdown.Toggle>
-                  <Dropdown.Menu>
+                  <Dropdown.Menu className="dropdown-menu-end" style={{ maxHeight: '400px', overflowY: 'auto', minWidth: '300px', right: 0, left: 'auto' }}>
                     <Dropdown.Header>{unreadCount > 0 ? `${unreadCount} notificaciones nuevas` : 'No hay notificaciones nuevas'}</Dropdown.Header>
-                    {notifications.length > 0 ? (
-                      notifications.map(notification => (
-                        <Dropdown.Item 
-                          key={notification.id} 
-                          onClick={() => handleNotificationClick(notification)}
-                          className={!notification.is_read ? 'fw-bold' : ''}
-                        >
-                          <small>{new Date(notification.created_at).toLocaleString()}</small><br/>
-                          {notification.message}
-                        </Dropdown.Item>
-                      ))
+                    {notifications.items?.length > 0 ? (
+                      <>
+                        <Dropdown.Item as="button" onClick={handleMarkAllRead}>Marcar todas como leídas</Dropdown.Item>
+                        <Dropdown.Divider />
+                        {notifications.items.map(notification => (
+                          <Dropdown.Item
+                            key={notification.id}
+                            onClick={() => handleNotificationClick(notification)}
+                            className={`d-flex justify-content-between align-items-start ${!notification.is_read ? 'fw-bold' : ''}`}
+                          >
+                            <div>
+                              <small>{new Date(notification.created_at).toLocaleString()}</small><br />
+                              {notification.message}
+                            </div>
+                            <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }}>&times;</Button>
+                          </Dropdown.Item>
+                        ))}
+                      </>
                     ) : (
                       <Dropdown.Item disabled>No hay notificaciones</Dropdown.Item>
                     )}

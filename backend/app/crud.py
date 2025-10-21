@@ -19,10 +19,16 @@ def get_or_create_product(db: Session, product_name: str, family_id: int) -> mod
     return db_product
 
 def search_products(db: Session, name: str, family_id: int, skip: int = 0, limit: int = 10):
-    return db.query(models.Product).filter(models.Product.family_id == family_id, models.Product.name.ilike(f"%{name}%")).offset(skip).limit(limit).all()
+    query = db.query(models.Product).filter(models.Product.family_id == family_id, models.Product.name.ilike(f"%{name}%"))
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
 
 def get_products_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100):
-    return db.query(models.Product).filter(models.Product.family_id == family_id).offset(skip).limit(limit).all()
+    query = db.query(models.Product).filter(models.Product.family_id == family_id)
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
 
 def get_product(db: Session, product_id: int):
     return db.query(models.Product).filter(models.Product.id == product_id).first()
@@ -180,8 +186,11 @@ def get_list(db: Session, list_id: int):
         joinedload(models.ShoppingList.calendar)
     ).filter(models.ShoppingList.id == list_id).first()
 
-def get_lists_by_calendar(db: Session, calendar_id: int):
-    return db.query(models.ShoppingList).filter(models.ShoppingList.calendar_id == calendar_id).all()
+def get_lists_by_calendar(db: Session, calendar_id: int, skip: int = 0, limit: int = 100):
+    query = db.query(models.ShoppingList).filter(models.ShoppingList.calendar_id == calendar_id)
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
 
 def get_lists_by_user(db: Session, user_id: int):
     return db.query(models.ShoppingList).filter(models.ShoppingList.owner_id == user_id).all()
@@ -446,7 +455,10 @@ def create_notification_for_family_members(db: Session, family_id: int, message:
     db.commit()
 
 def get_notifications_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
-    return db.query(models.Notification).filter(models.Notification.user_id == user_id).order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+    query = db.query(models.Notification).filter(models.Notification.user_id == user_id).order_by(models.Notification.created_at.desc())
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
 
 def mark_notification_as_read(db: Session, notification_id: int, user_id: int):
     notification = db.query(models.Notification).filter(models.Notification.id == notification_id, models.Notification.user_id == user_id).first()
@@ -454,4 +466,18 @@ def mark_notification_as_read(db: Session, notification_id: int, user_id: int):
         notification.is_read = True
         db.commit()
         db.refresh(notification)
+    return notification
+
+def mark_all_notifications_as_read(db: Session, user_id: int):
+    notifications = db.query(models.Notification).filter(models.Notification.user_id == user_id, models.Notification.is_read == False).all()
+    for notification in notifications:
+        notification.is_read = True
+    db.commit()
+    return notifications
+
+def delete_notification(db: Session, notification_id: int, user_id: int):
+    notification = db.query(models.Notification).filter(models.Notification.id == notification_id, models.Notification.user_id == user_id).first()
+    if notification:
+        db.delete(notification)
+        db.commit()
     return notification

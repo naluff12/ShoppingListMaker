@@ -27,10 +27,14 @@ function ShoppingListView() {
     const [products, setProducts] = useState([]);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [editingItem, setEditingItem] = useState(null);
+    const [itemsPage, setItemsPage] = useState(1);
+    const [itemsTotalPages, setItemsTotalPages] = useState(1);
+    const [productsPage, setProductsPage] = useState(1);
+    const [productsTotalPages, setProductsTotalPages] = useState(1);
 
 
 
-    const fetchListAndBlame = () => {
+    const fetchListAndBlame = (page = 1) => {
         if (!list || !list.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
@@ -42,11 +46,13 @@ function ShoppingListView() {
             .then(([listData, blameData]) => {
                 setListDetails(listData);
                 setItems(Array.isArray(listData.items) ? listData.items : []);
+                setItemsPage(listData.page);
+                setItemsTotalPages(Math.ceil(listData.total / listData.size));
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
                     fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
                         .then(res => res.json())
-                        .then(data => setProducts(data))
+                        .then(data => setProducts(data.items))
                         .catch(() => setProducts([]));
                 }
             })
@@ -304,6 +310,30 @@ function ShoppingListView() {
         }
     };
 
+    const fetchProducts = async (query, page = 1) => {
+        if (!query.trim() || !listDetails?.calendar?.family_id) {
+            setProducts([]);
+            return;
+        }
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(
+                `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(query)}&page=${page}&size=5`,
+                { headers: { 'Authorization': 'Bearer ' + token } }
+            );
+            if (res.ok) {
+                const data = await res.json();
+                setProducts(Array.isArray(data.items) ? data.items : []);
+                setProductsPage(data.page);
+                setProductsTotalPages(Math.ceil(data.total / data.size));
+            } else {
+                setProducts([]);
+            }
+        } catch {
+            setProducts([]);
+        }
+    };
+
     const totalEstimado = useMemo(() => items.reduce((acc, item) => acc + (item.precio_estimado || 0) * item.cantidad, 0), [items]);
     const totalConfirmado = useMemo(() => items.reduce((acc, item) => item.status === 'comprado' ? acc + (item.precio_confirmado || item.precio_estimado || 0) * item.cantidad : acc, 0), [items]);
 
@@ -323,152 +353,155 @@ function ShoppingListView() {
                         )}
                     </div>
                     {/* 🔹 AUTOCOMPLETADO CON IMÁGENES */}
-{/* 🔹 AUTOCOMPLETADO CON IMÁGENES + NAVEGACIÓN */}
-<Form onSubmit={handleAdd} className="mb-3 position-relative" style={{ zIndex: 10 }}>
-    <InputGroup>
-        <Form.Control
-            type="text"
-            placeholder="Nuevo producto"
-            value={newItem}
-            onChange={async (e) => {
-                const value = e.target.value;
-                setNewItem(value);
-                setHighlightedIndex(-1);
+                    {/* 🔹 AUTOCOMPLETADO CON IMÁGENES + NAVEGACIÓN */}
+                    <Form onSubmit={handleAdd} className="mb-3 position-relative" style={{ zIndex: 10 }}>
+                        <InputGroup>
+                            <Form.Control
+                                type="text"
+                                placeholder="Nuevo producto"
+                                value={newItem}
+                                onChange={async (e) => {
+                                    const value = e.target.value;
+                                    setNewItem(value);
+                                    setHighlightedIndex(-1);
+                                    setProductsPage(1);
 
-                if (!value.trim() || !listDetails?.calendar?.family_id) {
-                    setProducts([]);
-                    return;
-                }
+                                    if (!value.trim() || !listDetails?.calendar?.family_id) {
+                                        setProducts([]);
+                                        return;
+                                    }
 
-                const token = localStorage.getItem('token');
-                try {
-                    const res = await fetch(
-                        `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(value)}`,
-                        { headers: { 'Authorization': 'Bearer ' + token } }
-                    );
-                    if (res.ok) {
-                        const data = await res.json();
-                        setProducts(Array.isArray(data) ? data : []);
-                    } else {
-                        setProducts([]);
-                    }
-                } catch {
-                    setProducts([]);
-                }
-            }}
-            onKeyDown={(e) => {
-                if (products.length === 0) return;
-                if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    setHighlightedIndex((prev) => (prev + 1) % products.length);
-                } else if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
-                } else if (e.key === "Enter" && highlightedIndex >= 0) {
-                    e.preventDefault();
-                    const selected = products[highlightedIndex];
-                    if (selected) {
-                        setNewItem(selected.name);
-                        setProducts([]);
-                    }
-                }
-            }}
-            onFocus={(e) => {
-                if (products.length > 0) e.target.parentElement.classList.add("show");
-            }}
-            onBlur={() => {
-                setTimeout(() => {
-                    const dropdown = document.querySelector(".autocomplete-dropdown");
-                    if (dropdown) dropdown.style.display = "none";
-                }, 200);
-            }}
-        />
-        <Form.Control
-            type="number"
-            value={newQuantity}
-            onChange={(e) => setNewQuantity(parseFloat(e.target.value))}
-            style={{ maxWidth: '80px' }}
-        />
-        <Form.Select
-            value={newUnit}
-            onChange={(e) => setNewUnit(e.target.value)}
-            style={{ maxWidth: '100px' }}
-        >
-            <option value="piezas">piezas</option>
-            <option value="kg">kg</option>
-            <option value="g">g</option>
-            <option value="L">L</option>
-            <option value="ml">ml</option>
-        </Form.Select>
-        <Button type="submit" variant="primary" disabled={loading}>
-            Agregar
-        </Button>
-    </InputGroup>
-
-    {products.length > 0 && newItem.trim() !== "" && (
-        <div
-            className="autocomplete-dropdown position-absolute bg-white border rounded shadow-sm mt-1 w-100"
-            style={{ maxHeight: "250px", overflowY: "auto" }}
-        >
-            {products.map((p, index) => {
-                // 🔸 Función para resaltar coincidencias
-                const highlightMatch = (text, query) => {
-                    const regex = new RegExp(`(${query})`, "gi");
-                    const parts = text.split(regex);
-                    return parts.map((part, i) =>
-                        part.toLowerCase() === query.toLowerCase() ? (
-                            <span key={i} style={{ fontWeight: "bold", color: "#007bff" }}>
-                                {part}
-                            </span>
-                        ) : (
-                            part
-                        )
-                    );
-                };
-
-                return (
-                    <div
-                        key={p.id}
-                        className={`d-flex align-items-center p-2 hover-bg-light ${
-                            index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""
-                        }`}
-                        style={{ cursor: "pointer" }}
-                        onMouseDown={() => {
-                            setNewItem(p.name);
-                            setProducts([]);
-                        }}
-                        onMouseEnter={() => setHighlightedIndex(index)}
-                    >
-                        {p.image_url ? (
-                            <img
-                                src={`data:image/webp;base64,${p.image_url}`}
-                                alt={p.name}
-                                style={{
-                                    width: 40,
-                                    height: 40,
-                                    objectFit: "cover",
-                                    borderRadius: 4,
-                                    marginRight: 10,
+                                    fetchProducts(value, 1);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (products.length === 0) return;
+                                    if (e.key === "ArrowDown") {
+                                        e.preventDefault();
+                                        setHighlightedIndex((prev) => (prev + 1) % products.length);
+                                    } else if (e.key === "ArrowUp") {
+                                        e.preventDefault();
+                                        setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
+                                    } else if (e.key === "Enter" && highlightedIndex >= 0) {
+                                        e.preventDefault();
+                                        const selected = products[highlightedIndex];
+                                        if (selected) {
+                                            setNewItem(selected.name);
+                                            setProducts([]);
+                                        }
+                                    }
+                                }}
+                                onFocus={(e) => {
+                                    if (products.length > 0) e.target.parentElement.classList.add("show");
+                                }}
+                                onBlur={() => {
+                                    setTimeout(() => {
+                                        const dropdown = document.querySelector(".autocomplete-dropdown");
+                                        if (dropdown) dropdown.style.display = "none";
+                                    }, 200);
                                 }}
                             />
-                        ) : (
+                            <Form.Control
+                                type="number"
+                                value={newQuantity}
+                                onChange={(e) => setNewQuantity(parseFloat(e.target.value))}
+                                style={{ maxWidth: '80px' }}
+                            />
+                            <Form.Select
+                                value={newUnit}
+                                onChange={(e) => setNewUnit(e.target.value)}
+                                style={{ maxWidth: '100px' }}
+                            >
+                                <option value="piezas">piezas</option>
+                                <option value="kg">kg</option>
+                                <option value="g">g</option>
+                                <option value="L">L</option>
+                                <option value="ml">ml</option>
+                            </Form.Select>
+                            <Button type="submit" variant="primary" disabled={loading}>
+                                Agregar
+                            </Button>
+                        </InputGroup>
+
+                        {products.length > 0 && newItem.trim() !== "" && (
                             <div
-                                style={{
-                                    width: 40,
-                                    height: 40,
-                                    backgroundColor: "#eee",
-                                    borderRadius: 4,
-                                    marginRight: 10,
-                                }}
-                            />
+                                className="autocomplete-dropdown position-absolute bg-white border rounded shadow-sm mt-1 w-100"
+                                style={{ maxHeight: "350px", overflowY: "auto" }}
+                            >
+                                {products.map((p, index) => {
+                                    // 🔸 Función para resaltar coincidencias
+                                    const highlightMatch = (text, query) => {
+                                        const regex = new RegExp(`(${query})`, "gi");
+                                        const parts = text.split(regex);
+                                        return parts.map((part, i) =>
+                                            part.toLowerCase() === query.toLowerCase() ? (
+                                                <span key={i} style={{ fontWeight: "bold", color: "#007bff" }}>
+                                                    {part}
+                                                </span>
+                                            ) : (
+                                                part
+                                            )
+                                        );
+                                    };
+
+                                    return (
+                                        <div
+                                            key={p.id}
+                                            className={`d-flex align-items-center p-2 hover-bg-light ${index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""
+                                                }`}
+                                            style={{ cursor: "pointer" }}
+                                            onMouseDown={() => {
+                                                setNewItem(p.name);
+                                                setProducts([]);
+                                            }}
+                                            onMouseEnter={() => setHighlightedIndex(index)}
+                                        >
+                                            {p.image_url ? (
+                                                <img
+                                                    src={`data:image/webp;base64,${p.image_url}`}
+                                                    alt={p.name}
+                                                    style={{
+                                                        width: 40,
+                                                        height: 40,
+                                                        objectFit: "cover",
+                                                        borderRadius: 4,
+                                                        marginRight: 10,
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div
+                                                    style={{
+                                                        width: 40,
+                                                        height: 40,
+                                                        backgroundColor: "#eee",
+                                                        borderRadius: 4,
+                                                        marginRight: 10,
+                                                    }}
+                                                />
+                                            )}
+                                            <span>{highlightMatch(p.name, newItem)}</span>
+                                        </div>
+                                    );
+                                })}
+                                <div className="d-flex justify-content-between p-2">
+                                    <Button
+                                        size="sm"
+                                        disabled={productsPage <= 1}
+                                        onClick={() => fetchProducts(newItem, productsPage - 1)}
+                                    >
+                                        Anterior
+                                    </Button>
+                                    <span>Página {productsPage} de {productsTotalPages}</span>
+                                    <Button
+                                        size="sm"
+                                        disabled={productsPage >= productsTotalPages}
+                                        onClick={() => fetchProducts(newItem, productsPage + 1)}
+                                    >
+                                        Siguiente
+                                    </Button>
+                                </div>
+                            </div>
                         )}
-                        <span>{highlightMatch(p.name, newItem)}</span>
-                    </div>
-                );
-            })}
-        </div>
-    )}
-</Form>
+                    </Form>
 
 
                     <div className="d-flex justify-content-end gap-3">
@@ -565,6 +598,25 @@ function ShoppingListView() {
                     ))}
                 </TransitionGroup>
             </ul>
+            <div className="d-flex justify-content-center align-items-center mt-3">
+                <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    disabled={itemsPage <= 1}
+                    onClick={() => fetchListAndBlame(itemsPage - 1)}
+                >
+                    Anterior
+                </Button>
+                <span className="mx-2">Página {itemsPage} de {itemsTotalPages}</span>
+                <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    disabled={itemsPage >= itemsTotalPages}
+                    onClick={() => fetchListAndBlame(itemsPage + 1)}
+                >
+                    Siguiente
+                </Button>
+            </div>
 
             <div className="mt-4">
                 <h5>Comentarios de la lista</h5>
