@@ -1,6 +1,8 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 from . import models, schemas, security
+from .push_notifications import send_web_push
+import json
 
 # CRUD for Products
 def get_or_create_product(db: Session, product_name: str, family_id: int) -> models.Product:
@@ -120,6 +122,32 @@ def change_password(db: Session, user: models.User, new_password: str):
     db.commit()
     db.refresh(user)
     return user
+
+
+# CRUD for Push Subscriptions
+def create_push_subscription(db: Session, subscription: schemas.PushSubscriptionCreate, user_id: int):
+    # Check if the subscription endpoint already exists for this user
+    db_subscription = db.query(models.PushSubscription).filter(
+        models.PushSubscription.user_id == user_id,
+        models.PushSubscription.endpoint == subscription.endpoint
+    ).first()
+
+    if db_subscription:
+        return db_subscription
+
+    db_subscription = models.PushSubscription(
+        user_id=user_id,
+        endpoint=subscription.endpoint,
+        p256dh_key=subscription.keys.p256dh,
+        auth_key=subscription.keys.auth
+    )
+    db.add(db_subscription)
+    db.commit()
+    db.refresh(db_subscription)
+    return db_subscription
+
+def get_push_subscriptions_by_user(db: Session, user_id: int):
+    return db.query(models.PushSubscription).filter(models.PushSubscription.user_id == user_id).all()
 
 
 
@@ -281,12 +309,37 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
             user = db.query(models.User).filter(models.User.id == user_id).first()
             message = f"{user.username} ha agregado el producto '{item.nombre}' a la lista '{shopping_list.name}'."
             create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{shopping_list.id}")
+            trigger_push_notification_for_item_creation(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{shopping_list.id}")
 
     db.commit()
     db.refresh(db_item)
     # Eagerly load product for the return value
     db.refresh(db_item, attribute_names=['product'])
     return db_item
+
+def trigger_push_notification_for_item_creation(db: Session, family_id: int, message: str, created_by_id: int, link: str = None):
+    family = db.query(models.Family).options(joinedload(models.Family.users)).filter(models.Family.id == family_id).first()
+    if not family:
+        return
+
+    for user in family.users:
+        if user.id != created_by_id:
+            subscriptions = get_push_subscriptions_by_user(db, user_id=user.id)
+            for sub in subscriptions:
+                subscription_data = {
+                    "endpoint": sub.endpoint,
+                    "keys": {
+                        "p256dh": sub.p256dh_key,
+                        "auth": sub.auth_key
+                    }
+                }
+                payload = {
+                    "title": "Nuevo Producto en la Lista",
+                    "body": message,
+                    "url": link
+                }
+                send_web_push(subscription_data, json.dumps(payload))
+
 
 def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, user_id: int):
     db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()

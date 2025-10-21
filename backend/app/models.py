@@ -43,6 +43,19 @@ class User(Base):
     blame = relationship("Blame", back_populates="user")
     items_creados = relationship("ListItem", back_populates="creado_por")
     notifications = relationship("Notification", foreign_keys='[Notification.user_id]', back_populates="user")
+    push_subscriptions = relationship("PushSubscription", back_populates="user", cascade="all, delete-orphan")
+
+
+class PushSubscription(Base):
+    __tablename__ = 'push_subscriptions'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    endpoint = Column(Text, nullable=False)
+    p256dh_key = Column(String(255), nullable=False)
+    auth_key = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    user = relationship("User", back_populates="push_subscriptions")
 
 class Calendar(Base):
     __tablename__ = 'calendars'

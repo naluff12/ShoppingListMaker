@@ -11,13 +11,76 @@ import UserProfile from './UserProfile.jsx';
 import NavigationBar from './NavigationBar.jsx';
 import Setup from './Setup.jsx';
 import { Toaster } from 'react-hot-toast';
+import axios from 'axios';
 
 const API_URL = 'http://localhost:8000';
+
+// Helper function to convert VAPID key
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
 
 function App() {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (user) { // Only run if user is logged in
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(swReg => {
+                        console.log('Service Worker is registered', swReg);
+                        // Ask for permission and subscribe
+                        subscribeToPush(swReg);
+                    })
+                    .catch(error => {
+                        console.error('Service Worker Error', error);
+                    });
+            }
+        }
+    }, [user]);
+
+    const subscribeToPush = async (swReg) => {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            console.log('Push notification permission not granted.');
+            return;
+        }
+
+        let subscription = await swReg.pushManager.getSubscription();
+        if (subscription === null) {
+            try {
+                const response = await axios.get('/api/vapid/public-key');
+                const vapidPublicKey = response.data.public_key;
+                const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+
+                subscription = await swReg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: convertedVapidKey
+                });
+
+                const token = localStorage.getItem('token');
+                await axios.post('/api/subscribe', subscription, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                console.log('User subscribed to push notifications.');
+            } catch (error) {
+                console.error('Failed to subscribe to push notifications', error);
+            }
+        }
+    };
+
 
     const handleLogout = () => {
         localStorage.removeItem('token');
