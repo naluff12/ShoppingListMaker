@@ -268,27 +268,6 @@ class Notification(NotificationBase):
 class NotificationUpdate(BaseModel):
     is_read: bool
 
-
-# ---------- PUSH NOTIFICATION ----------
-class PushSubscriptionKeys(BaseModel):
-    p256dh: str
-    auth: str
-
-class PushSubscriptionBase(BaseModel):
-    endpoint: str
-    keys: PushSubscriptionKeys
-
-class PushSubscriptionCreate(PushSubscriptionBase):
-    pass
-
-class PushSubscription(PushSubscriptionBase):
-    id: int
-    user_id: int
-
-    class Config:
-        from_attributes = True
-
-
 User.model_rebuild()
 Blame.model_rebuild()
 ShoppingList.model_rebuild()

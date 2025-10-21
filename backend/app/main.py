@@ -20,7 +20,6 @@ from jose import JWTError, jwt
 
 from . import crud, models, schemas, security
 from .database import SessionLocal, engine
-from .push_notifications import VAPID_PUBLIC_KEY
 
 app = FastAPI()
 
@@ -793,18 +792,3 @@ def mark_as_read(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
     return notification
-
-# --- PUSH NOTIFICATIONS ---
-@app.get("/vapid/public-key")
-def get_vapid_public_key():
-    print(f"--- SERVING VAPID PUBLIC KEY: {VAPID_PUBLIC_KEY} ---")
-    return {"public_key": VAPID_PUBLIC_KEY}
-
-@app.post("/subscribe", status_code=status.HTTP_201_CREATED)
-def subscribe(
-    subscription: schemas.PushSubscriptionCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    crud.create_push_subscription(db, subscription=subscription, user_id=current_user.id)
-    return {"message": "Subscription successful"}
