@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Navbar, Nav, Button, Container, Dropdown, Badge } from 'react-bootstrap';
-import { Bell } from 'react-bootstrap-icons';
+import { Bell, CheckCircle } from 'react-bootstrap-icons';
 import toast from 'react-hot-toast';
 
 function NavigationBar({ user, onLogout }) {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState({});
+  const [notifications, setNotifications] = useState({ items: [], total: 0, page: 1, size: 10 });
 
   const fetchNotifications = async () => {
     try {
@@ -33,10 +33,7 @@ function NavigationBar({ user, onLogout }) {
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      // Set up polling
-      const intervalId = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
-
-      // Clean up interval on component unmount
+      const intervalId = setInterval(fetchNotifications, 30000);
       return () => clearInterval(intervalId);
     }
   }, [user]);
@@ -46,21 +43,34 @@ function NavigationBar({ user, onLogout }) {
     navigate('/login');
   };
 
+  const handleMarkOneRead = async (notificationId) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      await fetch(`/api/notifications/${notificationId}/mark-as-read`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      setNotifications(prev => ({
+        ...prev,
+        items: prev.items.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+      }));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
   const handleNotificationClick = async (notification) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      // Mark as read only if it's not already read
       if (!notification.is_read) {
-        await fetch(`/api/notifications/${notification.id}/mark-as-read`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        // Refresh notifications locally for immediate UI update
-        setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n));
+        handleMarkOneRead(notification.id);
       }
 
       if (notification.link) {
@@ -128,7 +138,7 @@ function NavigationBar({ user, onLogout }) {
       if (response.ok) {
         setNotifications(prev => {
           const updatedItems = prev.items.filter(item => item.id !== notificationId);
-          return { ...prev, items: updatedItems };
+          return { ...prev, items: updatedItems, total: prev.total - 1 };
         });
       } else {
         console.error('Failed to delete notification');
@@ -163,7 +173,7 @@ function NavigationBar({ user, onLogout }) {
                     {unreadCount > 0 && <Badge pill bg="danger" style={{ marginLeft: '5px' }}>{unreadCount}</Badge>}
                   </Dropdown.Toggle>
                   <Dropdown.Menu className="dropdown-menu-end" style={{ maxHeight: '400px', overflowY: 'auto', minWidth: '300px', right: 0, left: 'auto' }}>
-                    <Dropdown.Header>{unreadCount > 0 ? `${unreadCount} notificaciones nuevas` : 'No hay notificaciones nuevas'}</Dropdown.Header>
+                    <Dropdown.Header style={{ whiteSpace: 'normal' }}>{unreadCount > 0 ? `${unreadCount} notificaciones nuevas` : 'No hay notificaciones nuevas'}</Dropdown.Header>
                     {notifications.items?.length > 0 ? (
                       <>
                         <Dropdown.Item as="button" onClick={handleMarkAllRead}>Marcar todas como leídas</Dropdown.Item>
@@ -173,12 +183,18 @@ function NavigationBar({ user, onLogout }) {
                             key={notification.id}
                             onClick={() => handleNotificationClick(notification)}
                             className={`d-flex justify-content-between align-items-start ${!notification.is_read ? 'fw-bold' : ''}`}
+                            style={{ whiteSpace: 'normal' }}
                           >
                             <div>
                               <small>{new Date(notification.created_at).toLocaleString()}</small><br />
                               {notification.message}
                             </div>
-                            <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }}>&times;</Button>
+                            <div className="d-flex flex-column ms-2">
+                              <Button variant="outline-danger" size="sm" onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }}>&times;</Button>
+                              {!notification.is_read &&
+                                <Button variant="outline-success" size="sm" className="mt-1" onClick={(e) => { e.stopPropagation(); handleMarkOneRead(notification.id); }}><CheckCircle /></Button>
+                              }
+                            </div>
                           </Dropdown.Item>
                         ))}
                       </>
