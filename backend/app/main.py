@@ -544,7 +544,7 @@ def delete_item_endpoint(
     return db_item
 
 
-@app.post("/listas/", response_model=schemas.ShoppingList)
+@app.post("/listas/", response_model=schemas.ShoppingListResponse)
 def create_shopping_list_endpoint(
     list_data: schemas.ShoppingListCreate,
     db: Session = Depends(get_db),
@@ -558,7 +558,7 @@ def create_shopping_list_endpoint(
 
     return crud.create_shopping_list(db=db, list_data=list_data, owner_id=current_user.id)
 
-@app.get("/listas/", response_model=schemas.Page[schemas.ShoppingList])
+@app.get("/listas/", response_model=schemas.Page[schemas.ShoppingListResponse])
 def get_shopping_lists(
     calendar_id: int,
     page: int = 1,
@@ -589,7 +589,7 @@ def delete_shopping_list_endpoint(
     crud.delete_shopping_list(db=db, list_id=lista_id, user_id=current_user.id)
     return
 
-@app.put("/listas/{lista_id}", response_model=schemas.ShoppingList)
+@app.put("/listas/{lista_id}", response_model=schemas.ShoppingListResponse)
 def update_shopping_list(
     lista_id: int,
     list_update: schemas.ShoppingListUpdate,
@@ -608,7 +608,7 @@ def update_shopping_list(
     updated_list = crud.update_shopping_list(db=db, list_id=lista_id, list_update=list_update, user_id=current_user.id)
     return updated_list
 
-@app.get("/listas/{lista_id}", response_model=schemas.ShoppingList)
+@app.get("/listas/{lista_id}", response_model=schemas.ShoppingListResponse)
 def obtener_lista(
     lista_id: int,
     db: Session = Depends(get_db),
@@ -772,7 +772,7 @@ def upload_image_for_item(
         "image_url": image_base64
     }
 
-@app.get("/home/last-lists", response_model=List[schemas.ShoppingList])
+@app.get("/home/last-lists", response_model=List[schemas.ShoppingListResponse])
 def get_last_lists(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_last_lists_for_user_families(db=db, user=current_user)
 
@@ -819,3 +819,33 @@ def delete_notification(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
     return
+
+@app.get("/listas/{lista_id}/items", response_model=schemas.Page[schemas.ListItem])
+def get_items_for_list(
+    lista_id: int,
+    page: int = 1,
+    size: int = 10,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=lista_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    # 🔐 Verificar permisos
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver esta lista")
+
+    # 🔹 Obtener ítems con paginación
+    query = db.query(models.ListItem).filter(models.ListItem.list_id == lista_id)
+    total = query.count()
+    items = (
+        query.order_by(models.ListItem.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
+
+    return schemas.Page(items=items, total=total, page=page, size=size)

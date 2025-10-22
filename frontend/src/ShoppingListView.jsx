@@ -41,13 +41,14 @@ function ShoppingListView() {
 
         Promise.all([
             fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
+            fetch(`/api/listas/${list.id}/items?page=${page}&size=10`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
             fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
         ])
-            .then(([listData, blameData]) => {
+            .then(([listData, itemsData, blameData]) => {
                 setListDetails(listData);
-                setItems(Array.isArray(listData.items) ? listData.items : []);
-                setItemsPage(listData.page);
-                setItemsTotalPages(Math.ceil(listData.total / listData.size));
+                setItems(Array.isArray(itemsData.items) ? itemsData.items : []);
+                setItemsPage(itemsData.page);
+                setItemsTotalPages(Math.ceil(itemsData.total / itemsData.size));
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
                     fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
@@ -426,6 +427,7 @@ function ShoppingListView() {
                             <div
                                 className="autocomplete-dropdown position-absolute bg-white border rounded shadow-sm mt-1 w-100"
                                 style={{ maxHeight: "350px", overflowY: "auto" }}
+                                onMouseDown={(e) => e.preventDefault()}
                             >
                                 {products.map((p, index) => {
                                     // 🔸 Función para resaltar coincidencias

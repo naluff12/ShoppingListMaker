@@ -123,6 +123,16 @@ class ShoppingList(ShoppingListBase):
         from_attributes = True
 
 
+class ShoppingListResponse(ShoppingListBase):
+    id: int
+    owner_id: int
+    list_for_date: Optional[datetime] = None
+    calendar: Optional["Calendar"] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ---------- FAMILY ----------
 class FamilyBase(BaseModel):
     nombre: str

@@ -4,7 +4,7 @@ import { Button, Table, Modal, Form, InputGroup, FormControl, DropdownButton, Dr
 const API_URL = 'http://localhost:8000';
 
 function ProductManagement() {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState({ items: [], total: 0, page: 1, size: 10 });
   const [families, setFamilies] = useState([]);
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -32,10 +32,10 @@ function ProductManagement() {
     }
   };
 
-  const fetchProducts = async (familyId) => {
+  const fetchProducts = async (familyId, page = 1) => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/families/${familyId}/products`, {
+      const response = await fetch(`/api/families/${familyId}/products?page=${page}&size=10`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -45,7 +45,7 @@ function ProductManagement() {
         setProducts(data);
       } else {
         console.error('Failed to fetch products');
-        setProducts([]); // Clear products on failure
+        setProducts({ items: [], total: 0, page: 1, size: 10 }); // Clear products on failure
       }
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -58,7 +58,9 @@ function ProductManagement() {
 
   useEffect(() => {
     if (selectedFamily) {
-      fetchProducts(selectedFamily.id);
+      fetchProducts(selectedFamily.id, 1);
+    } else {
+      setProducts({ items: [], total: 0, page: 1, size: 10 });
     }
   }, [selectedFamily]);
 
@@ -81,7 +83,7 @@ function ProductManagement() {
         },
       });
       if (response.ok) {
-        fetchProducts(selectedFamily.id); // Refresh the list
+        fetchProducts(selectedFamily.id, products.page); // Refresh the list
       } else {
         console.error('Failed to delete product');
       }
@@ -112,10 +114,10 @@ function ProductManagement() {
       if (response.ok) {
         const product = await response.json();
         if (imageFile) {
-            await handleImageUpload(product.id, imageFile);
+          await handleImageUpload(product.id, imageFile);
         }
         setShowModal(false);
-        fetchProducts(selectedFamily.id); // Refresh the list
+        fetchProducts(selectedFamily.id, 1); // Refresh the list
       } else {
         const errorData = await response.json();
         console.error('Failed to save product:', errorData.detail);
@@ -135,16 +137,16 @@ function ProductManagement() {
     formData.append('file', file);
 
     try {
-        const res = await fetch(`/api/products/${productId}/upload-image`, {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + token },
-            body: formData,
-        });
-        if (!res.ok) throw new Error('Error al subir la imagen');
+      const res = await fetch(`/api/products/${productId}/upload-image`, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Error al subir la imagen');
     } catch (err) {
-        alert(err.message);
+      alert(err.message);
     }
-};
+  };
 
   const handleFormChange = (e) => {
     const { id, value } = e.target;
@@ -158,7 +160,7 @@ function ProductManagement() {
     setShowModal(true);
   };
 
-  const filteredProducts = products.filter(product =>
+  const filteredProducts = (products.items || []).filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -203,11 +205,11 @@ function ProductManagement() {
                 <tr key={product.id}>
                   <td>
                     {product.image_url && (
-                        <img
-                            src={`data:image/webp;base64,${product.image_url}`}
-                            alt={product.name}
-                            style={{ width: 50, height: 50, objectFit: 'cover' }}
-                        />
+                      <img
+                        src={`data:image/webp;base64,${product.image_url}`}
+                        alt={product.name}
+                        style={{ width: 50, height: 50, objectFit: 'cover' }}
+                      />
                     )}
                   </td>
                   <td>{product.name}</td>
@@ -220,6 +222,27 @@ function ProductManagement() {
               ))}
             </tbody>
           </Table>
+          <div className="d-flex justify-content-center align-items-center mt-3">
+            <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={!products.items.length || products.page <= 1}
+                onClick={() => fetchProducts(selectedFamily.id, products.page - 1)}
+            >
+                Anterior
+            </Button>
+            <span className="mx-2">
+                Página {products.page} de {products.total ? Math.ceil(products.total / products.size) : 1}
+            </span>
+            <Button
+                variant="outline-secondary"
+                size="sm"
+                disabled={!products.items.length || products.page >= Math.ceil(products.total / products.size)}
+                onClick={() => fetchProducts(selectedFamily.id, products.page + 1)}
+            >
+                Siguiente
+            </Button>
+        </div>
         </>
       )}
 
@@ -238,8 +261,8 @@ function ProductManagement() {
               <Form.Control as="textarea" rows={3} value={formData.description} onChange={handleFormChange} />
             </Form.Group>
             <Form.Group controlId="image">
-                <Form.Label>Image</Form.Label>
-                <Form.Control type="file" onChange={(e) => setImageFile(e.target.files[0])} />
+              <Form.Label>Image</Form.Label>
+              <Form.Control type="file" onChange={(e) => setImageFile(e.target.files[0])} />
             </Form.Group>
           </Form>
         </Modal.Body>
