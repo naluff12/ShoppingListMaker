@@ -117,7 +117,7 @@ function ProductManagement() {
           await handleImageUpload(product.id, imageFile);
         }
         setShowModal(false);
-        fetchProducts(selectedFamily.id, 1); // Refresh the list
+        fetchProducts(selectedFamily.id, currentProduct ? products.page : 1); // Refresh the list
       } else {
         const errorData = await response.json();
         console.error('Failed to save product:', errorData.detail);
