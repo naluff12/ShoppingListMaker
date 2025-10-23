@@ -288,8 +288,29 @@ class Notification(NotificationBase):
 class NotificationUpdate(BaseModel):
     is_read: bool
 
+
+class ShoppingListInfo(BaseModel):
+    id: int
+    name: str
+    list_for_date: datetime
+
+    class Config:
+        from_attributes = True
+
+class ListItemCreateBulk(BaseModel):
+    nombre: str
+    cantidad: float
+    unit: Optional[str] = None
+    comentario: Optional[str] = None
+    precio_estimado: Optional[float] = None
+
+class ListItemsBulkCreate(BaseModel):
+    items: List[ListItemCreateBulk]
+
+
 User.model_rebuild()
 Blame.model_rebuild()
 ShoppingList.model_rebuild()
+
 
 

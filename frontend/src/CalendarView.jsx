@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import './custom-calendar.css'; // Asegúrate que la ruta es correcta
+import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
 
 const API_URL = 'http://localhost:8000';
 
@@ -17,6 +18,8 @@ function CalendarView() {
     const [nuevaListaNotas, setNuevaListaNotas] = useState('');
     const [nuevaListaComentarios, setNuevaListaComentarios] = useState('');
     const [showForm, setShowForm] = useState(false);
+    const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
+    const [newlyCreatedList, setNewlyCreatedList] = useState(null);
 
     const fetchLists = () => {
         if (!calendar || !calendar.id) return;
@@ -92,14 +95,38 @@ function CalendarView() {
             if (!res.ok) throw new Error('Error al crear lista');
             const nueva = await res.json();
             setListas([...listas, nueva]);
+            setNewlyCreatedList(nueva);
             setShowForm(false);
             setNuevaListaNombre('');
             setNuevaListaNotas('');
             setNuevaListaComentarios('');
+            setShowPreviousItemsModal(true); // Show modal after creating the list
         } catch (err) {
             alert(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAddItems = async (itemsToAdd) => {
+        if (!newlyCreatedList) return;
+        const token = localStorage.getItem('token');
+        const items = itemsToAdd.map(item => ({
+            nombre: item.nombre,
+            cantidad: item.cantidad,
+            unit: item.unit,
+            comentario: item.comentario,
+            precio_estimado: item.precio_estimado,
+        }));
+
+        try {
+            await fetch(`/api/listas/${newlyCreatedList.id}/items/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ items })
+            });
+        } catch (err) {
+            alert('Error adding items to the list.');
         }
     };
 
@@ -181,6 +208,12 @@ function CalendarView() {
                     <span className="calendar-day-not-reviewed" style={{ padding: '0 10px', borderRadius: 4 }}>No revisada</span>
                 </small>
             </div>
+            <PreviousItemsModal
+                show={showPreviousItemsModal}
+                handleClose={() => setShowPreviousItemsModal(false)}
+                familyId={calendar?.family_id}
+                handleAddItems={handleAddItems}
+            />
         </div>
     );
 }

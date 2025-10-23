@@ -472,6 +472,18 @@ def get_calendars_for_family(family_id: int, db: Session = Depends(get_db), curr
     get_family_for_user(family_id, current_user)
     return db.query(models.Calendar).filter(models.Calendar.family_id == family_id).all()
 
+@app.get("/families/{family_id}/previous_lists", response_model=schemas.Page[schemas.ShoppingListResponse])
+def get_previous_lists_for_family(
+    family_id: int,
+    page: int = 1,
+    size: int = 10,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    get_family_for_user(family_id, current_user)
+    result = crud.get_lists_by_family(db=db, family_id=family_id, skip=(page - 1) * size, limit=size)
+    return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
+
 # --- SHOPPING LIST & ITEMS ---
 @app.post("/items/", response_model=schemas.ListItem)
 def create_item_for_list(
@@ -496,6 +508,31 @@ def create_item_for_list(
         family_id = current_user.families[0].id
 
     return crud.create_list_item(db=db, item=item, user_id=current_user.id, family_id=family_id)
+
+@app.post("/listas/{list_id}/items/bulk", response_model=List[schemas.ListItem])
+def create_bulk_items_for_list(
+    list_id: int,
+    items: schemas.ListItemsBulkCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    shopping_list = crud.get_list(db, list_id=list_id)
+    if not shopping_list:
+        raise HTTPException(status_code=404, detail="Shopping list not found")
+
+    family_id = None
+    if shopping_list.calendar:
+        get_family_for_user(shopping_list.calendar.family_id, current_user)
+        family_id = shopping_list.calendar.family_id
+    elif shopping_list.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    
+    if not family_id:
+        if not current_user.families:
+            raise HTTPException(status_code=400, detail="User does not belong to any family.")
+        family_id = current_user.families[0].id
+
+    return crud.create_list_items_bulk(db=db, items=items.items, list_id=list_id, user_id=current_user.id, family_id=family_id)
 
 
 @app.put("/items/{item_id}", response_model=schemas.ListItem)
@@ -825,6 +862,7 @@ def get_items_for_list(
     lista_id: int,
     page: int = 1,
     size: int = 10,
+    status: str = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -840,6 +878,8 @@ def get_items_for_list(
 
     # 🔹 Obtener ítems con paginación
     query = db.query(models.ListItem).filter(models.ListItem.list_id == lista_id)
+    if status:
+        query = query.filter(models.ListItem.status == status)
     total = query.count()
     items = (
         query.order_by(models.ListItem.created_at.desc())

@@ -5,6 +5,7 @@ import { Eye, EyeSlash } from 'react-bootstrap-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
+import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
 
 const API_URL = 'http://localhost:8000';
 
@@ -33,6 +34,7 @@ function ShoppingListView() {
     const [itemsTotalPages, setItemsTotalPages] = useState(1);
     const [productsPage, setProductsPage] = useState(1);
     const [productsTotalPages, setProductsTotalPages] = useState(1);
+    const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
 
     const fetchListAndBlame = (page = 1) => {
         if (!list || !list.id) return;
@@ -116,6 +118,29 @@ function ShoppingListView() {
             alert(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAddItemsFromModal = async (itemsToAdd) => {
+        if (!list) return;
+        const token = localStorage.getItem('token');
+        const items = itemsToAdd.map(item => ({
+            nombre: item.nombre,
+            cantidad: item.cantidad,
+            unit: item.unit,
+            comentario: item.comentario,
+            precio_estimado: item.precio_estimado,
+        }));
+
+        try {
+            await fetch(`/api/listas/${list.id}/items/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ items })
+            });
+            fetchListAndBlame(); // Recargar todo
+        } catch (err) {
+            alert('Error adding items to the list.');
         }
     };
 
@@ -386,6 +411,7 @@ function ShoppingListView() {
                             </div>
                         )}
                     </Form>
+                    <Button variant="info" onClick={() => setShowPreviousItemsModal(true)}>Agregar productos pendientes de otra lista</Button>
                     <div className="d-flex justify-content-end gap-3">
                         <h5>Total Comprado: <Badge bg="success">${totalComprado.toFixed(2)}</Badge></h5>
                     </div>
@@ -484,6 +510,12 @@ function ShoppingListView() {
                     <Button type="submit" variant="primary" size="sm">Comentar</Button>
                 </form>
             </div>
+            <PreviousItemsModal
+                show={showPreviousItemsModal}
+                handleClose={() => setShowPreviousItemsModal(false)}
+                familyId={listDetails?.calendar?.family_id}
+                handleAddItems={handleAddItemsFromModal}
+            />
         </div>
     );
 }

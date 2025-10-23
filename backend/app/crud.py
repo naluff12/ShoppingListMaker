@@ -192,6 +192,12 @@ def get_lists_by_calendar(db: Session, calendar_id: int, skip: int = 0, limit: i
     items = query.offset(skip).limit(limit).all()
     return {"items": items, "total": total}
 
+def get_lists_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100):
+    query = db.query(models.ShoppingList).join(models.Calendar).filter(models.Calendar.family_id == family_id)
+    total = query.count()
+    items = query.order_by(models.ShoppingList.created_at.desc()).offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
+
 def get_lists_by_user(db: Session, user_id: int):
     return db.query(models.ShoppingList).filter(models.ShoppingList.owner_id == user_id).all()
 
@@ -296,6 +302,43 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
     # Eagerly load product for the return value
     db.refresh(db_item, attribute_names=['product'])
     return db_item
+
+def create_list_items_bulk(db: Session, items: list[schemas.ListItemCreateBulk], list_id: int, user_id: int, family_id: int):
+    new_items = []
+    for item_data in items:
+        product = get_or_create_product(db, item_data.nombre, family_id)
+        db_item = models.ListItem(
+            list_id=list_id,
+            product_id=product.id,
+            nombre=item_data.nombre,
+            cantidad=item_data.cantidad,
+            unit=item_data.unit,
+            comentario=item_data.comentario,
+            precio_estimado=item_data.precio_estimado,
+            status='pendiente',
+            creado_por_id=user_id
+        )
+        db.add(db_item)
+        new_items.append(db_item)
+    
+    db.flush()
+
+    for db_item in new_items:
+        blame_entry = models.Blame(
+            user_id=user_id,
+            action="create",
+            entity_type="item",
+            entity_id=db_item.id,
+            detalles=f"Producto '{db_item.nombre}' agregado a la lista desde una lista anterior."
+        )
+        db.add(blame_entry)
+
+    db.commit()
+    return new_items
+
+
+
+
 
 def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, user_id: int):
     db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
