@@ -62,6 +62,7 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
 
     const onAddItems = () => {
         handleAddItems(Array.from(selectedItems.values()));
+        setSelectedItems(new Map());
         handleClose();
     };
 

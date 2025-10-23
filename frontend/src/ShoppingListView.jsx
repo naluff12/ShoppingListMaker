@@ -387,6 +387,14 @@ function ShoppingListView() {
                                 <option value="ml">ml</option>
                             </Form.Select>
                             <Button type="submit" variant="primary" disabled={loading}>Agregar</Button>
+                            <OverlayTrigger
+                                placement="top"
+                                overlay={<Tooltip id="tooltip-add-previous">Agregar productos no comprados de otra lista</Tooltip>}
+                            >
+                                <Button variant="info" onClick={() => setShowPreviousItemsModal(true)}>
+                                    <PlusCircle />
+                                </Button>
+                            </OverlayTrigger>
                         </InputGroup>
                         {products.length > 0 && newItem.trim() !== "" && (
                             <div className="autocomplete-dropdown position-absolute bg-white border rounded shadow-sm mt-1 w-100" style={{ maxHeight: "350px", overflowY: "auto" }} onMouseDown={(e) => e.preventDefault()}>
@@ -411,14 +419,6 @@ function ShoppingListView() {
                             </div>
                         )}
                     </Form>
-                    <OverlayTrigger
-                        placement="top"
-                        overlay={<Tooltip id="tooltip-add-previous">Agregar productos no comprados de otra lista</Tooltip>}
-                    >
-                        <Button variant="info" onClick={() => setShowPreviousItemsModal(true)}>
-                            <PlusCircle />
-                        </Button>
-                    </OverlayTrigger>
                     <div className="d-flex justify-content-end gap-3">
                         <h5>Total Comprado: <Badge bg="success">${totalComprado.toFixed(2)}</Badge></h5>
                     </div>
