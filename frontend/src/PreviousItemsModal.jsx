@@ -60,6 +60,24 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
         setSelectedItems(newSelectedItems);
     };
 
+    // ✅ Nueva función: seleccionar/deseleccionar todos los productos de una lista
+    const handleSelectAllFromList = (listId) => {
+        const newSelectedItems = new Map(selectedItems);
+        const listItems = itemsByList[listId] || [];
+
+        const allSelected = listItems.every(item => newSelectedItems.has(item.id));
+
+        if (allSelected) {
+            // Si todos ya están seleccionados, los deselecciona
+            listItems.forEach(item => newSelectedItems.delete(item.id));
+        } else {
+            // Si no, los selecciona todos
+            listItems.forEach(item => newSelectedItems.set(item.id, item));
+        }
+
+        setSelectedItems(newSelectedItems);
+    };
+
     const onAddItems = () => {
         handleAddItems(Array.from(selectedItems.values()));
         setSelectedItems(new Map());
@@ -83,14 +101,35 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
                                 {previousLists.map(list => (
                                     itemsByList[list.id]?.length > 0 && (
                                         <Accordion.Item eventKey={list.id} key={list.id}>
-                                            <Accordion.Header>{list.name} - {new Date(list.list_for_date).toLocaleDateString()}</Accordion.Header>
+                                            <Accordion.Header>
+                                                {list.name} - {new Date(list.list_for_date).toLocaleDateString()}
+                                            </Accordion.Header>
                                             <Accordion.Body>
+                                                {/* ✅ Botón para seleccionar todos los productos de esta lista */}
+                                                <div className="mb-2 d-flex justify-content-end">
+                                                    <Button
+                                                        variant="outline-primary"
+                                                        size="sm"
+                                                        onClick={() => handleSelectAllFromList(list.id)}
+                                                    >
+                                                        {itemsByList[list.id].every(item => selectedItems.has(item.id))
+                                                            ? 'Deseleccionar todos'
+                                                            : 'Seleccionar todos'}
+                                                    </Button>
+                                                </div>
+
                                                 <ListGroup>
                                                     {itemsByList[list.id]?.map(item => (
                                                         <ListGroup.Item key={item.id}>
                                                             <Row>
                                                                 <Col md={1}>
-                                                                    <img src={item.product.image_url ? `data:image/webp;base64,${item.product.image_url}` : 'https://via.placeholder.com/50'} alt={item.nombre} style={{ width: 50, height: 50, objectFit: 'cover' }} />
+                                                                    <img
+                                                                        src={item.product.image_url
+                                                                            ? `data:image/webp;base64,${item.product.image_url}`
+                                                                            : '../public/img_placeholder.png'}
+                                                                        alt={item.nombre}
+                                                                        style={{ width: 50, height: 50, objectFit: 'cover' }}
+                                                                    />
                                                                 </Col>
                                                                 <Col md={9}>
                                                                     <Form.Check
@@ -113,13 +152,20 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
                     </Col>
                     <Col md={4}>
                         <Card>
-                            <Card.Header>Productos Seleccionados <Badge bg="secondary">{totalSelected}</Badge></Card.Header>
+                            <Card.Header>
+                                Productos Seleccionados <Badge bg="secondary">{totalSelected}</Badge>
+                            </Card.Header>
                             <Card.Body>
                                 <ListGroup variant="flush">
                                     {Array.from(selectedItems.values()).map(item => (
-                                        <ListGroup.Item key={item.id} className="d-flex justify-content-between align-items-center">
+                                        <ListGroup.Item
+                                            key={item.id}
+                                            className="d-flex justify-content-between align-items-center"
+                                        >
                                             {item.nombre}
-                                            <Button variant="danger" size="sm" onClick={() => handleSelectItem(item)}>&times;</Button>
+                                            <Button variant="danger" size="sm" onClick={() => handleSelectItem(item)}>
+                                                &times;
+                                            </Button>
                                         </ListGroup.Item>
                                     ))}
                                 </ListGroup>
