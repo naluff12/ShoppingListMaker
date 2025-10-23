@@ -192,8 +192,15 @@ def get_lists_by_calendar(db: Session, calendar_id: int, skip: int = 0, limit: i
     items = query.offset(skip).limit(limit).all()
     return {"items": items, "total": total}
 
-def get_lists_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100):
+from datetime import date
+
+def get_lists_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100, start_date: date = None, end_date: date = None):
     query = db.query(models.ShoppingList).join(models.Calendar).filter(models.Calendar.family_id == family_id)
+    if start_date:
+        query = query.filter(models.ShoppingList.list_for_date >= start_date)
+    if end_date:
+        query = query.filter(models.ShoppingList.list_for_date <= end_date)
+    
     total = query.count()
     items = query.order_by(models.ShoppingList.created_at.desc()).offset(skip).limit(limit).all()
     return {"items": items, "total": total}

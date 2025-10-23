@@ -1,7 +1,7 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { Button, Spinner, Form, InputGroup, Card, Badge } from 'react-bootstrap';
+import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Eye, EyeSlash } from 'react-bootstrap-icons';
+import { Eye, EyeSlash, PlusCircle } from 'react-bootstrap-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
@@ -411,7 +411,14 @@ function ShoppingListView() {
                             </div>
                         )}
                     </Form>
-                    <Button variant="info" onClick={() => setShowPreviousItemsModal(true)}>Agregar productos pendientes de otra lista</Button>
+                    <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip id="tooltip-add-previous">Agregar productos no comprados de otra lista</Tooltip>}
+                    >
+                        <Button variant="info" onClick={() => setShowPreviousItemsModal(true)}>
+                            <PlusCircle />
+                        </Button>
+                    </OverlayTrigger>
                     <div className="d-flex justify-content-end gap-3">
                         <h5>Total Comprado: <Badge bg="success">${totalComprado.toFixed(2)}</Badge></h5>
                     </div>
@@ -514,6 +521,7 @@ function ShoppingListView() {
                 show={showPreviousItemsModal}
                 handleClose={() => setShowPreviousItemsModal(false)}
                 familyId={listDetails?.calendar?.family_id}
+                listId={list.id}
                 handleAddItems={handleAddItemsFromModal}
             />
         </div>

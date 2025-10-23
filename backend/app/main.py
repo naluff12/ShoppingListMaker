@@ -1,4 +1,4 @@
-from datetime import timedelta, datetime
+from datetime import date, timedelta, datetime
 from typing import List
 import time
 import os
@@ -477,11 +477,13 @@ def get_previous_lists_for_family(
     family_id: int,
     page: int = 1,
     size: int = 10,
+    start_date: date = None,
+    end_date: date = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     get_family_for_user(family_id, current_user)
-    result = crud.get_lists_by_family(db=db, family_id=family_id, skip=(page - 1) * size, limit=size)
+    result = crud.get_lists_by_family(db=db, family_id=family_id, skip=(page - 1) * size, limit=size, start_date=start_date, end_date=end_date)
     return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
 
 # --- SHOPPING LIST & ITEMS ---

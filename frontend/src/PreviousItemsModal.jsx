@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, ListGroup, Form, Row, Col, Accordion, Card, Badge } from 'react-bootstrap';
 
-const PreviousItemsModal = ({ show, handleClose, familyId, handleAddItems }) => {
+const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItems }) => {
     const [previousLists, setPreviousLists] = useState([]);
     const [itemsByList, setItemsByList] = useState({});
     const [selectedItems, setSelectedItems] = useState(new Map());
@@ -12,15 +12,21 @@ const PreviousItemsModal = ({ show, handleClose, familyId, handleAddItems }) => 
             setLoading(true);
             const fetchPreviousListsAndItems = async () => {
                 try {
-                    const response = await fetch(`/api/families/${familyId}/previous_lists`, {
+                    const now = new Date();
+                    const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+                    const response = await fetch(`/api/families/${familyId}/previous_lists?start_date=${startDate}&end_date=${endDate}`, {
                         headers: {
                             'Authorization': `Bearer ${localStorage.getItem('token')}`
                         }
                     });
                     if (response.ok) {
                         const data = await response.json();
-                        setPreviousLists(data.items);
-                        const itemsPromises = data.items.map(list =>
+                        const filteredLists = data.items.filter(list => list.id !== listId);
+                        setPreviousLists(filteredLists);
+
+                        const itemsPromises = filteredLists.map(list =>
                             fetch(`/api/listas/${list.id}/items?status=pendiente`, {
                                 headers: {
                                     'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -28,7 +34,7 @@ const PreviousItemsModal = ({ show, handleClose, familyId, handleAddItems }) => 
                             }).then(res => res.json())
                         );
                         const itemsResults = await Promise.all(itemsPromises);
-                        const itemsMap = data.items.reduce((acc, list, index) => {
+                        const itemsMap = filteredLists.reduce((acc, list, index) => {
                             acc[list.id] = itemsResults[index].items;
                             return acc;
                         }, {});
@@ -42,7 +48,7 @@ const PreviousItemsModal = ({ show, handleClose, familyId, handleAddItems }) => 
             };
             fetchPreviousListsAndItems();
         }
-    }, [show, familyId]);
+    }, [show, familyId, listId]);
 
     const handleSelectItem = (item) => {
         const newSelectedItems = new Map(selectedItems);
