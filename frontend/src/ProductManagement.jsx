@@ -204,13 +204,13 @@ function ProductManagement() {
               {filteredProducts.map(product => (
                 <tr key={product.id}>
                   <td>
-                    {product.image_url && (
+                    {
                       <img
-                        src={`data:image/webp;base64,${product.image_url}`}
+                        src={product.image_url ? `data:image/webp;base64,${product.image_url}` : `../public/img_placeholder.png`}
                         alt={product.name}
                         style={{ width: 50, height: 50, objectFit: 'cover' }}
                       />
-                    )}
+                    }
                   </td>
                   <td>{product.name}</td>
                   <td>{product.description}</td>
@@ -224,25 +224,25 @@ function ProductManagement() {
           </Table>
           <div className="d-flex justify-content-center align-items-center mt-3">
             <Button
-                variant="outline-secondary"
-                size="sm"
-                disabled={!products.items.length || products.page <= 1}
-                onClick={() => fetchProducts(selectedFamily.id, products.page - 1)}
+              variant="outline-secondary"
+              size="sm"
+              disabled={!products.items.length || products.page <= 1}
+              onClick={() => fetchProducts(selectedFamily.id, products.page - 1)}
             >
-                Anterior
+              Anterior
             </Button>
             <span className="mx-2">
-                Página {products.page} de {products.total ? Math.ceil(products.total / products.size) : 1}
+              Página {products.page} de {products.total ? Math.ceil(products.total / products.size) : 1}
             </span>
             <Button
-                variant="outline-secondary"
-                size="sm"
-                disabled={!products.items.length || products.page >= Math.ceil(products.total / products.size)}
-                onClick={() => fetchProducts(selectedFamily.id, products.page + 1)}
+              variant="outline-secondary"
+              size="sm"
+              disabled={!products.items.length || products.page >= Math.ceil(products.total / products.size)}
+              onClick={() => fetchProducts(selectedFamily.id, products.page + 1)}
             >
-                Siguiente
+              Siguiente
             </Button>
-        </div>
+          </div>
         </>
       )}
 
