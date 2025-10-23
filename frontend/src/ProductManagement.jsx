@@ -206,7 +206,7 @@ function ProductManagement() {
                   <td>
                     {
                       <img
-                        src={product.image_url ? `data:image/webp;base64,${product.image_url}` : `../public/img_placeholder.png`}
+                        src={product.image_url ? `data:image/webp;base64,${product.image_url}` : `/img_placeholder.png`}
                         alt={product.name}
                         style={{ width: 50, height: 50, objectFit: 'cover' }}
                       />

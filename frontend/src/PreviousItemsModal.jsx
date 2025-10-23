@@ -126,7 +126,7 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
                                                                     <img
                                                                         src={item.product.image_url
                                                                             ? `data:image/webp;base64,${item.product.image_url}`
-                                                                            : '../public/img_placeholder.png'}
+                                                                            : '/img_placeholder.png'}
                                                                         alt={item.nombre}
                                                                         style={{ width: 50, height: 50, objectFit: 'cover' }}
                                                                     />

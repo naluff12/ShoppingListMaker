@@ -406,7 +406,7 @@ function ShoppingListView() {
                                     };
                                     return (
                                         <div key={p.id} className={`d-flex align-items-center p-2 hover-bg-light ${index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""}`} style={{ cursor: "pointer" }} onMouseDown={() => { setNewItem(p.name); setProducts([]); }} onMouseEnter={() => setHighlightedIndex(index)}>
-                                            {<img src={p.image_url ? `data:image/webp;base64,${p.image_url}` : '../public/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 10 }} />}
+                                            {<img src={p.image_url ? `data:image/webp;base64,${p.image_url}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 10 }} />}
                                             <span>{highlightMatch(p.name, newItem)}</span>
                                         </div>
                                     );
