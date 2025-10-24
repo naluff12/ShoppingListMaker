@@ -32,20 +32,22 @@ function ProductManagement() {
     }
   };
 
-  const fetchProducts = async (familyId, page = 1) => {
+  const fetchProducts = async (familyId, page = 1, query = '') => {
     const token = localStorage.getItem('token');
+    const url = query
+      ? `/api/products/search?family_id=${familyId}&q=${encodeURIComponent(query)}&page=${page}&size=10`
+      : `/api/families/${familyId}/products?page=${page}&size=10`;
+
     try {
-      const response = await fetch(`/api/families/${familyId}/products?page=${page}&size=10`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+      const response = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
         const data = await response.json();
         setProducts(data);
       } else {
         console.error('Failed to fetch products');
-        setProducts({ items: [], total: 0, page: 1, size: 10 }); // Clear products on failure
+        setProducts({ items: [], total: 0, page: 1, size: 10 });
       }
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -58,11 +60,14 @@ function ProductManagement() {
 
   useEffect(() => {
     if (selectedFamily) {
-      fetchProducts(selectedFamily.id, 1);
+      const handler = setTimeout(() => {
+        fetchProducts(selectedFamily.id, 1, searchTerm);
+      }, 300);
+      return () => clearTimeout(handler);
     } else {
       setProducts({ items: [], total: 0, page: 1, size: 10 });
     }
-  }, [selectedFamily]);
+  }, [selectedFamily, searchTerm]);
 
   const handleEdit = (product) => {
     setCurrentProduct(product);
@@ -160,10 +165,6 @@ function ProductManagement() {
     setShowModal(true);
   };
 
-  const filteredProducts = (products.items || []).filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   return (
     <div>
       <h2>Product Management</h2>
@@ -188,6 +189,7 @@ function ProductManagement() {
           <InputGroup className="mt-3 mb-3">
             <FormControl
               placeholder="Search for products..."
+              value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </InputGroup>
@@ -201,7 +203,7 @@ function ProductManagement() {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map(product => (
+              {(products.items || []).map(product => (
                 <tr key={product.id}>
                   <td>
                     {
@@ -227,7 +229,7 @@ function ProductManagement() {
               variant="outline-secondary"
               size="sm"
               disabled={!products.items.length || products.page <= 1}
-              onClick={() => fetchProducts(selectedFamily.id, products.page - 1)}
+              onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm)}
             >
               Anterior
             </Button>
@@ -238,7 +240,7 @@ function ProductManagement() {
               variant="outline-secondary"
               size="sm"
               disabled={!products.items.length || products.page >= Math.ceil(products.total / products.size)}
-              onClick={() => fetchProducts(selectedFamily.id, products.page + 1)}
+              onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm)}
             >
               Siguiente
             </Button>
