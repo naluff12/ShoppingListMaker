@@ -1,11 +1,12 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Eye, EyeSlash, PlusCircle } from 'react-bootstrap-icons';
+import { Eye, EyeSlash, PlusCircle, PlusLg } from 'react-bootstrap-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
 import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
+import ShoppingItemCard from './ShoppingItemCard'; // Importar el nuevo componente
 
 const API_URL = 'http://localhost:8000';
 
@@ -35,6 +36,36 @@ function ShoppingListView() {
     const [productsPage, setProductsPage] = useState(1);
     const [productsTotalPages, setProductsTotalPages] = useState(1);
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
+    const [quickAddItemName, setQuickAddItemName] = useState('');
+    const [isQuickAdding, setIsQuickAdding] = useState(false);
+
+    const handleQuickAdd = async (e) => {
+        e.preventDefault();
+        if (!quickAddItemName.trim()) return;
+
+        setIsQuickAdding(true);
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/items/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ 
+                    list_id: list.id, 
+                    nombre: quickAddItemName, 
+                    cantidad: 1, // Default quantity
+                    unit: 'piezas' // Default unit
+                })
+            });
+            if (!res.ok) throw new Error('Error al agregar el producto');
+            await res.json();
+            setQuickAddItemName('');
+            fetchListAndBlame(itemsPage); // Recargar la página actual de items
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setIsQuickAdding(false);
+        }
+    };
 
     const fetchListAndBlame = (page = 1) => {
         if (!list || !list.id) return;
@@ -345,7 +376,7 @@ function ShoppingListView() {
                         <InputGroup>
                             <Form.Control
                                 type="text"
-                                placeholder="Nuevo producto"
+                                placeholder="Nuevo producto (con detalles)"
                                 value={newItem}
                                 onChange={async (e) => {
                                     const value = e.target.value;
@@ -419,82 +450,58 @@ function ShoppingListView() {
                             </div>
                         )}
                     </Form>
+
+                    <hr />
+
+                    <Form onSubmit={handleQuickAdd} className="mb-3">
+                        <InputGroup>
+                            <Form.Control
+                                type="text"
+                                placeholder="Añadir rápido..."
+                                value={quickAddItemName}
+                                onChange={(e) => setQuickAddItemName(e.target.value)}
+                                disabled={isQuickAdding}
+                            />
+                            <Button type="submit" variant="success" disabled={isQuickAdding}>
+                                {isQuickAdding ? <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> : <PlusLg />}
+                            </Button>
+                        </InputGroup>
+                    </Form>
+
                     <div className="d-flex justify-content-end gap-3">
                         <h5>Total Comprado: <Badge bg="success">${totalComprado.toFixed(2)}</Badge></h5>
                     </div>
                 </Card.Body>
             </Card>
 
-            <ul className="list-group">
+            <div>
                 <TransitionGroup>
                     {items.map(item => (
                         <CSSTransition key={item.id} timeout={400} classNames="fade">
-                            <li className={`list-group-item mb-2 shadow-sm ${item.status === 'comprado' ? 'is-comprado' : ''}`}>
-                                <div className="d-flex align-items-center justify-content-between">
-                                    <div className="d-flex align-items-center">
-                                        <ImageUploader itemId={item.id} imageUrl={item.product.image_url} onImageUpload={handleImageUpload} />
-                                        <div onDoubleClick={() => setEditingItem({ ...item })}>
-                                            {editingItem && editingItem.id === item.id ? (
-                                                <InputGroup>
-                                                    <Form.Control type="number" value={editingItem.cantidad} onChange={(e) => setEditingItem({ ...editingItem, cantidad: parseFloat(e.target.value) || 0 })} style={{ maxWidth: '80px' }} />
-                                                    <Form.Select value={editingItem.unit} onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })} style={{ maxWidth: '100px' }}>
-                                                        <option value="piezas">piezas</option>
-                                                        <option value="kg">kg</option>
-                                                        <option value="g">g</option>
-                                                        <option value="L">L</option>
-                                                        <option value="ml">ml</option>
-                                                    </Form.Select>
-                                                    <Button variant="success" size="sm" onClick={() => handleItemUpdate(editingItem.id, { cantidad: editingItem.cantidad, unit: editingItem.unit })}>Guardar</Button>
-                                                    <Button variant="secondary" size="sm" onClick={() => setEditingItem(null)}>Cancelar</Button>
-                                                </InputGroup>
-                                            ) : (
-                                                <>
-                                                    <span class="item-info"><b>{item.nombre}</b> ({item.cantidad} {item.unit})</span>
-                                                    <div className="text-muted small">{item.creado_por ? `agregado por ${item.creado_por.username}` : ''}</div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="d-flex align-items-center">
-                                        <small onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })}>
-                                            Precio: ${editingPrice?.id === item.id && editingPrice?.field === 'precio_confirmado' ?
-                                                <input type="number" step="0.01" defaultValue={item.precio_confirmado} autoFocus onBlur={(e) => handlePriceChange(item.id, 'precio_confirmado', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} style={{ width: 70 }} />
-                                                : (item.precio_confirmado || '0.00')}
-                                        </small>
-                                        <Form.Check
-                                            type="switch"
-                                            id={`item-status-${item.id}`}
-                                            checked={item.status === 'comprado'}
-                                            onChange={() => handleStatus(item.id, item.status)}
-                                            className="status-checkbox mx-2"
-                                        />
-                                        <Button variant="danger" size="sm" onClick={() => handleDelete(item.id)} disabled={loading}>&times;</Button>
-                                        <Button variant="outline-info" size="sm" className="ms-2" onClick={() => handleShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id}>H</Button>
-                                    </div>
-                                </div>
-                                {showItemBlame === item.id && (
-                                    <div className="mt-2 ms-3">
-                                        <h6>Historial del Producto</h6>
-                                        {itemBlames[item.id] && itemBlames[item.id].length === 0 && <div className="text-muted">Sin historial</div>}
-                                        <ul className="list-group">
-                                            {itemBlames[item.id] && itemBlames[item.id].map(c => (
-                                                <li key={c.id} className="list-group-item">
-                                                    <b>{c.user && c.user.username ? c.user.username : 'Usuario'}</b> ({c.timestamp ? new Date(c.timestamp).toLocaleString() : ''})<br />
-                                                    <small>{c.detalles}</small>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        <form onSubmit={(e) => { e.preventDefault(); handleItemCommentSubmit(item.id); }} className="mt-2 d-flex">
-                                            <input type="text" className="form-control me-2" placeholder="Nuevo comentario" value={newItemComment} onChange={e => setNewItemComment(e.target.value)} />
-                                            <Button type="submit" variant="primary" size="sm">Comentar</Button>
-                                        </form>
-                                    </div>
-                                )}
-                            </li>
+                            <ShoppingItemCard
+                                item={item}
+                                onStatusChange={handleStatus}
+                                onDelete={handleDelete}
+                                onImageUpload={handleImageUpload}
+                                onItemUpdate={handleItemUpdate}
+                                onPriceChange={handlePriceChange}
+                                onShowItemBlame={handleShowItemBlame}
+                                onItemCommentSubmit={handleItemCommentSubmit}
+                                editingItem={editingItem}
+                                setEditingItem={setEditingItem}
+                                editingPrice={editingPrice}
+                                setEditingPrice={setEditingPrice}
+                                showItemBlame={showItemBlame}
+                                itemBlames={itemBlames}
+                                newItemComment={newItemComment}
+                                setNewItemComment={setNewItemComment}
+                                loadingItemBlame={loadingItemBlame}
+                                loading={loading}
+                            />
                         </CSSTransition>
                     ))}
                 </TransitionGroup>
-            </ul>
+            </div>
             <div className="d-flex justify-content-center align-items-center mt-3">
                 <Button variant="outline-secondary" size="sm" disabled={itemsPage <= 1} onClick={() => fetchListAndBlame(itemsPage - 1)}>Anterior</Button>
                 <span className="mx-2">Página {itemsPage} de {itemsTotalPages}</span>

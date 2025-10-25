@@ -37,12 +37,41 @@
     background-color: #fff;
 }
 
-.list-group-item.is-comprado {
-    background-color: #e9f5ec;
-    /* Un fondo verde muy claro */
-    opacity: 0.8;
+/* Estilos para la tarjeta de item comprado */
+.card.is-comprado {
+    opacity: 0.75;
+    background-color: #f8f9fa;
 }
 
-.list-group-item.is-comprado .item-info {
+.card.is-comprado .card-header span {
     text-decoration: line-through;
+}
+
+/* Estilos para el autocompletado */
+.autocomplete-dropdown {
+    z-index: 1050; /* Asegura que esté sobre otros elementos */
+}
+
+.hover-bg-light:hover {
+    background-color: #f1f1f1;
+}
+
+/* Media query para mejorar la vista en móviles */
+@media (max-width: 576px) {
+    .card-body .row > div {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+
+    .card-body .btn-group-sm > .btn, .card-body .btn-sm {
+        font-size: 0.75rem; /* Botones más pequeños */
+        padding: 0.2rem 0.4rem;
+    }
+
+    .card-header span {
+        max-width: 70%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 }
