@@ -858,3 +858,36 @@ def delete_notification(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
     return
+
+@app.get("/listas/{lista_id}/items", response_model=schemas.Page[schemas.ListItem])
+def get_items_for_list(
+    lista_id: int,
+    page: int = 1,
+    size: int = 10,
+    status: str = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=lista_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    # 🔐 Verificar permisos
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver esta lista")
+
+    # 🔹 Obtener ítems con paginación
+    query = db.query(models.ListItem).filter(models.ListItem.list_id == lista_id)
+    if status:
+        query = query.filter(models.ListItem.status == status)
+    total = query.count()
+    items = (
+        query.order_by(models.ListItem.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+        .all()
+    )
+
+    return schemas.Page(items=items, total=total, page=page, size=size)

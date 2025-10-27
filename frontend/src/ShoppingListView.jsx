@@ -31,6 +31,8 @@ function ShoppingListView() {
     const [products, setProducts] = useState([]);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [editingItem, setEditingItem] = useState(null);
+    const [itemsPage, setItemsPage] = useState(1);
+    const [itemsTotalPages, setItemsTotalPages] = useState(1);
     const [productsPage, setProductsPage] = useState(1);
     const [productsTotalPages, setProductsTotalPages] = useState(1);
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
@@ -59,7 +61,7 @@ function ShoppingListView() {
             if (!res.ok) throw new Error('Error al agregar el producto');
             await res.json();
             setQuickAddItemName('');
-            fetchListAndBlame(); // Recargar la página actual de items
+            fetchListAndBlame(itemsPage); // Recargar la página actual de items
         } catch (err) {
             alert(err.message);
         } finally {
@@ -91,18 +93,21 @@ function ShoppingListView() {
         }
     };
 
-    const fetchListAndBlame = () => {
+    const fetchListAndBlame = (page = 1) => {
         if (!list || !list.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
 
         Promise.all([
             fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
+            fetch(`/api/listas/${list.id}/items?page=${page}&size=10`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
             fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
         ])
-            .then(([listData, blameData]) => {
+            .then(([listData, itemsData, blameData]) => {
                 setListDetails(listData);
-                setItems(Array.isArray(listData.items) ? listData.items : []);
+                setItems(Array.isArray(itemsData.items) ? itemsData.items : []);
+                setItemsPage(itemsData.page);
+                setItemsTotalPages(Math.ceil(itemsData.total / itemsData.size));
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
                     fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
@@ -528,7 +533,11 @@ function ShoppingListView() {
                     ))}
                 </TransitionGroup>
             </div>
-
+            <div className="d-flex justify-content-center align-items-center mt-3">
+                <Button variant="outline-secondary" size="sm" disabled={itemsPage <= 1} onClick={() => fetchListAndBlame(itemsPage - 1)}>Anterior</Button>
+                <span className="mx-2">Página {itemsPage} de {itemsTotalPages}</span>
+                <Button variant="outline-secondary" size="sm" disabled={itemsPage >= itemsTotalPages} onClick={() => fetchListAndBlame(itemsPage + 1)}>Siguiente</Button>
+            </div>
 
             <div className="mt-4">
                 <h5>Comentarios de la lista</h5>
