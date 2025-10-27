@@ -100,6 +100,7 @@ class ShoppingListBase(BaseModel):
     comentarios: Optional[str] = None
     calendar_id: Optional[int] = None
     status: Optional[str] = None
+    budget: Optional[float] = None
 
 
 class ShoppingListCreate(ShoppingListBase):
@@ -110,6 +111,7 @@ class ShoppingListUpdate(BaseModel):
     notas: Optional[str] = None
     comentarios: Optional[str] = None
     status: Optional[str] = None
+    budget: Optional[float] = None
 
 
 class ShoppingList(ShoppingListBase):
@@ -118,6 +120,7 @@ class ShoppingList(ShoppingListBase):
     list_for_date: Optional[datetime] = None
     items: List[ListItem] = []
     calendar: Optional["Calendar"] = None
+    budget: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -128,6 +131,7 @@ class ShoppingListResponse(ShoppingListBase):
     owner_id: int
     list_for_date: Optional[datetime] = None
     calendar: Optional["Calendar"] = None
+    budget: Optional[float] = None
 
     class Config:
         from_attributes = True

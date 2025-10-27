@@ -65,6 +65,7 @@ class ShoppingList(Base):
     notas = Column(Text)
     comentarios = Column(Text)
     status = Column(Enum('pendiente', 'revisada', 'no revisada', name='list_status'), default='pendiente')
+    budget = Column(Float, nullable=True)
     calendar_id = Column(Integer, ForeignKey('calendars.id'))
     owner_id = Column(Integer, ForeignKey('users.id'))
     list_for_date = Column(DateTime, default=datetime.datetime.utcnow)

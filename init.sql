@@ -56,6 +56,7 @@ CREATE TABLE shopping_lists (
         'revisada',
         'no revisada'
     ) DEFAULT 'pendiente',
+    budget FLOAT,
     calendar_id INT,
     owner_id INT,
     list_for_date DATE,

@@ -1,7 +1,7 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip, Modal, ProgressBar } from 'react-bootstrap';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Eye, EyeSlash, PlusCircle, PlusLg } from 'react-bootstrap-icons';
+import { Eye, EyeSlash, PlusCircle, PlusLg, PencilSquare } from 'react-bootstrap-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
@@ -31,13 +31,13 @@ function ShoppingListView() {
     const [products, setProducts] = useState([]);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const [editingItem, setEditingItem] = useState(null);
-    const [itemsPage, setItemsPage] = useState(1);
-    const [itemsTotalPages, setItemsTotalPages] = useState(1);
     const [productsPage, setProductsPage] = useState(1);
     const [productsTotalPages, setProductsTotalPages] = useState(1);
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [quickAddItemName, setQuickAddItemName] = useState('');
     const [isQuickAdding, setIsQuickAdding] = useState(false);
+    const [showBudgetModal, setShowBudgetModal] = useState(false);
+    const [newBudget, setNewBudget] = useState('');
 
     const handleQuickAdd = async (e) => {
         e.preventDefault();
@@ -49,9 +49,9 @@ function ShoppingListView() {
             const res = await fetch(`/api/items/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ 
-                    list_id: list.id, 
-                    nombre: quickAddItemName, 
+                body: JSON.stringify({
+                    list_id: list.id,
+                    nombre: quickAddItemName,
                     cantidad: 1, // Default quantity
                     unit: 'piezas' // Default unit
                 })
@@ -59,7 +59,7 @@ function ShoppingListView() {
             if (!res.ok) throw new Error('Error al agregar el producto');
             await res.json();
             setQuickAddItemName('');
-            fetchListAndBlame(itemsPage); // Recargar la página actual de items
+            fetchListAndBlame(); // Recargar la página actual de items
         } catch (err) {
             alert(err.message);
         } finally {
@@ -67,21 +67,42 @@ function ShoppingListView() {
         }
     };
 
-    const fetchListAndBlame = (page = 1) => {
+    const handleBudgetUpdate = async () => {
+        const budgetValue = parseFloat(newBudget);
+        if (isNaN(budgetValue) || budgetValue < 0) {
+            alert("Por favor, introduce un número válido para el presupuesto.");
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/listas/${list.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({ budget: budgetValue })
+            });
+            if (!res.ok) throw new Error('Error al actualizar el presupuesto');
+            const updatedList = await res.json();
+            setListDetails(updatedList);
+            setShowBudgetModal(false);
+            setNewBudget('');
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
+    const fetchListAndBlame = () => {
         if (!list || !list.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
 
         Promise.all([
             fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
-            fetch(`/api/listas/${list.id}/items?page=${page}&size=10`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
             fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
         ])
-            .then(([listData, itemsData, blameData]) => {
+            .then(([listData, blameData]) => {
                 setListDetails(listData);
-                setItems(Array.isArray(itemsData.items) ? itemsData.items : []);
-                setItemsPage(itemsData.page);
-                setItemsTotalPages(Math.ceil(itemsData.total / itemsData.size));
+                setItems(Array.isArray(listData.items) ? listData.items : []);
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
                     fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
@@ -358,6 +379,11 @@ function ShoppingListView() {
     };
 
     const totalComprado = useMemo(() => items.reduce((acc, item) => item.status === 'comprado' ? acc + (item.precio_confirmado || 0) * item.cantidad : acc, 0), [items]);
+    const totalEstimado = useMemo(() => items.reduce((acc, item) => acc + (item.precio_confirmado || item.precio_estimado || 0) * item.cantidad, 0), [items]);
+
+    const budget = listDetails?.budget || 0;
+    const budgetProgress = budget > 0 ? (totalEstimado / budget) * 100 : 0;
+    const budgetVariant = budgetProgress > 100 ? 'danger' : budgetProgress > 75 ? 'warning' : 'success';
 
     return (
         <div className="container mt-4" style={{ maxWidth: 800 }}>
@@ -372,6 +398,21 @@ function ShoppingListView() {
                             </span>
                         )}
                     </div>
+
+                    {/* Budget Section */}
+                    <div className="mb-3">
+                        <div className="d-flex justify-content-between align-items-center">
+                            <h5>Presupuesto: ${budget.toFixed(2)}</h5>
+                            <Button variant="outline-primary" size="sm" onClick={() => setShowBudgetModal(true)}><PencilSquare className="me-1" /> Editar</Button>
+                        </div>
+                        <ProgressBar now={budgetProgress} variant={budgetVariant} label={`${budgetProgress.toFixed(0)}%`} />
+                        <div className="d-flex justify-content-between mt-1 text-muted small">
+                            <span>Total Estimado: ${totalEstimado.toFixed(2)}</span>
+                            <span>Restante: <span className={totalEstimado > budget ? 'text-danger' : 'text-success'}>${(budget - totalEstimado).toFixed(2)}</span></span>
+                        </div>
+                    </div>
+                    <hr />
+
                     <Form onSubmit={handleAdd} className="mb-3 position-relative" style={{ zIndex: 10 }}>
                         <InputGroup>
                             <Form.Control
@@ -453,21 +494,6 @@ function ShoppingListView() {
 
                     <hr />
 
-                    <Form onSubmit={handleQuickAdd} className="mb-3">
-                        <InputGroup>
-                            <Form.Control
-                                type="text"
-                                placeholder="Añadir rápido..."
-                                value={quickAddItemName}
-                                onChange={(e) => setQuickAddItemName(e.target.value)}
-                                disabled={isQuickAdding}
-                            />
-                            <Button type="submit" variant="success" disabled={isQuickAdding}>
-                                {isQuickAdding ? <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" /> : <PlusLg />}
-                            </Button>
-                        </InputGroup>
-                    </Form>
-
                     <div className="d-flex justify-content-end gap-3">
                         <h5>Total Comprado: <Badge bg="success">${totalComprado.toFixed(2)}</Badge></h5>
                     </div>
@@ -502,11 +528,7 @@ function ShoppingListView() {
                     ))}
                 </TransitionGroup>
             </div>
-            <div className="d-flex justify-content-center align-items-center mt-3">
-                <Button variant="outline-secondary" size="sm" disabled={itemsPage <= 1} onClick={() => fetchListAndBlame(itemsPage - 1)}>Anterior</Button>
-                <span className="mx-2">Página {itemsPage} de {itemsTotalPages}</span>
-                <Button variant="outline-secondary" size="sm" disabled={itemsPage >= itemsTotalPages} onClick={() => fetchListAndBlame(itemsPage + 1)}>Siguiente</Button>
-            </div>
+
 
             <div className="mt-4">
                 <h5>Comentarios de la lista</h5>
@@ -531,6 +553,35 @@ function ShoppingListView() {
                 listId={list.id}
                 handleAddItems={handleAddItemsFromModal}
             />
+
+            <Modal show={showBudgetModal} onHide={() => setShowBudgetModal(false)} centered>
+                <Modal.Header closeButton>
+                    <Modal.Title>Establecer Presupuesto</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <Form.Group>
+                        <Form.Label>Monto del Presupuesto</Form.Label>
+                        <InputGroup>
+                            <InputGroup.Text>$</InputGroup.Text>
+                            <Form.Control
+                                type="number"
+                                placeholder="Ej: 500.00"
+                                value={newBudget}
+                                onChange={(e) => setNewBudget(e.target.value)}
+                                autoFocus
+                            />
+                        </InputGroup>
+                    </Form.Group>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowBudgetModal(false)}>
+                        Cancelar
+                    </Button>
+                    <Button variant="primary" onClick={handleBudgetUpdate}>
+                        Guardar Presupuesto
+                    </Button>
+                </Modal.Footer>
+            </Modal>
         </div>
     );
 }
