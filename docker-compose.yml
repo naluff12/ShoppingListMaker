@@ -6,6 +6,7 @@ services:
     container_name: mariadb_shopping
     restart: unless-stopped
     environment:
+      TZ: ${TZ}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
