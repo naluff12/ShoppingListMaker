@@ -7,6 +7,7 @@ import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
 import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
 import ShoppingItemCard from './ShoppingItemCard'; // Importar el nuevo componente
+import PriceHistoryModal from './PriceHistoryModal'; // Importar el modal de historial de precios
 
 const API_URL = 'http://localhost:8000';
 
@@ -21,6 +22,7 @@ function ShoppingListView() {
     const [newItem, setNewItem] = useState('');
     const [newQuantity, setNewQuantity] = useState(1);
     const [newUnit, setNewUnit] = useState('piezas');
+    const [newPrice, setNewPrice] = useState('');
     const [loading, setLoading] = useState(false);
     const [itemBlames, setItemBlames] = useState({});
     const [editingPrice, setEditingPrice] = useState(null);
@@ -40,6 +42,8 @@ function ShoppingListView() {
     const [isQuickAdding, setIsQuickAdding] = useState(false);
     const [showBudgetModal, setShowBudgetModal] = useState(false);
     const [newBudget, setNewBudget] = useState('');
+    const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
+    const [selectedItemForPriceHistory, setSelectedItemForPriceHistory] = useState(null);
 
     const handleQuickAdd = async (e) => {
         e.preventDefault();
@@ -163,13 +167,14 @@ function ShoppingListView() {
             const res = await fetch(`/api/items/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ list_id: list.id, nombre: newItem, cantidad: newQuantity, unit: newUnit })
+                body: JSON.stringify({ list_id: list.id, nombre: newItem, cantidad: newQuantity, unit: newUnit, precio_estimado: newPrice || null })
             });
             if (!res.ok) throw new Error('Error al agregar item');
             await res.json();
             setNewItem('');
             setNewQuantity(1);
             setNewUnit('piezas');
+            setNewPrice('');
             fetchListAndBlame(); // Recargar todo
         } catch (err) {
             alert(err.message);
@@ -383,6 +388,11 @@ function ShoppingListView() {
         }
     };
 
+    const handleShowPriceHistory = (item) => {
+        setSelectedItemForPriceHistory(item);
+        setShowPriceHistoryModal(true);
+    };
+
     const totalComprado = useMemo(() => items.reduce((acc, item) => item.status === 'comprado' ? acc + (item.precio_confirmado || 0) * item.cantidad : acc, 0), [items]);
     const totalEstimado = useMemo(() => items.reduce((acc, item) => acc + (item.precio_confirmado || item.precio_estimado || 0) * item.cantidad, 0), [items]);
 
@@ -448,6 +458,9 @@ function ShoppingListView() {
                                         const selected = products[highlightedIndex];
                                         if (selected) {
                                             setNewItem(selected.name);
+                                            if (selected.last_price) {
+                                                setNewPrice(selected.last_price);
+                                            }
                                             setProducts([]);
                                         }
                                     }
@@ -482,7 +495,7 @@ function ShoppingListView() {
                                         return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <span key={i} style={{ fontWeight: "bold", color: "#007bff" }}>{part}</span> : part);
                                     };
                                     return (
-                                        <div key={p.id} className={`d-flex align-items-center p-2 hover-bg-light ${index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""}`} style={{ cursor: "pointer" }} onMouseDown={() => { setNewItem(p.name); setProducts([]); }} onMouseEnter={() => setHighlightedIndex(index)}>
+                                        <div key={p.id} className={`d-flex align-items-center p-2 hover-bg-light ${index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""}`} style={{ cursor: "pointer" }} onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setProducts([]); }} onMouseEnter={() => setHighlightedIndex(index)}>
                                             {<img src={p.image_url ? `data:image/webp;base64,${p.image_url}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 10 }} />}
                                             <span>{highlightMatch(p.name, newItem)}</span>
                                         </div>
@@ -518,6 +531,7 @@ function ShoppingListView() {
                                 onPriceChange={handlePriceChange}
                                 onShowItemBlame={handleShowItemBlame}
                                 onItemCommentSubmit={handleItemCommentSubmit}
+                                onShowPriceHistory={handleShowPriceHistory}
                                 editingItem={editingItem}
                                 setEditingItem={setEditingItem}
                                 editingPrice={editingPrice}
@@ -591,6 +605,12 @@ function ShoppingListView() {
                     </Button>
                 </Modal.Footer>
             </Modal>
+
+            <PriceHistoryModal 
+                show={showPriceHistoryModal} 
+                handleClose={() => setShowPriceHistoryModal(false)} 
+                item={selectedItemForPriceHistory} 
+            />
         </div>
     );
 }

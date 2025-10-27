@@ -31,18 +31,34 @@ class Family(BaseModel):
     class Config:
         from_attributes = True
 
+# ---------- PRICE HISTORY ----------
+class PriceHistoryBase(BaseModel):
+    price: float
+    created_at: datetime
+
+class PriceHistoryCreate(PriceHistoryBase):
+    product_id: int
+
+class PriceHistory(PriceHistoryBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
 # ---------- PRODUCT ----------
 class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
     family_id: Optional[int] = None
+    last_price: Optional[float] = None
 
 class ProductCreate(ProductBase):
     pass
 
 class Product(ProductBase):
     id: int
+    price_history: List[PriceHistory] = []
 
     class Config:
         from_attributes = True
@@ -66,6 +82,7 @@ class ListItemCreate(BaseModel):
     list_id: int
     comentario: Optional[str] = None
     precio_estimado: Optional[float] = None
+    precio_confirmado: Optional[float] = None
 
 
 class ListItem(ListItemBase):
@@ -315,6 +332,3 @@ class ListItemsBulkCreate(BaseModel):
 User.model_rebuild()
 Blame.model_rebuild()
 ShoppingList.model_rebuild()
-
-
-

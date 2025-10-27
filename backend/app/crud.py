@@ -59,6 +59,8 @@ def delete_family_product(db: Session, product_id: int):
         db.commit()
     return db_product
 
+def get_price_history_for_product(db: Session, product_id: int):
+    return db.query(models.PriceHistory).filter(models.PriceHistory.product_id == product_id).order_by(models.PriceHistory.created_at.desc()).all()
 
 # CRUD for Users
 def get_user(db: Session, user_id: int):
@@ -280,11 +282,20 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
         unit=item.unit,
         comentario=item.comentario,
         precio_estimado=item.precio_estimado,
+        precio_confirmado=item.precio_confirmado,
         status='pendiente',
         creado_por_id=user_id
     )
     db.add(db_item)
     db.flush()  # Flush to get the ID
+
+    if item.precio_confirmado is not None:
+        product.last_price = item.precio_confirmado
+        price_history_entry = models.PriceHistory(
+            product_id=product.id,
+            price=item.precio_confirmado
+        )
+        db.add(price_history_entry)
 
     blame_entry = models.Blame(
         user_id=user_id,
@@ -344,9 +355,6 @@ def create_list_items_bulk(db: Session, items: list[schemas.ListItemCreateBulk],
     return new_items
 
 
-
-
-
 def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, user_id: int):
     db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
     if not db_item:
@@ -354,6 +362,16 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
 
     update_data = item_update.model_dump(exclude_unset=True)
     blame_details = []
+
+    if 'precio_confirmado' in update_data and update_data['precio_confirmado'] is not None:
+        if db_item.product:
+            db_item.product.last_price = update_data['precio_confirmado']
+            price_history_entry = models.PriceHistory(
+                product_id=db_item.product.id,
+                price=update_data['precio_confirmado']
+            )
+            db.add(price_history_entry)
+
     for key, value in update_data.items():
         original_value = getattr(db_item, key)
         if original_value != value:

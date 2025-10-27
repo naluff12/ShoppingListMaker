@@ -156,7 +156,20 @@ def delete_product_for_family(family_id: int, product_id: int, db: Session = Dep
         raise HTTPException(status_code=404, detail="Product not found in this family")
     return crud.delete_family_product(db=db, product_id=product_id)
 
+@app.get("/products/{product_id}/prices", response_model=List[schemas.PriceHistory])
+def get_product_price_history(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_product = crud.get_product(db, product_id=product_id)
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Check if the user belongs to the family of the product
+    get_family_for_user(db_product.family_id, current_user)
 
+    return crud.get_price_history_for_product(db=db, product_id=product_id)
 
 
 # --- Endpoints ---

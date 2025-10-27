@@ -94,10 +94,21 @@ class Product(Base):
     description = Column(Text)
     family_id = Column(Integer, ForeignKey('families.id'))
     image_url = Column(LONGTEXT)
+    last_price = Column(Float, nullable=True)
     created_at = Column(DateTime, default=tz_util.now)
     updated_at = Column(DateTime, default=tz_util.now, onupdate=tz_util.now)
 
     family = relationship("Family")
+    price_history = relationship("PriceHistory", back_populates="product")
+
+class PriceHistory(Base):
+    __tablename__ = 'price_history'
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    price = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=tz_util.now)
+
+    product = relationship("Product", back_populates="price_history")
 
 class ListItem(Base):
     __tablename__ = 'list_items'

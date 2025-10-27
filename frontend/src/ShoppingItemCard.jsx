@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Button, Form, InputGroup, Row, Col, Badge, Collapse } from 'react-bootstrap';
-import { Trash, ChatLeftText } from 'react-bootstrap-icons';
+import { Trash, ChatLeftText, GraphUp } from 'react-bootstrap-icons';
 import ImageUploader from './ImageUploader';
 
 const ShoppingItemCard = ({
@@ -12,6 +12,7 @@ const ShoppingItemCard = ({
     onPriceChange,
     onShowItemBlame,
     onItemCommentSubmit,
+    onShowPriceHistory,
     editingItem,
     setEditingItem,
     editingPrice,
@@ -65,20 +66,22 @@ const ShoppingItemCard = ({
                         )}
 
                         <div onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })} title="Doble click para editar precio">
-                            <b>Precio:</b> 
+                            <b>Precio:</b>
                             {editingPrice?.id === item.id && editingPrice?.field === 'precio_confirmado' ? (
-                                <Form.Control 
-                                    type="number" 
-                                    step="0.01" 
-                                    defaultValue={item.precio_confirmado} 
-                                    autoFocus 
-                                    onBlur={(e) => onPriceChange(item.id, 'precio_confirmado', e.target.value)} 
-                                    onKeyDown={e => e.key === 'Enter' && e.target.blur()} 
-                                    style={{ width: '80px', display: 'inline-block' }} 
+                                <Form.Control
+                                    type="number"
+                                    step="0.01"
+                                    defaultValue={item.precio_confirmado}
+                                    autoFocus
+                                    onBlur={(e) => onPriceChange(item.id, 'precio_confirmado', e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+                                    style={{ width: '80px', display: 'inline-block' }}
                                     size="sm"
                                 />
                             ) : (
-                                <Badge bg="success" className="ms-2">${(item.precio_confirmado || 0).toFixed(2)}</Badge>
+                                <>
+                                    <Badge bg={`${item.precio_confirmado ? 'success' : item.product?.last_price ? 'warning' : 'primary'}`} className="ms-2">${(item.precio_confirmado || item.product?.last_price || 0).toFixed(2)}</Badge>
+                                </>
                             )}
                         </div>
 
@@ -88,6 +91,9 @@ const ShoppingItemCard = ({
                             </Button>
                             <Button variant="outline-info" size="sm" className="me-2" onClick={() => onShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id}>
                                 <ChatLeftText /> <span className="d-none d-md-inline">Historial</span>
+                            </Button>
+                            <Button variant="outline-primary" size="sm" onClick={() => onShowPriceHistory(item)}>
+                                <GraphUp /> <span className="d-none d-md-inline">Precios</span>
                             </Button>
                         </div>
                     </Col>
@@ -115,7 +121,7 @@ const ShoppingItemCard = ({
             <Card.Footer className="text-muted small">
                 Agregado por: {item.creado_por?.username || 'desconocido'}
             </Card.Footer>
-        </Card>
+        </Card >
     );
 };
 

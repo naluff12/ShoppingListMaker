@@ -71,11 +71,21 @@ CREATE TABLE products (
     description TEXT,
     family_id INT,
     image_url LONGTEXT,
+    last_price FLOAT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
     UNIQUE KEY (name, family_id)
 );
+
+CREATE TABLE price_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    product_id INT NOT NULL,
+    price FLOAT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
 
 CREATE TABLE list_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
