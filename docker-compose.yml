@@ -24,6 +24,7 @@ services:
     # ports:
     #   - "${BACKEND_PORT}:8000"
     environment:
+      TZ: ${TZ}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       FRONTEND_URL: ${FRONTEND_URL}
