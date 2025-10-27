@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Boo
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.ext.declarative import declarative_base
-import datetime
+from . import tz_util
 
 Base = declarative_base()
 
@@ -18,7 +18,7 @@ class Family(Base):
     nombre = Column(String(100), nullable=False)
     notas = Column(Text)
     owner_id = Column(Integer, ForeignKey('users.id'))
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=tz_util.now)
 
     owner = relationship("User", back_populates="owned_families")
     users = relationship("User", secondary=user_families, back_populates="families")
@@ -35,7 +35,7 @@ class User(Base):
     nombre = Column(String(100))
     direccion = Column(String(255))
     telefono = Column(String(50))
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=tz_util.now)
 
     families = relationship("Family", secondary=user_families, back_populates="users")
     owned_families = relationship("Family", back_populates="owner")
@@ -52,7 +52,7 @@ class Calendar(Base):
     comentarios = Column(Text)
     family_id = Column(Integer, ForeignKey('families.id'))
     owner_id = Column(Integer, ForeignKey('users.id'))
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=tz_util.now)
 
     family = relationship("Family", back_populates="calendars")
     owner = relationship("User")
@@ -68,8 +68,8 @@ class ShoppingList(Base):
     budget = Column(Float, nullable=True)
     calendar_id = Column(Integer, ForeignKey('calendars.id'))
     owner_id = Column(Integer, ForeignKey('users.id'))
-    list_for_date = Column(DateTime, default=datetime.datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    list_for_date = Column(DateTime, default=tz_util.now)
+    created_at = Column(DateTime, default=tz_util.now)
 
     calendar = relationship("Calendar", back_populates="lists")
     owner = relationship("User", back_populates="lists")
@@ -94,8 +94,8 @@ class Product(Base):
     description = Column(Text)
     family_id = Column(Integer, ForeignKey('families.id'))
     image_url = Column(LONGTEXT)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=tz_util.now)
+    updated_at = Column(DateTime, default=tz_util.now, onupdate=tz_util.now)
 
     family = relationship("Family")
 
@@ -113,7 +113,7 @@ class ListItem(Base):
     precio_confirmado = Column(Float)
     creado_por_id = Column(Integer, ForeignKey('users.id'))
     image_url = Column(LONGTEXT)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=tz_util.now)
 
     list = relationship("ShoppingList", back_populates="items")
     product = relationship("Product")
@@ -132,7 +132,7 @@ class Blame(Base):
     action = Column(String(50))  # creado, editado, borrado
     entity_type = Column(String(50))  # familia, calendario, lista, item
     entity_id = Column(Integer)  # no tiene FK directa
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    timestamp = Column(DateTime, default=tz_util.now)
     detalles = Column(Text)
 
     user = relationship("User", back_populates="blame")
@@ -164,7 +164,7 @@ class Notification(Base):
     family_id = Column(Integer, ForeignKey('families.id'))
     message = Column(Text, nullable=False)
     is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=tz_util.now)
     created_by_id = Column(Integer, ForeignKey('users.id'))
     link = Column(String(255))
 
