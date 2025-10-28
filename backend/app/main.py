@@ -675,6 +675,24 @@ def obtener_lista(
 
     return lista
 
+@app.get("/listas/{lista_id}/budget-details", response_model=schemas.BudgetDetails)
+def get_budget_details(
+    lista_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=lista_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver esta lista")
+
+    return crud.get_budget_details_for_list(db=db, list_id=lista_id)
+
+
 @app.get("/blame/lista/{list_id}", response_model=List[schemas.Blame])
 def get_blame_for_list(
     list_id: int,

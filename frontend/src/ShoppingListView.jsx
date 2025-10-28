@@ -44,6 +44,21 @@ function ShoppingListView() {
     const [newBudget, setNewBudget] = useState('');
     const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
     const [selectedItemForPriceHistory, setSelectedItemForPriceHistory] = useState(null);
+    const [budgetDetails, setBudgetDetails] = useState({ total_estimado: 0, total_comprado: 0 });
+
+    const fetchBudgetDetails = async () => {
+        if (!list || !list.id) return;
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`/api/listas/${list.id}/budget-details`, { headers: { 'Authorization': 'Bearer ' + token } });
+            if (res.ok) {
+                const data = await res.json();
+                setBudgetDetails(data);
+            }
+        } catch (err) {
+            console.error("Error fetching budget details:", err);
+        }
+    };
 
     const handleQuickAdd = async (e) => {
         e.preventDefault();
@@ -66,6 +81,7 @@ function ShoppingListView() {
             await res.json();
             setQuickAddItemName('');
             fetchListAndBlame(itemsPage); // Recargar la página actual de items
+            fetchBudgetDetails();
         } catch (err) {
             alert(err.message);
         } finally {
@@ -129,6 +145,7 @@ function ShoppingListView() {
 
     useEffect(() => {
         fetchListAndBlame();
+        fetchBudgetDetails();
         setItemBlames({});
         setShowItemBlame(null);
     }, [list]);
@@ -176,6 +193,7 @@ function ShoppingListView() {
             setNewUnit('piezas');
             setNewPrice('');
             fetchListAndBlame(); // Recargar todo
+            fetchBudgetDetails();
         } catch (err) {
             alert(err.message);
         } finally {
@@ -201,6 +219,7 @@ function ShoppingListView() {
                 body: JSON.stringify({ items })
             });
             fetchListAndBlame(); // Recargar todo
+            fetchBudgetDetails();
         } catch (err) {
             alert('Error adding items to the list.');
         }
@@ -218,6 +237,7 @@ function ShoppingListView() {
             if (!res.ok) throw new Error('Error al actualizar estado');
             const updatedItem = await res.json();
             setItems(items.map(i => i.id === id ? updatedItem : i));
+            fetchBudgetDetails();
             if (showItemBlame === id) {
                 const resHist = await fetch(`/api/blame/item/${id}`, { headers: { 'Authorization': 'Bearer ' + token } });
                 const dataHist = await resHist.json();
@@ -240,6 +260,7 @@ function ShoppingListView() {
                 });
             if (!res.ok) throw new Error('Error al eliminar item');
             fetchListAndBlame(); // Recargar todo
+            fetchBudgetDetails();
         } catch (err) {
             alert(err.message);
         }
@@ -289,23 +310,27 @@ function ShoppingListView() {
 
     const handlePriceChange = async (itemId, field, value) => {
         const parsedValue = parseFloat(value);
-        if (isNaN(parsedValue)) return;
 
-        const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/items/${itemId}`,
-                {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ [field]: parsedValue })
-                });
-            if (!res.ok) throw new Error('Error al actualizar el precio');
-            const updatedItem = await res.json();
-            setItems(items.map(i => i.id === itemId ? updatedItem : i));
+            // Solo enviar la actualización si el valor es un número válido
+            if (!isNaN(parsedValue)) {
+                const token = localStorage.getItem('token');
+                const res = await fetch(`/api/items/${itemId}`,
+                    {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ [field]: parsedValue })
+                    });
+                if (!res.ok) throw new Error('Error al actualizar el precio');
+                const updatedItem = await res.json();
+                setItems(items.map(i => i.id === itemId ? updatedItem : i));
+                fetchBudgetDetails();
+            }
         } catch (err) {
             alert(err.message);
-            fetchListAndBlame();
+            fetchListAndBlame(); // Recargar en caso de error
         } finally {
+            // Siempre restablecer el estado de edición para volver a mostrar la insignia
             setEditingPrice(null);
         }
     };
@@ -358,6 +383,7 @@ function ShoppingListView() {
             const updatedItem = await res.json();
             setItems(items.map(i => i.id === itemId ? updatedItem : i));
             setEditingItem(null);
+            fetchBudgetDetails();
         } catch (err) {
             alert(err.message);
             fetchListAndBlame();
@@ -393,12 +419,10 @@ function ShoppingListView() {
         setShowPriceHistoryModal(true);
     };
 
-    const totalComprado = useMemo(() => items.reduce((acc, item) => item.status === 'comprado' ? acc + (item.precio_confirmado || 0) * item.cantidad : acc, 0), [items]);
-    const totalEstimado = useMemo(() => items.reduce((acc, item) => acc + (item.precio_confirmado || item.precio_estimado || 0) * item.cantidad, 0), [items]);
-
     const budget = listDetails?.budget || 0;
-    const budgetProgress = budget > 0 ? (totalEstimado / budget) * 100 : 0;
+    const budgetProgress = budget > 0 ? (budgetDetails.total_estimado / budget) * 100 : 0;
     const budgetVariant = budgetProgress > 100 ? 'danger' : budgetProgress > 75 ? 'warning' : 'success';
+    const purchasedProgress = budget > 0 ? (budgetDetails.total_comprado / budget) * 100 : 0;
 
     return (
         <div className="container mt-4" style={{ maxWidth: 800 }}>
@@ -420,11 +444,12 @@ function ShoppingListView() {
                             <h5>Presupuesto: ${budget.toFixed(2)}</h5>
                             <Button variant="outline-primary" size="sm" onClick={() => setShowBudgetModal(true)}><PencilSquare className="me-1" /> Editar</Button>
                         </div>
-                        <ProgressBar now={budgetProgress} variant={budgetVariant} label={`${budgetProgress.toFixed(0)}%`} />
+                        <ProgressBar now={budgetProgress} variant={budgetVariant} label={`Estimado ${budgetProgress.toFixed(0)}%`} />
                         <div className="d-flex justify-content-between mt-1 text-muted small">
-                            <span>Total Estimado: ${totalEstimado.toFixed(2)}</span>
-                            <span>Restante: <span className={totalEstimado > budget ? 'text-danger' : 'text-success'}>${(budget - totalEstimado).toFixed(2)}</span></span>
+                            <span>Total Estimado: ${budgetDetails.total_estimado.toFixed(2)}</span>
+                            <span>Restante: <span className={budgetDetails.total_estimado > budget ? 'text-danger' : 'text-success'}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
                         </div>
+                        <ProgressBar className="mt-2" now={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
                     </div>
                     <hr />
 
@@ -513,7 +538,7 @@ function ShoppingListView() {
                     <hr />
 
                     <div className="d-flex justify-content-end gap-3">
-                        <h5>Total Comprado: <Badge bg="success">${totalComprado.toFixed(2)}</Badge></h5>
+                        <h5>Total Comprado: <Badge bg="success">${budgetDetails.total_comprado.toFixed(2)}</Badge></h5>
                     </div>
                 </Card.Body>
             </Card>

@@ -328,6 +328,10 @@ class ListItemCreateBulk(BaseModel):
 class ListItemsBulkCreate(BaseModel):
     items: List[ListItemCreateBulk]
 
+class BudgetDetails(BaseModel):
+    total_estimado: float
+    total_comprado: float
+
 
 User.model_rebuild()
 Blame.model_rebuild()

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Table, Modal, Form, InputGroup, FormControl, DropdownButton, Dropdown } from 'react-bootstrap';
+import PriceHistoryModal from './PriceHistoryModal'; // Import the new modal
 
 const API_URL = 'http://localhost:8000';
 
@@ -9,9 +10,11 @@ function ProductManagement() {
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [currentProduct, setCurrentProduct] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', last_price: '' });
   const [searchTerm, setSearchTerm] = useState('');
   const [imageFile, setImageFile] = useState(null);
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
+  const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
 
   const fetchFamilies = async () => {
     const token = localStorage.getItem('token');
@@ -71,7 +74,11 @@ function ProductManagement() {
 
   const handleEdit = (product) => {
     setCurrentProduct(product);
-    setFormData({ name: product.name, description: product.description || '' });
+    setFormData({
+      name: product.name,
+      description: product.description || '',
+      last_price: product.last_price || ''
+    });
     setImageFile(null);
     setShowModal(true);
   };
@@ -106,6 +113,14 @@ function ProductManagement() {
       ? `/api/families/${selectedFamily.id}/products/${currentProduct.id}`
       : `/api/families/${selectedFamily.id}/products`;
 
+    const payload = { ...formData };
+    if (payload.last_price) {
+      payload.last_price = parseFloat(payload.last_price);
+    } else {
+      delete payload.last_price;
+    }
+
+
     try {
       const response = await fetch(url, {
         method,
@@ -113,7 +128,7 @@ function ProductManagement() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -160,9 +175,14 @@ function ProductManagement() {
 
   const openAddProductModal = () => {
     setCurrentProduct(null);
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', last_price: '' });
     setImageFile(null);
     setShowModal(true);
+  };
+
+  const handleShowPriceHistory = (product) => {
+    setSelectedProductForHistory({ product: product, nombre: product.name });
+    setShowPriceHistoryModal(true);
   };
 
   return (
@@ -199,6 +219,7 @@ function ProductManagement() {
                 <th>Image</th>
                 <th>Name</th>
                 <th>Description</th>
+                <th>Last Price</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -216,9 +237,11 @@ function ProductManagement() {
                   </td>
                   <td>{product.name}</td>
                   <td>{product.description}</td>
+                  <td>{product.last_price ? `${product.last_price.toFixed(2)}` : 'N/A'}</td>
                   <td>
-                    <Button variant="warning" onClick={() => handleEdit(product)}>Edit</Button>{' '}
-                    <Button variant="danger" onClick={() => handleDelete(product.id)}>Delete</Button>
+                    <Button variant="warning" size="sm" onClick={() => handleEdit(product)}>Edit</Button>{' '}
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(product.id)}>Delete</Button>{' '}
+                    <Button variant="info" size="sm" onClick={() => handleShowPriceHistory(product)}>History</Button>
                   </td>
                 </tr>
               ))}
@@ -262,6 +285,10 @@ function ProductManagement() {
               <Form.Label>Description</Form.Label>
               <Form.Control as="textarea" rows={3} value={formData.description} onChange={handleFormChange} />
             </Form.Group>
+            <Form.Group controlId="last_price">
+              <Form.Label>Price</Form.Label>
+              <Form.Control type="number" placeholder="Enter price" value={formData.last_price} onChange={handleFormChange} />
+            </Form.Group>
             <Form.Group controlId="image">
               <Form.Label>Image</Form.Label>
               <Form.Control type="file" onChange={(e) => setImageFile(e.target.files[0])} />
@@ -273,6 +300,14 @@ function ProductManagement() {
           <Button variant="primary" onClick={handleSave}>Save Changes</Button>
         </Modal.Footer>
       </Modal>
+
+      {selectedProductForHistory && (
+        <PriceHistoryModal
+          show={showPriceHistoryModal}
+          handleClose={() => setShowPriceHistoryModal(false)}
+          item={selectedProductForHistory}
+        />
+      )}
     </div>
   );
 }

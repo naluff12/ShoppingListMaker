@@ -210,8 +210,32 @@ def get_lists_by_family(db: Session, family_id: int, skip: int = 0, limit: int =
 def get_lists_by_user(db: Session, user_id: int):
     return db.query(models.ShoppingList).filter(models.ShoppingList.owner_id == user_id).all()
 
+def get_budget_details_for_list(db: Session, list_id: int):
+    """
+    Calculates the estimated and purchased totals for a given shopping list.
+    """
+    items = db.query(models.ListItem).options(
+        joinedload(models.ListItem.product)
+    ).filter(models.ListItem.list_id == list_id).all()
+
+    total_estimado = 0
+    total_comprado = 0
+
+    for item in items:
+        # Logic for estimated total: confirmed price > product's last price > 0
+        precio_a_usar = item.precio_confirmado if item.precio_confirmado is not None else (item.product.last_price if item.product else 0)
+        if precio_a_usar is None: # If last_price is also null
+            precio_a_usar = 0
+        total_estimado += (precio_a_usar * item.cantidad)
+
+        # Logic for purchased total: only confirmed price for items with status 'comprado'
+        if item.status == 'comprado':
+            total_comprado += ((item.precio_confirmado or 0) * item.cantidad)
+
+    return {"total_estimado": total_estimado, "total_comprado": total_comprado}
+
 def create_shopping_list(db: Session, list_data: schemas.ShoppingListCreate, owner_id: int):
-    db_list = models.ShoppingList(**list_data.dict(), owner_id=owner_id)
+    db_list = models.ShoppingList(**list_data.model_dump(), owner_id=owner_id)
     db.add(db_list)
     db.flush()  # Flush to get the ID
 
