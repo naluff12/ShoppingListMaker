@@ -1,0 +1,62 @@
+.skeleton {
+    animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    background-color: #e0e0e0;
+    border-radius: 4px;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.skeleton-text {
+    height: 1em;
+    margin-bottom: 0.5rem;
+}
+
+.skeleton-switch {
+    width: 48px;
+    height: 24px;
+    border-radius: 12px;
+}
+
+.skeleton-switch-small {
+    width: 38px;
+    height: 20px;
+    border-radius: 10px;
+}
+
+.skeleton-image {
+    width: 100px;
+    height: 100px;
+}
+
+.skeleton-image-small {
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+}
+
+.skeleton-button {
+    width: 80px;
+    height: 38px;
+    margin-right: 0.5rem;
+}
+
+.skeleton-button-small {
+    width: 32px;
+    height: 32px;
+    margin-right: 0.5rem;
+}
+
+.shopping-list-item-skeleton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid #eee;
+}

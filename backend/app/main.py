@@ -592,8 +592,12 @@ def delete_item_endpoint(
     elif shopping_list.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
+    # Evitar DetachedInstanceError: acceder a relaciones antes de eliminar
+    _ = db_item.creado_por  # forzar carga si es necesario
+
     crud.delete_item(db=db, item_id=item_id, user_id=current_user.id)
     return db_item
+
 
 
 @app.post("/listas/", response_model=schemas.ShoppingListResponse)

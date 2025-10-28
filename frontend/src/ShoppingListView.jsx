@@ -7,7 +7,10 @@ import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
 import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
 import ShoppingItemCard from './ShoppingItemCard'; // Importar el nuevo componente
+import ShoppingListItem from './ShoppingListItem';
 import PriceHistoryModal from './PriceHistoryModal'; // Importar el modal de historial de precios
+import ShoppingItemCardSkeleton from './ShoppingItemCardSkeleton';
+import ShoppingListItemSkeleton from './ShoppingListItemSkeleton';
 
 const API_URL = 'http://localhost:8000';
 
@@ -45,6 +48,9 @@ function ShoppingListView() {
     const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
     const [selectedItemForPriceHistory, setSelectedItemForPriceHistory] = useState(null);
     const [budgetDetails, setBudgetDetails] = useState({ total_estimado: 0, total_comprado: 0 });
+    const [viewMode, setViewMode] = useState('card');
+    const [itemsTotalCount, setItemsTotalCount] = useState(0);
+    const [purchasedItemsCount, setPurchasedItemsCount] = useState(0);
 
     const fetchBudgetDetails = async () => {
         if (!list || !list.id) return;
@@ -118,16 +124,24 @@ function ShoppingListView() {
         const token = localStorage.getItem('token');
         setLoading(true);
 
+        const listDetailsPromise = fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const itemsPromise = fetch(`/api/listas/${list.id}/items?page=${page}&size=10`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const blamePromise = fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const purchasedCountPromise = fetch(`/api/listas/${list.id}/items?status=comprado&size=1`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+
         Promise.all([
-            fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
-            fetch(`/api/listas/${list.id}/items?page=${page}&size=10`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json()),
-            fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json())
+            listDetailsPromise,
+            itemsPromise,
+            blamePromise,
+            purchasedCountPromise
         ])
-            .then(([listData, itemsData, blameData]) => {
+            .then(([listData, itemsData, blameData, purchasedCountData]) => {
                 setListDetails(listData);
                 setItems(Array.isArray(itemsData.items) ? itemsData.items : []);
                 setItemsPage(itemsData.page);
                 setItemsTotalPages(Math.ceil(itemsData.total / itemsData.size));
+                setItemsTotalCount(itemsData.total);
+                setPurchasedItemsCount(purchasedCountData.total);
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
                     fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
@@ -238,6 +252,11 @@ function ShoppingListView() {
             const updatedItem = await res.json();
             setItems(items.map(i => i.id === id ? updatedItem : i));
             fetchBudgetDetails();
+            if (newStatus === 'comprado') {
+                setPurchasedItemsCount(prev => prev + 1);
+            } else {
+                setPurchasedItemsCount(prev => prev - 1);
+            }
             if (showItemBlame === id) {
                 const resHist = await fetch(`/api/blame/item/${id}`, { headers: { 'Authorization': 'Bearer ' + token } });
                 const dataHist = await resHist.json();
@@ -423,6 +442,7 @@ function ShoppingListView() {
     const budgetProgress = budget > 0 ? (budgetDetails.total_estimado / budget) * 100 : 0;
     const budgetVariant = budgetProgress > 100 ? 'danger' : budgetProgress > 75 ? 'warning' : 'success';
     const purchasedProgress = budget > 0 ? (budgetDetails.total_comprado / budget) * 100 : 0;
+    const itemsProgress = itemsTotalCount > 0 ? (purchasedItemsCount / itemsTotalCount) * 100 : 0;
 
     return (
         <div className="container mt-4" style={{ maxWidth: 800 }}>
@@ -450,6 +470,9 @@ function ShoppingListView() {
                             <span>Restante: <span className={budgetDetails.total_estimado > budget ? 'text-danger' : 'text-success'}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
                         </div>
                         <ProgressBar className="mt-2" now={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
+                        
+                        <h5 className="mt-3">Progreso de Artículos</h5>
+                        <ProgressBar now={itemsProgress} label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
                     </div>
                     <hr />
 
@@ -543,34 +566,73 @@ function ShoppingListView() {
                 </Card.Body>
             </Card>
 
+            <div className="d-flex justify-content-end mb-3">
+                <Button variant="outline-secondary" size="sm" onClick={() => setViewMode('list')} active={viewMode === 'list'}>Lista</Button>
+                <Button variant="outline-secondary" size="sm" onClick={() => setViewMode('card')} active={viewMode === 'card'}>Tarjetas</Button>
+            </div>
+
             <div>
-                <TransitionGroup>
-                    {items.map(item => (
-                        <CSSTransition key={item.id} timeout={400} classNames="fade">
-                            <ShoppingItemCard
-                                item={item}
-                                onStatusChange={handleStatus}
-                                onDelete={handleDelete}
-                                onImageUpload={handleImageUpload}
-                                onItemUpdate={handleItemUpdate}
-                                onPriceChange={handlePriceChange}
-                                onShowItemBlame={handleShowItemBlame}
-                                onItemCommentSubmit={handleItemCommentSubmit}
-                                onShowPriceHistory={handleShowPriceHistory}
-                                editingItem={editingItem}
-                                setEditingItem={setEditingItem}
-                                editingPrice={editingPrice}
-                                setEditingPrice={setEditingPrice}
-                                showItemBlame={showItemBlame}
-                                itemBlames={itemBlames}
-                                newItemComment={newItemComment}
-                                setNewItemComment={setNewItemComment}
-                                loadingItemBlame={loadingItemBlame}
-                                loading={loading}
-                            />
-                        </CSSTransition>
-                    ))}
-                </TransitionGroup>
+                {loading ? (
+                    Array.from({ length: 5 }).map((_, index) =>
+                        viewMode === 'card' ? (
+                            <ShoppingItemCardSkeleton key={index} />
+                        ) : (
+                            <ShoppingListItemSkeleton key={index} />
+                        )
+                    )
+                ) : (
+                    <TransitionGroup>
+                        {items.map(item => (
+                            <CSSTransition key={item.id} timeout={400} classNames="fade">
+                                {viewMode === 'card' ? (
+                                    <ShoppingItemCard
+                                        item={item}
+                                        onStatusChange={handleStatus}
+                                        onDelete={handleDelete}
+                                        onImageUpload={handleImageUpload}
+                                        onItemUpdate={handleItemUpdate}
+                                        onPriceChange={handlePriceChange}
+                                        onShowItemBlame={handleShowItemBlame}
+                                        onItemCommentSubmit={handleItemCommentSubmit}
+                                        onShowPriceHistory={handleShowPriceHistory}
+                                        editingItem={editingItem}
+                                        setEditingItem={setEditingItem}
+                                        editingPrice={editingPrice}
+                                        setEditingPrice={setEditingPrice}
+                                        showItemBlame={showItemBlame}
+                                        itemBlames={itemBlames}
+                                        newItemComment={newItemComment}
+                                        setNewItemComment={setNewItemComment}
+                                        loadingItemBlame={loadingItemBlame}
+                                        loading={loading}
+                                    />
+                                ) : (
+                                    <ShoppingListItem
+                                        item={item}
+                                        onStatusChange={handleStatus}
+                                        onDelete={handleDelete}
+                                        onImageUpload={handleImageUpload}
+                                        onItemUpdate={handleItemUpdate}
+                                        onPriceChange={handlePriceChange}
+                                        onShowItemBlame={handleShowItemBlame}
+                                        onItemCommentSubmit={handleItemCommentSubmit}
+                                        onShowPriceHistory={handleShowPriceHistory}
+                                        editingItem={editingItem}
+                                        setEditingItem={setEditingItem}
+                                        editingPrice={editingPrice}
+                                        setEditingPrice={setEditingPrice}
+                                        showItemBlame={showItemBlame}
+                                        itemBlames={itemBlames}
+                                        newItemComment={newItemComment}
+                                        setNewItemComment={setNewItemComment}
+                                        loadingItemBlame={loadingItemBlame}
+                                        loading={loading}
+                                    />
+                                )}
+                            </CSSTransition>
+                        ))}
+                    </TransitionGroup>
+                )}
             </div>
             <div className="d-flex justify-content-center align-items-center mt-3">
                 <Button variant="outline-secondary" size="sm" disabled={itemsPage <= 1} onClick={() => fetchListAndBlame(itemsPage - 1)}>Anterior</Button>

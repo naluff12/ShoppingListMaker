@@ -228,9 +228,9 @@ def get_budget_details_for_list(db: Session, list_id: int):
             precio_a_usar = 0
         total_estimado += (precio_a_usar * item.cantidad)
 
-        # Logic for purchased total: only confirmed price for items with status 'comprado'
+        # Logic for purchased total: uses the same price logic but only for 'comprado' items
         if item.status == 'comprado':
-            total_comprado += ((item.precio_confirmado or 0) * item.cantidad)
+            total_comprado += (precio_a_usar * item.cantidad)
 
     return {"total_estimado": total_estimado, "total_comprado": total_comprado}
 
@@ -458,29 +458,63 @@ def update_item_status(db: Session, item_id: int, status: str, user_id: int):
     return db_item
 
 def delete_item(db: Session, item_id: int, user_id: int):
-    db_item = db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
-    if db_item:
-        # Create notification before deleting the item to have access to its data
-        shopping_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == db_item.list_id).first()
-        if shopping_list:
-            calendar = db.query(models.Calendar).filter(models.Calendar.id == shopping_list.calendar_id).first()
-            if calendar:
-                user = db.query(models.User).filter(models.User.id == user_id).first()
-                message = f"{user.username} ha eliminado el producto '{db_item.product.name}' de la lista '{shopping_list.name}'."
-                create_notification_for_family_members(db, family_id=calendar.family_id, message=message, created_by_id=user_id, link=f"/shopping-list/{shopping_list.id}")
+    """
+    Elimina un item de la lista de compras, crea notificación y registro de blame.
+    Retorna un diccionario JSON seguro para FastAPI.
+    """
+    db_item = (
+        db.query(models.ListItem)
+        .options(joinedload(models.ListItem.product), joinedload(models.ListItem.creado_por))
+        .filter(models.ListItem.id == item_id)
+        .first()
+    )
+    if not db_item:
+        return {"success": False, "message": "Item no encontrado"}
 
-        blame_entry = models.Blame(
-            user_id=user_id,
-            action="delete",
-            entity_type="item",
-            entity_id=item_id,
-            detalles=f"Item '{db_item.product.name}' eliminado de la lista."
-        )
-        db.add(blame_entry)
+    # Guardar datos importantes antes de eliminar
+    product_name = db_item.product.name if db_item.product else "Producto desconocido"
+    list_name = None
+    calendar_family_id = None
 
-        db.delete(db_item)
-        db.commit()
-    return db_item
+    shopping_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == db_item.list_id).first()
+    if shopping_list:
+        list_name = shopping_list.name
+        calendar = db.query(models.Calendar).filter(models.Calendar.id == shopping_list.calendar_id).first()
+        if calendar:
+            calendar_family_id = calendar.family_id
+            user = db.query(models.User).filter(models.User.id == user_id).first()
+            message = f"{user.username} ha eliminado el producto '{product_name}' de la lista '{list_name}'."
+            create_notification_for_family_members(
+                db,
+                family_id=calendar_family_id,
+                message=message,
+                created_by_id=user_id,
+                link=f"/shopping-list/{shopping_list.id}"
+            )
+
+    # Blame
+    blame_entry = models.Blame(
+        user_id=user_id,
+        action="delete",
+        entity_type="item",
+        entity_id=item_id,
+        detalles=f"Item '{product_name}' eliminado de la lista '{list_name}'."
+    )
+    db.add(blame_entry)
+
+    # Eliminar el item
+    db.delete(db_item)
+    db.commit()
+
+    # Retornar datos simples
+    return {
+        "success": True,
+        "item_id": item_id,
+        "product_name": product_name,
+        "list_name": list_name,
+        "calendar_family_id": calendar_family_id
+    }
+
 
 def delete_shopping_list(db: Session, list_id: int, user_id: int):
     db_list = db.query(models.ShoppingList).filter(models.ShoppingList.id == list_id).first()
