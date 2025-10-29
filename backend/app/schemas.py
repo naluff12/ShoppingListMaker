@@ -49,6 +49,8 @@ class PriceHistory(PriceHistoryBase):
 class ProductBase(BaseModel):
     name: str
     description: Optional[str] = None
+    category: Optional[str] = None
+    brand: Optional[str] = None
     image_url: Optional[str] = None
     family_id: Optional[int] = None
     last_price: Optional[float] = None
@@ -83,6 +85,8 @@ class ListItemCreate(BaseModel):
     comentario: Optional[str] = None
     precio_estimado: Optional[float] = None
     precio_confirmado: Optional[float] = None
+    category: Optional[str] = None
+    brand: Optional[str] = None
 
 
 class ListItem(ListItemBase):

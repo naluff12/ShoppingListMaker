@@ -8,6 +8,7 @@ import string
 import io
 from PIL import Image
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from sqlalchemy.exc import OperationalError
 from .schemas import ListItem as ListItemSchema
 
@@ -368,11 +369,13 @@ def get_products_for_family(
     family_id: int,
     page: int = 1,
     size: int = 10,
+    category: str = None,
+    brand: str = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     get_family_for_user(family_id, current_user)
-    result = crud.get_products_by_family(db=db, family_id=family_id, skip=(page - 1) * size, limit=size)
+    result = crud.get_products_by_family(db=db, family_id=family_id, skip=(page - 1) * size, limit=size, category=category, brand=brand)
     return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
 
 @app.get("/products/search", response_model=schemas.Page[schemas.Product])
@@ -900,6 +903,9 @@ def get_items_for_list(
     page: int = 1,
     size: int = 10,
     status: str = None,
+    category: str = None,
+    brand: str = None,
+    search: str = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -917,12 +923,45 @@ def get_items_for_list(
     query = db.query(models.ListItem).filter(models.ListItem.list_id == lista_id)
     if status:
         query = query.filter(models.ListItem.status == status)
+
+    product_filters = []
+    if category:
+        product_filters.append(func.lower(models.Product.category).like(f"%{category.lower()}%"))
+    if brand:
+        product_filters.append(func.lower(models.Product.brand).like(f"%{brand.lower()}%"))
+
+    if product_filters:
+        query = query.join(models.Product)
+        for f in product_filters:
+            query = query.filter(f)
+
+    if search:
+        query = query.filter(func.lower(models.ListItem.nombre).like(f"%{search.lower()}%"))
+        
     total = query.count()
     items = (
-        query.order_by(models.ListItem.created_at.desc())
+        query.options(joinedload(models.ListItem.product))
+        .order_by(models.ListItem.created_at.desc())
         .offset((page - 1) * size)
         .limit(size)
         .all()
     )
 
     return schemas.Page(items=items, total=total, page=page, size=size)
+
+@app.get("/listas/{lista_id}/filter-options")
+def get_list_filter_options_endpoint(
+    lista_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    lista = crud.get_list(db, list_id=lista_id)
+    if not lista:
+        raise HTTPException(status_code=404, detail="Lista no encontrada")
+
+    if lista.calendar:
+        get_family_for_user(lista.calendar.family_id, current_user)
+    elif lista.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="No tienes permisos para ver esta lista")
+
+    return crud.get_list_filter_options(db=db, list_id=lista_id)

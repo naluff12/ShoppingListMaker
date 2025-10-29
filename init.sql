@@ -69,23 +69,24 @@ CREATE TABLE products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    category VARCHAR(100),
+    brand VARCHAR(100),
     family_id INT,
     image_url LONGTEXT,
     last_price FLOAT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (family_id) REFERENCES families(id) ON DELETE CASCADE,
+    FOREIGN KEY (family_id) REFERENCES families (id) ON DELETE CASCADE,
     UNIQUE KEY (name, family_id)
 );
-
+--ALTER TABLE products ADD COLUMN category VARCHAR(100); ALTER TABLE products ADD COLUMN brand VARCHAR(100);
 CREATE TABLE price_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
     price FLOAT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
 );
-
 
 CREATE TABLE list_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -107,7 +108,7 @@ CREATE TABLE list_items (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (list_id) REFERENCES shopping_lists (id),
     FOREIGN KEY (creado_por_id) REFERENCES users (id),
-    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+    FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
 );
 
 CREATE TABLE blames (

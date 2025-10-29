@@ -3,29 +3,50 @@ from sqlalchemy.orm import Session, joinedload
 from . import models, schemas, security
 
 # CRUD for Products
-def get_or_create_product(db: Session, product_name: str, family_id: int) -> models.Product:
+def get_or_create_product(db: Session, product_name: str, family_id: int, category: str = None, brand: str = None) -> models.Product:
     # Check if product exists (case-insensitive)
     db_product = db.query(models.Product).filter(
         func.lower(models.Product.name) == func.lower(product_name),
         models.Product.family_id == family_id
     ).first()
     if db_product:
+        # If product exists, update category and brand if they are provided
+        if category and db_product.category != category:
+            db_product.category = category
+        if brand and db_product.brand != brand:
+            db_product.brand = brand
+        db.commit()
+        db.refresh(db_product)
         return db_product
     # Create new product if not found
-    db_product = models.Product(name=product_name, family_id=family_id)
+    db_product = models.Product(name=product_name, family_id=family_id, category=category, brand=brand)
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
     return db_product
 
+from sqlalchemy import func, or_
+
 def search_products(db: Session, name: str, family_id: int, skip: int = 0, limit: int = 10):
-    query = db.query(models.Product).filter(models.Product.family_id == family_id, models.Product.name.ilike(f"%{name}%"))
+    lower_name = name.lower()
+    query = db.query(models.Product).filter(
+        models.Product.family_id == family_id,
+        or_(
+            func.lower(models.Product.name).like(f"%{lower_name}%"),
+            func.lower(models.Product.category).like(f"%{lower_name}%"),
+            func.lower(models.Product.brand).like(f"%{lower_name}%")
+        )
+    )
     total = query.count()
     items = query.offset(skip).limit(limit).all()
     return {"items": items, "total": total}
 
-def get_products_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100):
+def get_products_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100, category: str = None, brand: str = None):
     query = db.query(models.Product).filter(models.Product.family_id == family_id)
+    if category:
+        query = query.filter(func.lower(models.Product.category).like(f"%{category.lower()}%"))
+    if brand:
+        query = query.filter(func.lower(models.Product.brand).like(f"%{brand.lower()}%"))
     total = query.count()
     items = query.offset(skip).limit(limit).all()
     return {"items": items, "total": total}
@@ -296,7 +317,7 @@ def get_item(db: Session, item_id: int):
 
 def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, family_id: int):
     # Find or create the product
-    product = get_or_create_product(db, item.nombre, family_id)
+    product = get_or_create_product(db, item.nombre, family_id, item.category, item.brand)
 
     db_item = models.ListItem(
         list_id=item.list_id,
@@ -607,3 +628,26 @@ def delete_notification(db: Session, notification_id: int, user_id: int):
         db.delete(notification)
         db.commit()
     return notification
+
+def get_list_filter_options(db: Session, list_id: int):
+    """
+    Get unique categories and brands for a given shopping list.
+    """
+    # Subquery to get product_ids from the list_items table
+    product_ids_sq = db.query(models.ListItem.product_id).filter(models.ListItem.list_id == list_id).distinct()
+
+    # Query for unique, non-null categories
+    categories_query = db.query(models.Product.category).filter(
+        models.Product.id.in_(product_ids_sq),
+        models.Product.category.isnot(None)
+    ).distinct()
+    categories = [c[0] for c in categories_query.all()]
+
+    # Query for unique, non-null brands
+    brands_query = db.query(models.Product.brand).filter(
+        models.Product.id.in_(product_ids_sq),
+        models.Product.brand.isnot(None)
+    ).distinct()
+    brands = [b[0] for b in brands_query.all()]
+
+    return {"categories": categories, "brands": brands}

@@ -1,7 +1,7 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip, Modal, ProgressBar } from 'react-bootstrap';
+import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip, Modal, ProgressBar, Dropdown, DropdownButton, FormControl } from 'react-bootstrap';
 import React, { useState, useEffect, useMemo } from 'react';
-import { Eye, EyeSlash, PlusCircle, PlusLg, PencilSquare } from 'react-bootstrap-icons';
+import { Eye, EyeSlash, PlusCircle, PlusLg, PencilSquare, Funnel } from 'react-bootstrap-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
@@ -51,6 +51,20 @@ function ShoppingListView() {
     const [viewMode, setViewMode] = useState('card');
     const [itemsTotalCount, setItemsTotalCount] = useState(0);
     const [purchasedItemsCount, setPurchasedItemsCount] = useState(0);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState(''); // e.g., 'comprado', 'pendiente'
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [brandFilter, setBrandFilter] = useState('');
+    const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
+
+    useEffect(() => {
+        if (!list || !list.id) return;
+        const token = localStorage.getItem('token');
+        fetch(`/api/listas/${list.id}/filter-options`, { headers: { 'Authorization': 'Bearer ' + token } })
+            .then(res => res.json())
+            .then(data => setFilterOptions(data))
+            .catch(() => setFilterOptions({ categories: [], brands: [] }));
+    }, [list]);
 
     const fetchBudgetDetails = async () => {
         if (!list || !list.id) return;
@@ -124,8 +138,17 @@ function ShoppingListView() {
         const token = localStorage.getItem('token');
         setLoading(true);
 
+        const queryParams = new URLSearchParams({
+            page: page,
+            size: 10,
+            search: searchTerm,
+            status: statusFilter,
+            category: categoryFilter,
+            brand: brandFilter
+        });
+
         const listDetailsPromise = fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const itemsPromise = fetch(`/api/listas/${list.id}/items?page=${page}&size=10`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const itemsPromise = fetch(`/api/listas/${list.id}/items?${queryParams.toString()}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
         const blamePromise = fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
         const purchasedCountPromise = fetch(`/api/listas/${list.id}/items?status=comprado&size=1`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
 
@@ -158,11 +181,14 @@ function ShoppingListView() {
     };
 
     useEffect(() => {
-        fetchListAndBlame();
+        const handler = setTimeout(() => {
+            fetchListAndBlame();
+        }, 300);
         fetchBudgetDetails();
         setItemBlames({});
         setShowItemBlame(null);
-    }, [list]);
+        return () => clearTimeout(handler);
+    }, [list, searchTerm, statusFilter, categoryFilter, brandFilter]);
 
     const handleShowItemBlame = async (itemId) => {
         if (showItemBlame === itemId) {
@@ -565,6 +591,45 @@ function ShoppingListView() {
                     </div>
                 </Card.Body>
             </Card>
+
+            <InputGroup className="mb-3">
+                <Form.Control
+                    placeholder="Buscar items..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <DropdownButton
+                    variant="outline-secondary"
+                    title={<Funnel />}
+                    id="input-group-dropdown-2"
+                    align="end"
+                >
+                    <div className="p-3" style={{ width: '250px' }}>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Estado</Form.Label>
+                            <Form.Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                                <option value="">Todos</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="comprado">Comprado</option>
+                            </Form.Select>
+                        </Form.Group>
+                        <Form.Group className="mb-3">
+                            <Form.Label>Categoría</Form.Label>
+                            <Form.Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                                <option value="">Todas</option>
+                                {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                            </Form.Select>
+                        </Form.Group>
+                        <Form.Group>
+                            <Form.Label>Marca</Form.Label>
+                            <Form.Select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
+                                <option value="">Todas</option>
+                                {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                            </Form.Select>
+                        </Form.Group>
+                    </div>
+                </DropdownButton>
+            </InputGroup>
 
             <div className="d-flex justify-content-end mb-3">
                 <Button variant="outline-secondary" size="sm" onClick={() => setViewMode('list')} active={viewMode === 'list'}>Lista</Button>

@@ -92,6 +92,8 @@ class Product(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text)
+    category = Column(String(100), index=True)
+    brand = Column(String(100), index=True)
     family_id = Column(Integer, ForeignKey('families.id'))
     image_url = Column(LONGTEXT)
     last_price = Column(Float, nullable=True)

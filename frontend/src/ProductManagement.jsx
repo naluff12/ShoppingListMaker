@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Modal, Form, InputGroup, FormControl, DropdownButton, Dropdown } from 'react-bootstrap';
+import { Button, Table, Modal, Form, InputGroup, FormControl, DropdownButton, Dropdown, Row, Col } from 'react-bootstrap';
 import PriceHistoryModal from './PriceHistoryModal'; // Import the new modal
 
 const API_URL = 'http://localhost:8000';
@@ -10,8 +10,9 @@ function ProductManagement() {
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [currentProduct, setCurrentProduct] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '', last_price: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', category: '', brand: '', last_price: '' });
   const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({ category: '', brand: '' });
   const [imageFile, setImageFile] = useState(null);
   const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
@@ -35,11 +36,20 @@ function ProductManagement() {
     }
   };
 
-  const fetchProducts = async (familyId, page = 1, query = '') => {
+  const fetchProducts = async (familyId, page = 1, query = '', category = '', brand = '') => {
     const token = localStorage.getItem('token');
-    const url = query
-      ? `/api/products/search?family_id=${familyId}&q=${encodeURIComponent(query)}&page=${page}&size=10`
-      : `/api/families/${familyId}/products?page=${page}&size=10`;
+    let url = `/api/families/${familyId}/products?page=${page}&size=10`;
+    const queryParams = new URLSearchParams();
+    if (query) {
+      url = `/api/products/search?family_id=${familyId}&q=${encodeURIComponent(query)}&page=${page}&size=10`;
+    } else {
+      if (category) queryParams.append('category', category);
+      if (brand) queryParams.append('brand', brand);
+    }
+
+    if (queryParams.toString()) {
+      url += `&${queryParams.toString()}`;
+    }
 
     try {
       const response = await fetch(url, {
@@ -64,19 +74,26 @@ function ProductManagement() {
   useEffect(() => {
     if (selectedFamily) {
       const handler = setTimeout(() => {
-        fetchProducts(selectedFamily.id, 1, searchTerm);
+        fetchProducts(selectedFamily.id, 1, searchTerm, filters.category, filters.brand);
       }, 300);
       return () => clearTimeout(handler);
     } else {
       setProducts({ items: [], total: 0, page: 1, size: 10 });
     }
-  }, [selectedFamily, searchTerm]);
+  }, [selectedFamily, searchTerm, filters]);
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleEdit = (product) => {
     setCurrentProduct(product);
     setFormData({
       name: product.name,
       description: product.description || '',
+      category: product.category || '',
+      brand: product.brand || '',
       last_price: product.last_price || ''
     });
     setImageFile(null);
@@ -95,7 +112,7 @@ function ProductManagement() {
         },
       });
       if (response.ok) {
-        fetchProducts(selectedFamily.id, products.page); // Refresh the list
+        fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand); // Refresh the list
       } else {
         console.error('Failed to delete product');
       }
@@ -120,7 +137,6 @@ function ProductManagement() {
       delete payload.last_price;
     }
 
-
     try {
       const response = await fetch(url, {
         method,
@@ -137,7 +153,7 @@ function ProductManagement() {
           await handleImageUpload(product.id, imageFile);
         }
         setShowModal(false);
-        fetchProducts(selectedFamily.id, currentProduct ? products.page : 1); // Refresh the list
+        fetchProducts(selectedFamily.id, currentProduct ? products.page : 1, searchTerm, filters.category, filters.brand); // Refresh the list
       } else {
         const errorData = await response.json();
         console.error('Failed to save product:', errorData.detail);
@@ -175,7 +191,7 @@ function ProductManagement() {
 
   const openAddProductModal = () => {
     setCurrentProduct(null);
-    setFormData({ name: '', description: '', last_price: '' });
+    setFormData({ name: '', description: '', category: '', brand: '', last_price: '' });
     setImageFile(null);
     setShowModal(true);
   };
@@ -213,12 +229,32 @@ function ProductManagement() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </InputGroup>
+          <Row className="mb-3">
+            <Col md={6}>
+              <FormControl
+                placeholder="Filter by category"
+                name="category"
+                value={filters.category}
+                onChange={handleFilterChange}
+              />
+            </Col>
+            <Col md={6}>
+              <FormControl
+                placeholder="Filter by brand"
+                name="brand"
+                value={filters.brand}
+                onChange={handleFilterChange}
+              />
+            </Col>
+          </Row>
           <Table striped bordered hover>
             <thead>
               <tr>
                 <th>Image</th>
                 <th>Name</th>
                 <th>Description</th>
+                <th>Category</th>
+                <th>Brand</th>
                 <th>Last Price</th>
                 <th>Actions</th>
               </tr>
@@ -237,6 +273,8 @@ function ProductManagement() {
                   </td>
                   <td>{product.name}</td>
                   <td>{product.description}</td>
+                  <td>{product.category}</td>
+                  <td>{product.brand}</td>
                   <td>{product.last_price ? `${product.last_price.toFixed(2)}` : 'N/A'}</td>
                   <td>
                     <Button variant="warning" size="sm" onClick={() => handleEdit(product)}>Edit</Button>{' '}
@@ -252,7 +290,7 @@ function ProductManagement() {
               variant="outline-secondary"
               size="sm"
               disabled={!products.items.length || products.page <= 1}
-              onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm)}
+              onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm, filters.category, filters.brand)}
             >
               Anterior
             </Button>
@@ -263,7 +301,7 @@ function ProductManagement() {
               variant="outline-secondary"
               size="sm"
               disabled={!products.items.length || products.page >= Math.ceil(products.total / products.size)}
-              onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm)}
+              onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm, filters.category, filters.brand)}
             >
               Siguiente
             </Button>
@@ -284,6 +322,14 @@ function ProductManagement() {
             <Form.Group controlId="description">
               <Form.Label>Description</Form.Label>
               <Form.Control as="textarea" rows={3} value={formData.description} onChange={handleFormChange} />
+            </Form.Group>
+            <Form.Group controlId="category">
+              <Form.Label>Category</Form.Label>
+              <Form.Control type="text" value={formData.category} onChange={handleFormChange} />
+            </Form.Group>
+            <Form.Group controlId="brand">
+              <Form.Label>Brand</Form.Label>
+              <Form.Control type="text" value={formData.brand} onChange={handleFormChange} />
             </Form.Group>
             <Form.Group controlId="last_price">
               <Form.Label>Price</Form.Label>
