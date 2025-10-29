@@ -2,7 +2,7 @@ import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip, Modal, ProgressBar, Dropdown, DropdownButton, FormControl } from 'react-bootstrap';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Eye, EyeSlash, PlusCircle, PlusLg, PencilSquare, Funnel } from 'react-bootstrap-icons';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css'; // Importar los nuevos estilos
 import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
@@ -17,7 +17,7 @@ const API_URL = 'http://localhost:8000';
 function ShoppingListView() {
     const location = useLocation();
     const navigate = useNavigate();
-    const list = location.state?.list;
+    const { listId } = useParams();
 
     const [items, setItems] = useState([]);
     const [listDetails, setListDetails] = useState(null);
@@ -26,6 +26,8 @@ function ShoppingListView() {
     const [newQuantity, setNewQuantity] = useState(1);
     const [newUnit, setNewUnit] = useState('piezas');
     const [newPrice, setNewPrice] = useState('');
+    const [newBrand, setNewBrand] = useState('');
+    const [newCategory, setNewCategory] = useState('');
     const [loading, setLoading] = useState(false);
     const [itemBlames, setItemBlames] = useState({});
     const [editingPrice, setEditingPrice] = useState(null);
@@ -58,19 +60,19 @@ function ShoppingListView() {
     const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
 
     useEffect(() => {
-        if (!list || !list.id) return;
+        if (!listId) return;
         const token = localStorage.getItem('token');
-        fetch(`/api/listas/${list.id}/filter-options`, { headers: { 'Authorization': 'Bearer ' + token } })
+        fetch(`/api/listas/${listId}/filter-options`, { headers: { 'Authorization': 'Bearer ' + token } })
             .then(res => res.json())
             .then(data => setFilterOptions(data))
             .catch(() => setFilterOptions({ categories: [], brands: [] }));
-    }, [list]);
+    }, [listId]);
 
     const fetchBudgetDetails = async () => {
-        if (!list || !list.id) return;
+        if (!listId) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${list.id}/budget-details`, { headers: { 'Authorization': 'Bearer ' + token } });
+            const res = await fetch(`/api/listas/${listId}/budget-details`, { headers: { 'Authorization': 'Bearer ' + token } });
             if (res.ok) {
                 const data = await res.json();
                 setBudgetDetails(data);
@@ -91,7 +93,7 @@ function ShoppingListView() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({
-                    list_id: list.id,
+                    list_id: listId,
                     nombre: quickAddItemName,
                     cantidad: 1, // Default quantity
                     unit: 'piezas' // Default unit
@@ -118,7 +120,7 @@ function ShoppingListView() {
 
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${list.id}`, {
+            const res = await fetch(`/api/listas/${listId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ budget: budgetValue })
@@ -134,7 +136,7 @@ function ShoppingListView() {
     };
 
     const fetchListAndBlame = (page = 1) => {
-        if (!list || !list.id) return;
+        if (!listId) return;
         const token = localStorage.getItem('token');
         setLoading(true);
 
@@ -147,23 +149,25 @@ function ShoppingListView() {
             brand: brandFilter
         });
 
-        const listDetailsPromise = fetch(`/api/listas/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const itemsPromise = fetch(`/api/listas/${list.id}/items?${queryParams.toString()}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const blamePromise = fetch(`/api/blame/lista/${list.id}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const purchasedCountPromise = fetch(`/api/listas/${list.id}/items?status=comprado&size=1`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const listDetailsPromise = fetch(`/api/listas/${listId}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const itemsPromise = fetch(`/api/listas/${listId}/items?${queryParams.toString()}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const blamePromise = fetch(`/api/blame/lista/${listId}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const purchasedCountPromise = fetch(`/api/listas/${listId}/items?status=comprado&size=1`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const totalItemsCountPromise = fetch(`/api/listas/${listId}/items?size=1`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
 
         Promise.all([
             listDetailsPromise,
             itemsPromise,
             blamePromise,
-            purchasedCountPromise
+            purchasedCountPromise,
+            totalItemsCountPromise
         ])
-            .then(([listData, itemsData, blameData, purchasedCountData]) => {
+            .then(([listData, itemsData, blameData, purchasedCountData, totalItemsCountData]) => {
                 setListDetails(listData);
                 setItems(Array.isArray(itemsData.items) ? itemsData.items : []);
                 setItemsPage(itemsData.page);
                 setItemsTotalPages(Math.ceil(itemsData.total / itemsData.size));
-                setItemsTotalCount(itemsData.total);
+                setItemsTotalCount(totalItemsCountData.total);
                 setPurchasedItemsCount(purchasedCountData.total);
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
@@ -188,7 +192,7 @@ function ShoppingListView() {
         setItemBlames({});
         setShowItemBlame(null);
         return () => clearTimeout(handler);
-    }, [list, searchTerm, statusFilter, categoryFilter, brandFilter]);
+    }, [listId, searchTerm, statusFilter, categoryFilter, brandFilter]);
 
     const handleShowItemBlame = async (itemId) => {
         if (showItemBlame === itemId) {
@@ -224,7 +228,15 @@ function ShoppingListView() {
             const res = await fetch(`/api/items/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ list_id: list.id, nombre: newItem, cantidad: newQuantity, unit: newUnit, precio_estimado: newPrice || null })
+                body: JSON.stringify({ 
+                    list_id: listId, 
+                    nombre: newItem, 
+                    cantidad: newQuantity, 
+                    unit: newUnit, 
+                    precio_estimado: newPrice || null,
+                    brand: newBrand,
+                    category: newCategory
+                })
             });
             if (!res.ok) throw new Error('Error al agregar item');
             await res.json();
@@ -232,6 +244,8 @@ function ShoppingListView() {
             setNewQuantity(1);
             setNewUnit('piezas');
             setNewPrice('');
+            setNewBrand('');
+            setNewCategory('');
             fetchListAndBlame(); // Recargar todo
             fetchBudgetDetails();
         } catch (err) {
@@ -242,7 +256,7 @@ function ShoppingListView() {
     };
 
     const handleAddItemsFromModal = async (itemsToAdd) => {
-        if (!list) return;
+        if (!listId) return;
         const token = localStorage.getItem('token');
         const items = itemsToAdd.map(item => ({
             nombre: item.nombre,
@@ -253,7 +267,7 @@ function ShoppingListView() {
         }));
 
         try {
-            await fetch(`/api/listas/${list.id}/items/bulk`, {
+            await fetch(`/api/listas/${listId}/items/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ items })
@@ -338,7 +352,7 @@ function ShoppingListView() {
         if (!newListComment) return;
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${list.id}/blames`,
+            const res = await fetch(`/api/listas/${listId}/blames`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
@@ -384,7 +398,7 @@ function ShoppingListView() {
         const newStatus = listDetails.status === 'revisada' ? 'pendiente' : 'revisada';
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${list.id}`, {
+            const res = await fetch(`/api/listas/${listId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ status: newStatus })
@@ -476,7 +490,7 @@ function ShoppingListView() {
             <Card className="mb-4">
                 <Card.Body>
                     <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h2 className="mb-0">{listDetails?.name || list?.name || ''}</h2>
+                        <h2 className="mb-0">{listDetails?.name || ''}</h2>
                         {listDetails && (
                             <span onClick={handleListStatusChange} style={{ cursor: 'pointer', color: listDetails.status === 'revisada' ? 'green' : 'red' }} title={listDetails.status === 'revisada' ? 'Marcar como Pendiente' : 'Marcar como Revisada'}>
                                 {listDetails.status === 'revisada' ? <Eye size={24} /> : <EyeSlash size={24} />}
@@ -535,6 +549,8 @@ function ShoppingListView() {
                                             if (selected.last_price) {
                                                 setNewPrice(selected.last_price);
                                             }
+                                            setNewBrand(selected.brand);
+                                            setNewCategory(selected.category);
                                             setProducts([]);
                                         }
                                     }
@@ -569,9 +585,12 @@ function ShoppingListView() {
                                         return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <span key={i} style={{ fontWeight: "bold", color: "#007bff" }}>{part}</span> : part);
                                     };
                                     return (
-                                        <div key={p.id} className={`d-flex align-items-center p-2 hover-bg-light ${index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""}`} style={{ cursor: "pointer" }} onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setProducts([]); }} onMouseEnter={() => setHighlightedIndex(index)}>
+                                        <div key={p.id} className={`d-flex align-items-center p-2 hover-bg-light ${index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""}`} style={{ cursor: "pointer" }} onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} onMouseEnter={() => setHighlightedIndex(index)}>
                                             {<img src={p.image_url ? `data:image/webp;base64,${p.image_url}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 10 }} />}
-                                            <span>{highlightMatch(p.name, newItem)}</span>
+                                            <div>
+                                                <span>{highlightMatch(p.name, newItem)}</span>
+                                                <div className="text-muted small">{p.brand} / {p.category}</div>
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -725,7 +744,7 @@ function ShoppingListView() {
                 show={showPreviousItemsModal}
                 handleClose={() => setShowPreviousItemsModal(false)}
                 familyId={listDetails?.calendar?.family_id}
-                listId={list.id}
+                listId={listId}
                 handleAddItems={handleAddItemsFromModal}
             />
 

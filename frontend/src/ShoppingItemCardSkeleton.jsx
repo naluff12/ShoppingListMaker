@@ -15,6 +15,7 @@ const ShoppingItemCardSkeleton = () => {
                         <div className="skeleton skeleton-image"></div>
                     </Col>
                     <Col xs={8} md={9}>
+                        <div className="skeleton skeleton-text" style={{ width: '40%' }}></div>
                         <div className="skeleton skeleton-text"></div>
                         <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
                         <div className="d-flex align-items-center mt-3">

@@ -96,6 +96,8 @@ CREATE TABLE list_items (
     comentario TEXT,
     cantidad FLOAT DEFAULT 1.0,
     unit VARCHAR(50) NULL,
+    brand VARCHAR(100),
+    category VARCHAR(100),
     status ENUM(
         'pendiente',
         'comprado',
@@ -110,7 +112,7 @@ CREATE TABLE list_items (
     FOREIGN KEY (creado_por_id) REFERENCES users (id),
     FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
 );
-
+-- ALTER TABLE list_items ADD COLUMN brand VARCHAR(100) AFTER unit;ALTER TABLE list_items ADD COLUMN category VARCHAR(100) AFTER brand;
 CREATE TABLE blames (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,

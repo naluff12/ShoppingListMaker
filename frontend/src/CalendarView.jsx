@@ -148,8 +148,8 @@ function CalendarView() {
         }
     };
 
-    const handleSelectList = (list) => {
-        navigate('/shopping-list', { state: { list } });
+ const handleSelectList = (list) => {
+        navigate(`/shopping-list/${list.id}`, { state: { list } });
     };
 
     return (

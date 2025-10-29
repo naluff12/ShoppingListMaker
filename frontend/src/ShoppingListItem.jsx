@@ -45,6 +45,9 @@ const ShoppingListItem = ({
                     <div className="item-name-compact" onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar cantidad">
                         {item.nombre}
                     </div>
+                    <div className="item-brand-category-compact">
+                        <small className="text-muted">{item.brand} / {item.category}</small>
+                    </div>
                     {isEditing ? (
                         <InputGroup size="sm" className="quantity-edit-compact">
                             <Form.Control type="number" value={editingItem.cantidad} onChange={(e) => setEditingItem({ ...editingItem, cantidad: parseFloat(e.target.value) || 0 })} />

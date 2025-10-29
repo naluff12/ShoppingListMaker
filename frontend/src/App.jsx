@@ -100,7 +100,7 @@ function App() {
                         <Route path="/" element={<Welcome />} />
                         <Route path="/family-panel" element={<FamilyPanel user={user} />} />
                         <Route path="/calendar" element={<CalendarView />} />
-                        <Route path="/shopping-list" element={<ShoppingListView />} />
+                        <Route path="/shopping-list/:listId" element={<ShoppingListView />} />
                         <Route path="/profile" element={<UserProfile />} />
                         {user.is_admin && <Route path="/admin" element={<AdminDashboard />} />}
                     </>
