@@ -83,8 +83,7 @@ function NavigationBar({ user, onLogout }) {
             },
           });
           if (response.ok) {
-            const listData = await response.json();
-            navigate('/shopping-list', { state: { list: listData } });
+            navigate(notification.link);
           } else {
             toast.error('El contenido ya no está disponible.');
           }
