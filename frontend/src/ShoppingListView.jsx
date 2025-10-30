@@ -58,6 +58,9 @@ function ShoppingListView() {
     const [categoryFilter, setCategoryFilter] = useState('');
     const [brandFilter, setBrandFilter] = useState('');
     const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
+    const [showNewProductModal, setShowNewProductModal] = useState(false);
+    const [modalBrand, setModalBrand] = useState('');
+    const [modalCategory, setModalCategory] = useState('');
 
     useEffect(() => {
         if (!listId) return;
@@ -219,9 +222,7 @@ function ShoppingListView() {
         }
     };
 
-    const handleAdd = async (e) => {
-        e.preventDefault();
-        if (!newItem) return;
+    const proceedWithAdd = async (brand = '', category = '') => {
         setLoading(true);
         const token = localStorage.getItem('token');
         try {
@@ -234,12 +235,20 @@ function ShoppingListView() {
                     cantidad: newQuantity, 
                     unit: newUnit, 
                     precio_estimado: newPrice || null,
-                    brand: newBrand,
-                    category: newCategory
+                    brand: brand,
+                    category: category
                 })
             });
             if (!res.ok) throw new Error('Error al agregar item');
             await res.json();
+
+            if (brand && !filterOptions.brands.includes(brand)) {
+                setFilterOptions(prev => ({ ...prev, brands: [...prev.brands, brand] }));
+            }
+            if (category && !filterOptions.categories.includes(category)) {
+                setFilterOptions(prev => ({ ...prev, categories: [...prev.categories, category] }));
+            }
+
             setNewItem('');
             setNewQuantity(1);
             setNewUnit('piezas');
@@ -252,6 +261,27 @@ function ShoppingListView() {
             alert(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleAdd = async (e) => {
+        e.preventDefault();
+        if (!newItem) return;
+
+        const token = localStorage.getItem('token');
+        const searchRes = await fetch(`/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(newItem)}`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const searchData = await searchRes.json();
+        
+        const existingProduct = searchData.items.find(p => p.name.toLowerCase() === newItem.toLowerCase());
+
+        if (!existingProduct) {
+            setModalBrand('');
+            setModalCategory('');
+            setShowNewProductModal(true);
+        } else {
+            proceedWithAdd(existingProduct.brand, existingProduct.category);
         }
     };
 
@@ -782,6 +812,38 @@ function ShoppingListView() {
                 handleClose={() => setShowPriceHistoryModal(false)} 
                 item={selectedItemForPriceHistory} 
             />
+
+            <Modal show={showNewProductModal} onHide={() => setShowNewProductModal(false)}>
+                <Modal.Header closeButton>
+                    <Modal.Title>Producto Nuevo</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    <p>'{newItem}' parece ser un producto nuevo. Si lo deseas, puedes agregar una marca y categoría.</p>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Marca</Form.Label>
+                        <Form.Control type="text" value={modalBrand} onChange={(e) => setModalBrand(e.target.value)} />
+                    </Form.Group>
+                    <Form.Group>
+                        <Form.Label>Categoría</Form.Label>
+                        <Form.Control type="text" value={modalCategory} onChange={(e) => setModalCategory(e.target.value)} />
+                    </Form.Group>
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => {
+                        setShowNewProductModal(false);
+                        proceedWithAdd();
+                    }}>
+                        Agregar sin detalles
+                    </Button>
+                    <Button variant="primary" onClick={() => {
+                        setShowNewProductModal(false);
+                        proceedWithAdd(modalBrand, modalCategory);
+                    }}>
+                        Guardar y Agregar
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
         </div>
     );
 }

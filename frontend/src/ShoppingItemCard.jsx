@@ -46,7 +46,7 @@ const ShoppingItemCard = ({
                         <ImageUploader itemId={item.id} imageUrl={item.product.image_url} onImageUpload={onImageUpload} />
                     </Col>
                     <Col xs={8} md={9}>
-                        <p className="mb-1 text-muted small">{item.brand} / {item.category}</p>
+                        <p className="mb-1 text-muted small">{item.product?.brand} / {item.product?.category}</p>
                         {isEditing ? (
                             <InputGroup>
                                 <Form.Control type="number" value={editingItem.cantidad} onChange={(e) => setEditingItem({ ...editingItem, cantidad: parseFloat(e.target.value) || 0 })} style={{ maxWidth: '80px' }} />

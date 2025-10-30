@@ -46,7 +46,7 @@ const ShoppingListItem = ({
                         {item.nombre}
                     </div>
                     <div className="item-brand-category-compact">
-                        <small className="text-muted">{item.brand} / {item.category}</small>
+                        <small className="text-muted">{item.product?.brand} / {item.product?.category}</small>
                     </div>
                     {isEditing ? (
                         <InputGroup size="sm" className="quantity-edit-compact">

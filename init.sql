@@ -96,8 +96,6 @@ CREATE TABLE list_items (
     comentario TEXT,
     cantidad FLOAT DEFAULT 1.0,
     unit VARCHAR(50) NULL,
-    brand VARCHAR(100),
-    category VARCHAR(100),
     status ENUM(
         'pendiente',
         'comprado',

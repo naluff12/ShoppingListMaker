@@ -329,9 +329,7 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
         precio_estimado=item.precio_estimado,
         precio_confirmado=item.precio_confirmado,
         status='pendiente',
-        creado_por_id=user_id,
-        brand=item.brand,
-        category=item.category
+        creado_por_id=user_id
     )
     db.add(db_item)
     db.flush()  # Flush to get the ID
@@ -381,9 +379,7 @@ def create_list_items_bulk(db: Session, items: list[schemas.ListItemCreateBulk],
             comentario=item_data.comentario,
             precio_estimado=item_data.precio_estimado,
             status='pendiente',
-            creado_por_id=user_id,
-            brand=item_data.brand,
-            category=item_data.category
+            creado_por_id=user_id
         )
         db.add(db_item)
         new_items.append(db_item)

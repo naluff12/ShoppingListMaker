@@ -74,8 +74,6 @@ class ListItemBase(BaseModel):
     status: str
     product_id: Optional[int] = None
     nombre: str
-    brand: Optional[str] = None
-    category: Optional[str] = None
     image_url: Optional[str] = None
 
 
@@ -110,8 +108,6 @@ class ListItemUpdate(BaseModel):
     status: Optional[str] = None
     precio_estimado: Optional[float] = None
     precio_confirmado: Optional[float] = None
-    brand: Optional[str] = None
-    category: Optional[str] = None
 
 
 class ListItemStatusUpdate(BaseModel):

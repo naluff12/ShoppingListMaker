@@ -121,8 +121,6 @@ class ListItem(Base):
     comentario = Column(Text)
     cantidad = Column(Float, default=1.0)
     unit = Column(String(50), nullable=True)
-    brand = Column(String(100), index=True)
-    category = Column(String(100), index=True)
     status = Column(Enum('pendiente', 'comprado', 'ya no se necesita', name='item_status'), default='pendiente')
     precio_estimado = Column(Float)
     precio_confirmado = Column(Float)
