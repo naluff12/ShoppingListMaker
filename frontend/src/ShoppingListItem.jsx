@@ -1,6 +1,6 @@
-import React from 'react';
-import { Form, Button, Badge, Collapse, InputGroup } from 'react-bootstrap';
-import { Trash, ChatLeftText, GraphUp } from 'react-bootstrap-icons';
+import React, { useState, useRef } from 'react';
+import { Form, Button, Badge, Collapse, InputGroup, Modal, Dropdown } from 'react-bootstrap';
+import { Trash, ChatLeftText, GraphUp, ThreeDotsVertical } from 'react-bootstrap-icons';
 import ImageUploader from './ImageUploader';
 import './ShoppingListItem.css';
 
@@ -26,6 +26,23 @@ const ShoppingListItem = ({
     loading
 }) => {
     const isEditing = editingItem && editingItem.id === item.id;
+    const [showImageModal, setShowImageModal] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            onImageUpload(item.id, file);
+        }
+    };
+
+    const handleViewClick = () => {
+        setShowImageModal(true);
+    }
+
+    const handleChangeClick = () => {
+        fileInputRef.current.click();
+    }
 
     return (
         <div className={`shopping-list-item-compact ${item.status === 'comprado' ? 'is-comprado' : ''}`}>
@@ -39,7 +56,39 @@ const ShoppingListItem = ({
                     title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'}
                 />
                 <div className="item-image-compact">
-                    <ImageUploader itemId={item.id} imageUrl={item.product.image_url} onImageUpload={onImageUpload} />
+                    {item.product?.image_url ? (
+                        <>
+                            <Dropdown>
+                                <Dropdown.Toggle as="div" id={`image-dropdown-${item.id}`} className="image-dropdown-toggle">
+                                    <img
+                                        src={`data:image/webp;base64,${item.product.image_url}`}
+                                        alt=""
+                                        className="item-image"
+                                    />
+                                    <ThreeDotsVertical className="image-dropdown-icon" />
+                                </Dropdown.Toggle>
+
+                                <Dropdown.Menu>
+                                    <Dropdown.Item onClick={handleViewClick}>Ver imagen</Dropdown.Item>
+                                    <Dropdown.Item onClick={handleChangeClick}>Cambiar imagen</Dropdown.Item>
+                                </Dropdown.Menu>
+                            </Dropdown>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                style={{ display: 'none' }}
+                                accept="image/jpeg,image/png"
+                            />
+                            <Modal show={showImageModal} onHide={() => setShowImageModal(false)} centered>
+                                <Modal.Body className="p-0">
+                                    <img src={`data:image/webp;base64,${item.product.image_url}`} alt="Producto" className="img-fluid" />
+                                </Modal.Body>
+                            </Modal>
+                        </>
+                    ) : (
+                        <ImageUploader itemId={item.id} imageUrl={item.product?.image_url} onImageUpload={onImageUpload} />
+                    )}
                 </div>
                 <div className="item-details-compact">
                     <div className="item-name-compact" onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar cantidad">

@@ -1,6 +1,6 @@
-import React from 'react';
-import { Card, Button, Form, InputGroup, Row, Col, Badge, Collapse } from 'react-bootstrap';
-import { Trash, ChatLeftText, GraphUp } from 'react-bootstrap-icons';
+import React, { useState, useRef } from 'react';
+import { Card, Button, Form, InputGroup, Row, Col, Badge, Collapse, Modal, Dropdown } from 'react-bootstrap';
+import { Trash, ChatLeftText, GraphUp, ThreeDotsVertical } from 'react-bootstrap-icons';
 import ImageUploader from './ImageUploader';
 
 const ShoppingItemCard = ({
@@ -26,6 +26,23 @@ const ShoppingItemCard = ({
 }) => {
 
     const isEditing = editingItem && editingItem.id === item.id;
+    const [showImageModal, setShowImageModal] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            onImageUpload(item.id, file);
+        }
+    };
+
+    const handleViewClick = () => {
+        setShowImageModal(true);
+    }
+
+    const handleChangeClick = () => {
+        fileInputRef.current.click();
+    }
 
     return (
         <Card className={`mb-3 shadow-sm ${item.status === 'comprado' ? 'is-comprado' : ''}`}>
@@ -43,7 +60,39 @@ const ShoppingItemCard = ({
             <Card.Body>
                 <Row>
                     <Col xs={4} md={3} className="d-flex align-items-center justify-content-center">
-                        <ImageUploader itemId={item.id} imageUrl={item.product.image_url} onImageUpload={onImageUpload} />
+                        {item.product?.image_url ? (
+                            <>
+                                <Dropdown>
+                                    <Dropdown.Toggle as="div" id={`card-image-dropdown-${item.id}`} className="card-image-dropdown-toggle">
+                                        <img
+                                            src={`data:image/webp;base64,${item.product.image_url}`}
+                                            alt=""
+                                            className="card-item-image"
+                                        />
+                                        <ThreeDotsVertical className="card-image-dropdown-icon" />
+                                    </Dropdown.Toggle>
+
+                                    <Dropdown.Menu>
+                                        <Dropdown.Item onClick={handleViewClick}>Ver imagen</Dropdown.Item>
+                                        <Dropdown.Item onClick={handleChangeClick}>Cambiar imagen</Dropdown.Item>
+                                    </Dropdown.Menu>
+                                </Dropdown>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    style={{ display: 'none' }}
+                                    accept="image/jpeg,image/png"
+                                />
+                                <Modal show={showImageModal} onHide={() => setShowImageModal(false)} centered>
+                                    <Modal.Body className="p-0">
+                                        <img src={`data:image/webp;base64,${item.product.image_url}`} alt="Producto" className="img-fluid" />
+                                    </Modal.Body>
+                                </Modal>
+                            </>
+                        ) : (
+                            <ImageUploader itemId={item.id} imageUrl={item.product?.image_url} onImageUpload={onImageUpload} />
+                        )}
                     </Col>
                     <Col xs={8} md={9}>
                         <p className="mb-1 text-muted small">{item.product?.brand} / {item.product?.category}</p>

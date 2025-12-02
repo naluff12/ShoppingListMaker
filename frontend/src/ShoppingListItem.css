@@ -184,3 +184,44 @@
         font-size: 0.8rem;
     }
 }
+
+
+.item-image-compact .image-dropdown-toggle {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    border-radius: 4px;
+    overflow: hidden; /* Ensures image and icon are contained */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.item-image-compact .image-dropdown-toggle .item-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.item-image-compact .image-dropdown-toggle .image-dropdown-icon {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    padding: 2px;
+    font-size: 0.8rem;
+    line-height: 1; /* Adjust to better center the icon */
+}
+
+/* Ensure the dropdown menu itself appears above other content */
+.item-image-compact .dropdown-menu {
+    z-index: 1050;
+}
+
+.modal-body .img-fluid {
+    width: 100%;
+}
