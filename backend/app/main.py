@@ -622,6 +622,8 @@ def get_shopping_lists(
     calendar_id: int,
     page: int = 1,
     size: int = 10,
+    start_date: date = None,
+    end_date: date = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -629,8 +631,26 @@ def get_shopping_lists(
     if not calendar:
         raise HTTPException(status_code=404, detail="Calendar not found")
     get_family_for_user(calendar.family_id, current_user)
-    result = crud.get_lists_by_calendar(db=db, calendar_id=calendar_id, skip=(page - 1) * size, limit=size)
-    return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
+    
+    no_pagination = start_date is not None and end_date is not None
+    limit = None if no_pagination else size
+    skip = 0 if no_pagination else (page - 1) * size
+
+    result = crud.get_lists_by_calendar(
+        db=db,
+        calendar_id=calendar_id,
+        skip=skip,
+        limit=limit,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    return schemas.Page(
+        items=result["items"],
+        total=result["total"],
+        page=1 if no_pagination else page,
+        size=result["total"] if no_pagination else size,
+    )
 
 @app.delete("/listas/{lista_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_shopping_list_endpoint(

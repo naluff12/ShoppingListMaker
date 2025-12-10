@@ -12,6 +12,7 @@ function CalendarView() {
     const calendar = location.state?.calendar;
 
     const [selectedDate, setSelectedDate] = useState(new Date());
+    const [activeStartDate, setActiveStartDate] = useState(new Date());
     const [listas, setListas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [nuevaListaNombre, setNuevaListaNombre] = useState('');
@@ -21,11 +22,18 @@ function CalendarView() {
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [newlyCreatedList, setNewlyCreatedList] = useState(null);
 
-    const fetchLists = () => {
+    const fetchLists = (startDate, endDate) => {
         if (!calendar || !calendar.id) return;
         const token = localStorage.getItem('token');
         setLoading(true);
-        fetch(`/api/listas/?calendar_id=${calendar.id}`, {
+        
+        const params = new URLSearchParams({
+            calendar_id: calendar.id,
+            start_date: startDate.toISOString().slice(0, 10),
+            end_date: endDate.toISOString().slice(0, 10),
+        });
+
+        fetch(`/api/listas/?${params.toString()}`, {
             headers: { 'Authorization': 'Bearer ' + token }
         })
             .then(res => res.json())
@@ -35,8 +43,12 @@ function CalendarView() {
 
     // Cargar listas del calendario seleccionado
     useEffect(() => {
-        fetchLists();
-    }, [calendar]);
+        if (calendar) {
+            const startDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth(), 1);
+            const endDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth() + 1, 0);
+            fetchLists(startDate, endDate);
+        }
+    }, [calendar, activeStartDate]);
 
     // Mapear listas por list_for_date
     const listasPorFecha = useMemo(() => {
@@ -140,7 +152,9 @@ function CalendarView() {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             if (!res.ok) throw new Error('Error al eliminar la lista');
-            fetchLists(); // Recargar las listas
+            const startDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth(), 1);
+            const endDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth() + 1, 0);
+            fetchLists(startDate, endDate); // Recargar las listas
         } catch (err) {
             alert(err.message);
         } finally {
@@ -163,6 +177,12 @@ function CalendarView() {
                         value={selectedDate}
                         tileClassName={getTileClassName}
                         calendarType="iso8601"
+                        onActiveStartDateChange={({ activeStartDate }) => setActiveStartDate(activeStartDate)}
+                        onViewChange={({ view, activeStartDate }) => {
+                            if (view === 'month') {
+                                setActiveStartDate(activeStartDate);
+                            }
+                        }}
                     />
                 </div>
                 <div className="col-md-5">

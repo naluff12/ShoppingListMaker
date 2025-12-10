@@ -1,5 +1,7 @@
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
+from typing import Optional
+from datetime import date
 from . import models, schemas, security
 
 # CRUD for Products
@@ -209,13 +211,30 @@ def get_list(db: Session, list_id: int):
         joinedload(models.ShoppingList.calendar)
     ).filter(models.ShoppingList.id == list_id).first()
 
-def get_lists_by_calendar(db: Session, calendar_id: int, skip: int = 0, limit: int = 100):
-    query = db.query(models.ShoppingList).filter(models.ShoppingList.calendar_id == calendar_id)
-    total = query.count()
-    items = query.offset(skip).limit(limit).all()
-    return {"items": items, "total": total}
+def get_lists_by_calendar(
+    db: Session,
+    calendar_id: int,
+    skip: int = 0,
+    limit: Optional[int] = 100,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+):
+    query = db.query(models.ShoppingList).filter(
+        models.ShoppingList.calendar_id == calendar_id
+    )
 
-from datetime import date
+    if start_date:
+        query = query.filter(models.ShoppingList.list_for_date >= start_date)
+    if end_date:
+        query = query.filter(models.ShoppingList.list_for_date <= end_date)
+
+    total = query.count()
+
+    if limit is not None:
+        query = query.offset(skip).limit(limit)
+
+    items = query.all()
+    return {"items": items, "total": total}
 
 def get_lists_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100, start_date: date = None, end_date: date = None):
     query = db.query(models.ShoppingList).join(models.Calendar).filter(models.Calendar.family_id == family_id)
