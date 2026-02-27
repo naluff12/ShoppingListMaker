@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { Upload } from 'lucide-react';
 import './ImageUploader.css';
 
 const ImageUploader = ({ itemId, imageUrl, onImageUpload }) => {
@@ -16,7 +17,7 @@ const ImageUploader = ({ itemId, imageUrl, onImageUpload }) => {
     };
 
     return (
-        <div className="image-uploader" onClick={handleImageClick}>
+        <div className="image-uploader" onClick={handleImageClick} style={{ cursor: 'pointer', width: '100%', height: '100%', minHeight: '60px', borderRadius: '8px', overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.3s ease' }}>
             <input
                 type="file"
                 ref={fileInputRef}
@@ -25,9 +26,12 @@ const ImageUploader = ({ itemId, imageUrl, onImageUpload }) => {
                 accept="image/jpeg,image/png"
             />
             {imageUrl ? (
-                <img src={`data:image/webp;base64,${imageUrl}`} alt="" className="item-image" />
+                <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-                <div className="image-placeholder">Subir foto</div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '4px', color: 'var(--text-secondary)' }}>
+                    <Upload size={20} />
+                    <span style={{ fontSize: '0.75rem' }}>Subir foto</span>
+                </div>
             )}
         </div>
     );

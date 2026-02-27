@@ -3,6 +3,8 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from .models import *
+from .shared_images import *
 
 DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://user:password@db/shopping_db")
 

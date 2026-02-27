@@ -1,6 +1,6 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Boolean, Float, Text, DateTime, Table
-from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.mysql import LONGTEXT
+from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Boolean, Float, Text, DateTime, Table, and_
+from sqlalchemy.orm import relationship, foreign
+
 from sqlalchemy.ext.declarative import declarative_base
 from . import tz_util
 
@@ -78,9 +78,8 @@ class ShoppingList(Base):
     # Relación hacia Blame (una lista puede tener varios registros de blame)
     blame = relationship(
         "Blame",
-        primaryjoin="and_(ShoppingList.id==Blame.entity_id, Blame.entity_type=='lista')",
+        primaryjoin=lambda: and_(ShoppingList.id==foreign(Blame.entity_id), Blame.entity_type=='lista'),
         back_populates="shopping_list",
-        foreign_keys="[Blame.entity_id]",
         uselist=True,
         viewonly=True  # evita intentar insertar FK inexistente
     )
@@ -95,12 +94,13 @@ class Product(Base):
     category = Column(String(100), index=True)
     brand = Column(String(100), index=True)
     family_id = Column(Integer, ForeignKey('families.id'))
-    image_url = Column(LONGTEXT)
+    shared_image_id = Column(Integer, ForeignKey('shared_images.id'), nullable=True)
     last_price = Column(Float, nullable=True)
     created_at = Column(DateTime, default=tz_util.now)
     updated_at = Column(DateTime, default=tz_util.now, onupdate=tz_util.now)
 
     family = relationship("Family")
+    shared_image = relationship("SharedImage")
     price_history = relationship("PriceHistory", back_populates="product")
 
 class PriceHistory(Base):
@@ -125,7 +125,6 @@ class ListItem(Base):
     precio_estimado = Column(Float)
     precio_confirmado = Column(Float)
     creado_por_id = Column(Integer, ForeignKey('users.id'))
-    image_url = Column(LONGTEXT)
     created_at = Column(DateTime, default=tz_util.now)
 
     list = relationship("ShoppingList", back_populates="items")
@@ -133,7 +132,7 @@ class ListItem(Base):
     creado_por = relationship("User", back_populates="items_creados")
     blame = relationship(
         "Blame",
-        primaryjoin="and_(ListItem.id==foreign(Blame.entity_id), Blame.entity_type=='item')",
+        primaryjoin=lambda: and_(ListItem.id==foreign(Blame.entity_id), Blame.entity_type=='item'),
         back_populates="list_item"
     )
 
@@ -153,9 +152,10 @@ class Blame(Base):
     # Asociación manual con ShoppingList (N:1)
     shopping_list = relationship(
         "ShoppingList",
-        primaryjoin="and_(Blame.entity_id==ShoppingList.id, Blame.entity_type=='lista')",
+        primaryjoin=lambda: and_(foreign(Blame.entity_id)==ShoppingList.id, Blame.entity_type=='lista'),
         back_populates="blame",
-        foreign_keys="[Blame.entity_id]",
+        foreign_keys=lambda: [Blame.entity_id],
+        remote_side=[ShoppingList.id],
         uselist=False,
         viewonly=True
     )
@@ -165,7 +165,7 @@ class Blame(Base):
         "ListItem",
         primaryjoin="and_(Blame.entity_id==ListItem.id, Blame.entity_type=='item')",
         back_populates="blame",
-        foreign_keys="[Blame.entity_id]",
+        foreign_keys=lambda: [Blame.entity_id],
         uselist=False,
         viewonly=True
     )
@@ -184,3 +184,12 @@ class Notification(Base):
     user = relationship("User", foreign_keys=[user_id], back_populates="notifications")
     family = relationship("Family", back_populates="notifications")
     created_by = relationship("User", foreign_keys=[created_by_id])
+
+class SharedImage(Base):
+    __tablename__ = 'shared_images'
+    id = Column(Integer, primary_key=True, index=True)
+    file_path = Column(String(255), nullable=False)
+    uploaded_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at = Column(DateTime, default=tz_util.now)
+
+    uploaded_by = relationship("User")

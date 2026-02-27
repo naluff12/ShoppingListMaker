@@ -3,31 +3,27 @@ from typing import List
 import time
 import os
 import random
-import base64
 import string
-import io
-from PIL import Image
+
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from sqlalchemy.exc import OperationalError
 from .schemas import ListItem as ListItemSchema
 
-from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File
+from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 
-from . import crud, models, schemas, security, tz_util
+from . import crud, models, schemas, security, tz_util, shared_images
 from .database import SessionLocal, engine
+from .websockets import manager
 
 app = FastAPI()
 
-# --- Static files for images ---
-UPLOAD_DIR = "static/images"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
 # CORS Middleware
 app.add_middleware(
@@ -384,8 +380,13 @@ def search_products_endpoint(q: str, family_id: int, page: int = 1, size: int = 
     result = crud.search_products(db=db, name=q, family_id=family_id, skip=(page - 1) * size, limit=size)
     return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
 
+@app.get("/images/gallery", response_model=List[schemas.SharedImage])
+def get_image_gallery(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return shared_images.get_shared_images(db=db)
+
+
 @app.post("/products/{product_id}/upload-image", response_model=schemas.Product)
-def upload_product_image(
+async def upload_product_image(
     product_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -397,21 +398,15 @@ def upload_product_image(
 
     # In a real app, you'd check if the user has permission to edit this product.
     # For now, we'll allow any authenticated user.
+    
+    # Check if the user belongs to the family of the product
+    get_family_for_user(db_product.family_id, current_user)
 
     try:
-        contents = file.file.read()
-        img = Image.open(io.BytesIO(contents))
-        if img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-        
-        buffer = io.BytesIO()
-        img.save(buffer, format="webp", quality=80)
-        webp_image_bytes = buffer.getvalue()
-        
-        base64_encoded_image = base64.b64encode(webp_image_bytes).decode('utf-8')
-        data_url = f"{base64_encoded_image}"
+        shared_image = await shared_images.save_image(db, file, current_user.id)
 
-        db_product.image_url = data_url
+        # Update product shared_image_id
+        db_product.shared_image_id = shared_image.id
         db.commit()
         db.refresh(db_product)
         return db_product
@@ -506,6 +501,7 @@ def get_previous_lists_for_family(
 @app.post("/items/", response_model=schemas.ListItem)
 def create_item_for_list(
     item: schemas.ListItemCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -525,7 +521,13 @@ def create_item_for_list(
             raise HTTPException(status_code=400, detail="User does not belong to any family.")
         family_id = current_user.families[0].id
 
-    return crud.create_list_item(db=db, item=item, user_id=current_user.id, family_id=family_id)
+    new_item = crud.create_list_item(db=db, item=item, user_id=current_user.id, family_id=family_id)
+    background_tasks.add_task(
+        manager.broadcast_to_family, 
+        family_id, 
+        {"action": "ITEM_CREATED", "list_id": new_item.list_id, "item_id": new_item.id}
+    )
+    return new_item
 
 @app.post("/listas/{list_id}/items/bulk", response_model=List[schemas.ListItem])
 def create_bulk_items_for_list(
@@ -557,6 +559,7 @@ def create_bulk_items_for_list(
 def update_item_endpoint(
     item_id: int,
     item_update: schemas.ListItemUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -573,12 +576,24 @@ def update_item_endpoint(
     elif shopping_list.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
-    return crud.update_item(db=db, item_id=item_id, item_update=item_update, user_id=current_user.id)
+    family_id = shopping_list.calendar.family_id if shopping_list.calendar else None
+    if not family_id and current_user.families:
+        family_id = current_user.families[0].id
+
+    updated_item = crud.update_item(db=db, item_id=item_id, item_update=item_update, user_id=current_user.id)
+    if family_id:
+        background_tasks.add_task(
+            manager.broadcast_to_family,
+            family_id,
+            {"action": "ITEM_UPDATED", "list_id": updated_item.list_id, "item_id": updated_item.id}
+        )
+    return updated_item
 
 
 @app.delete("/items/{item_id}", response_model=schemas.ListItem)
 def delete_item_endpoint(
     item_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -595,10 +610,22 @@ def delete_item_endpoint(
     elif shopping_list.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
+    family_id = shopping_list.calendar.family_id if shopping_list.calendar else None
+    if not family_id and current_user.families:
+        family_id = current_user.families[0].id
+    list_id = db_item.list_id
+
     # Evitar DetachedInstanceError: acceder a relaciones antes de eliminar
     _ = db_item.creado_por  # forzar carga si es necesario
 
     crud.delete_item(db=db, item_id=item_id, user_id=current_user.id)
+    
+    if family_id:
+        background_tasks.add_task(
+            manager.broadcast_to_family,
+            family_id,
+            {"action": "ITEM_DELETED", "list_id": list_id, "item_id": item_id}
+        )
     return db_item
 
 
@@ -825,8 +852,8 @@ def create_blame_for_item(
         detalles=blame_data.detalles
     )
 
-@app.post("/items/{item_id}/upload-image")
-def upload_image_for_item(
+@app.post("/items/{item_id}/upload-image", response_model=schemas.ListItem)
+async def upload_image_for_item(
     item_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
@@ -836,38 +863,28 @@ def upload_image_for_item(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    product = item.product
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found for this item")
+    shopping_list = item.list
+    if not shopping_list:
+        raise HTTPException(status_code=404, detail="Shopping list not found for this item")
 
-    family = product.family
-    if not family:
-        raise HTTPException(status_code=400, detail="El producto no pertenece a ninguna familia")
-
-    if current_user not in family.users and current_user.id != family.owner_id:
-        raise HTTPException(status_code=403, detail="No tienes permisos para modificar este producto")
+    if shopping_list.calendar:
+        get_family_for_user(shopping_list.calendar.family_id, current_user)
+    elif shopping_list.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not enough permissions to update this item")
 
     try:
-        image = Image.open(file.file)
-    except Exception:
-        raise HTTPException(status_code=400, detail="El archivo no es una imagen válida")
+        shared_image = await shared_images.save_image(db, file, current_user.id)
 
-    buffer = io.BytesIO()
-    image.convert("RGB").save(buffer, format="WEBP", quality=80)
-    buffer.seek(0)
+        # Update associated product shared_image_id (images are strictly global)
+        if item.product:
+            item.product.shared_image_id = shared_image.id
+            
+        db.commit()
+        db.refresh(item)
+        return item
 
-    image_base64 = base64.b64encode(buffer.read()).decode("utf-8")
-
-    product.image_url = image_base64
-    product.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(product)
-
-    return {
-        "message": "Imagen convertida y guardada correctamente",
-        "product_id": product.id,
-        "image_url": image_base64
-    }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
 
 @app.get("/home/last-lists", response_model=List[schemas.ShoppingListResponse])
 def get_last_lists(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -985,3 +1002,15 @@ def get_list_filter_options_endpoint(
         raise HTTPException(status_code=403, detail="No tienes permisos para ver esta lista")
 
     return crud.get_list_filter_options(db=db, list_id=lista_id)
+
+@app.websocket("/ws/{family_id}")
+async def websocket_endpoint(websocket: WebSocket, family_id: int):
+    # Depending on auth, wait, how to auth a websocket?
+    # For now, just accept
+    await manager.connect(websocket, family_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # We don't really expect clients to send messages right now, but we keep the connection open
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, family_id)

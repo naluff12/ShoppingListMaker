@@ -57,8 +57,13 @@ def get_product(db: Session, product_id: int):
     return db.query(models.Product).filter(models.Product.id == product_id).first()
 
 def create_family_product(db: Session, product: schemas.ProductCreate, family_id: int):
-    product_data = product.model_dump(exclude={'family_id'})
+    product_data = product.model_dump(exclude={'family_id', 'shared_image_id'})
+    
     db_product = models.Product(**product_data, family_id=family_id)
+
+    if product.shared_image_id:
+        db_product.shared_image_id = product.shared_image_id
+
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
@@ -68,7 +73,12 @@ def update_family_product(db: Session, product_id: int, product_update: schemas.
     db_product = get_product(db, product_id)
     if not db_product:
         return None
-    update_data = product_update.model_dump(exclude_unset=True)
+    
+    update_data = product_update.model_dump(exclude_unset=True, exclude={'shared_image_id'})
+
+    if product_update.shared_image_id is not None: # Check for None explicitly to allow setting to null
+        db_product.shared_image_id = product_update.shared_image_id
+    
     for key, value in update_data.items():
         setattr(db_product, key, value)
     db.commit()
@@ -350,6 +360,7 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
         status='pendiente',
         creado_por_id=user_id
     )
+
     db.add(db_item)
     db.flush()  # Flush to get the ID
 
@@ -424,8 +435,10 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
     if not db_item:
         return None
 
-    update_data = item_update.model_dump(exclude_unset=True)
+    update_data = item_update.model_dump(exclude_unset=True, exclude={'shared_image_id'})
     blame_details = []
+
+    # shared_image_id removed from ListItemUpdate schema to enforce global product images
 
     if 'precio_confirmado' in update_data and update_data['precio_confirmado'] is not None:
         if db_item.product:
@@ -670,3 +683,5 @@ def get_list_filter_options(db: Session, list_id: int):
     brands = [b[0] for b in brands_query.all()]
 
     return {"categories": categories, "brands": brands}
+
+

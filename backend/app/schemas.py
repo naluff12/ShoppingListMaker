@@ -51,15 +51,15 @@ class ProductBase(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     brand: Optional[str] = None
-    image_url: Optional[str] = None
     family_id: Optional[int] = None
     last_price: Optional[float] = None
 
 class ProductCreate(ProductBase):
-    pass
+    shared_image_id: Optional[int] = None
 
 class Product(ProductBase):
     id: int
+    shared_image: Optional["SharedImage"] = None
     price_history: List[PriceHistory] = []
 
     class Config:
@@ -74,7 +74,6 @@ class ListItemBase(BaseModel):
     status: str
     product_id: Optional[int] = None
     nombre: str
-    image_url: Optional[str] = None
 
 
 class ListItemCreate(BaseModel):
@@ -338,7 +337,18 @@ class BudgetDetails(BaseModel):
     total_estimado: float
     total_comprado: float
 
+class SharedImage(BaseModel):
+    id: int
+    file_path: str
+    uploaded_by_user_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 
 User.model_rebuild()
 Blame.model_rebuild()
 ShoppingList.model_rebuild()
+Product.model_rebuild()
+ListItem.model_rebuild()

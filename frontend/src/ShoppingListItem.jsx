@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
-import { Form, Button, Badge, Collapse, InputGroup, Modal, Dropdown } from 'react-bootstrap';
-import { Trash, ChatLeftText, GraphUp, ThreeDotsVertical } from 'react-bootstrap-icons';
+import React, { useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
+import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon } from 'lucide-react';
 import ImageUploader from './ImageUploader';
-import './ShoppingListItem.css';
+
+const API_URL = 'http://localhost:8000';
 
 const ShoppingListItem = ({
     item,
@@ -14,6 +15,7 @@ const ShoppingListItem = ({
     onShowItemBlame,
     onItemCommentSubmit,
     onShowPriceHistory,
+    onShowGallery,
     editingItem,
     setEditingItem,
     editingPrice,
@@ -27,7 +29,19 @@ const ShoppingListItem = ({
 }) => {
     const isEditing = editingItem && editingItem.id === item.id;
     const [showImageModal, setShowImageModal] = useState(false);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const dropdownRef = useRef(null);
     const fileInputRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -38,41 +52,60 @@ const ShoppingListItem = ({
 
     const handleViewClick = () => {
         setShowImageModal(true);
+        setShowDropdown(false);
     }
 
     const handleChangeClick = () => {
         fileInputRef.current.click();
+        setShowDropdown(false);
     }
 
-    return (
-        <div className={`shopping-list-item-compact ${item.status === 'comprado' ? 'is-comprado' : ''}`}>
-            <div className="item-main-info-compact">
-                <Form.Check
-                    type="switch"
-                    id={`item-status-${item.id}`}
-                    checked={item.status === 'comprado'}
-                    onChange={() => onStatusChange(item.id, item.status)}
-                    className="status-checkbox-compact"
-                    title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'}
-                />
-                <div className="item-image-compact">
-                    {item.product?.image_url ? (
-                        <>
-                            <Dropdown>
-                                <Dropdown.Toggle as="div" id={`image-dropdown-${item.id}`} className="image-dropdown-toggle">
-                                    <img
-                                        src={`data:image/webp;base64,${item.product.image_url}`}
-                                        alt=""
-                                        className="item-image"
-                                    />
-                                    <ThreeDotsVertical className="image-dropdown-icon" />
-                                </Dropdown.Toggle>
+    const handleGalleryClick = () => {
+        onShowGallery(item);
+        setShowDropdown(false);
+    }
 
-                                <Dropdown.Menu>
-                                    <Dropdown.Item onClick={handleViewClick}>Ver imagen</Dropdown.Item>
-                                    <Dropdown.Item onClick={handleChangeClick}>Cambiar imagen</Dropdown.Item>
-                                </Dropdown.Menu>
-                            </Dropdown>
+    const priceValue = (item.precio_confirmado || item.product?.last_price || 0).toFixed(2);
+    const priceBadgeClass = item.precio_confirmado ? 'badge-success' : item.product?.last_price ? 'badge-warning' : 'badge-primary';
+
+    return (
+        <div className={`glass-panel shopping-list-item-compact ${item.status === 'comprado' ? 'item-comprado' : ''}`} style={{ display: 'flex', flexDirection: 'column', padding: '12px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <label className="switch" title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'} style={{ flexShrink: 0 }}>
+                    <input 
+                        type="checkbox" 
+                        checked={item.status === 'comprado'} 
+                        onChange={() => onStatusChange(item.id, item.status)} 
+                    />
+                    <span className="slider round"></span>
+                </label>
+                
+                <div ref={dropdownRef} style={{ width: '60px', flexShrink: 0, position: 'relative' }}>
+                    {item.product?.shared_image ? (
+                        <>
+                            <div style={{ width: '60px', height: '60px', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
+                                <img
+                                    src={`${API_URL}${item.product.shared_image.file_path}`}
+                                    alt={item.nombre}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                />
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}
+                                    style={{ position: 'absolute', bottom: '2px', right: '2px', background: 'rgba(0,0,0,0.7)', borderRadius: '50%', padding: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', zIndex: 10 }}
+                                    title="Opciones de imagen"
+                                >
+                                    <MoreVertical size={14} color="white" />
+                                </button>
+                            </div>
+
+                            {showDropdown && (
+                                <div style={{ position: 'absolute', bottom: '100%', left: 0, minWidth: '160px', zIndex: 9999, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginBottom: '4px' }}>
+                                    <div className="dropdown-item" onClick={handleViewClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Eye size={16} style={{marginRight: '8px', flexShrink: 0}} /> Ver imagen</div>
+                                    <div className="dropdown-item" onClick={handleChangeClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Camera size={16} style={{marginRight: '8px', flexShrink: 0}} /> Cambiar</div>
+                                    <div className="dropdown-item" onClick={handleGalleryClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><ImageIcon size={16} style={{marginRight: '8px', flexShrink: 0}} /> Galería</div>
+                                </div>
+                            )}
+                            
                             <input
                                 type="file"
                                 ref={fileInputRef}
@@ -80,93 +113,116 @@ const ShoppingListItem = ({
                                 style={{ display: 'none' }}
                                 accept="image/jpeg,image/png"
                             />
-                            <Modal show={showImageModal} onHide={() => setShowImageModal(false)} centered>
-                                <Modal.Body className="p-0">
-                                    <img src={`data:image/webp;base64,${item.product.image_url}`} alt="Producto" className="img-fluid" />
-                                </Modal.Body>
-                            </Modal>
+                            
+                            {showImageModal && ReactDOM.createPortal(
+                                <div className="modal-backdrop" onClick={() => setShowImageModal(false)}>
+                                    <div style={{ padding: '0', background: 'transparent', boxShadow: 'none', maxWidth: '90vw' }} onClick={e => e.stopPropagation()}>
+                                        <div style={{ position: 'relative' }}>
+                                            <button className="modal-close" onClick={() => setShowImageModal(false)} style={{ position: 'absolute', top: '-40px', right: '0', color: 'white' }}>
+                                                <X size={32} />
+                                            </button>
+                                            <img src={`${API_URL}${item.product?.shared_image.file_path}`} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
+                                        </div>
+                                    </div>
+                                </div>,
+                                document.body
+                            )}
                         </>
                     ) : (
-                        <ImageUploader itemId={item.id} imageUrl={item.product?.image_url} onImageUpload={onImageUpload} />
+                        <ImageUploader itemId={item.id} imageUrl={''} onImageUpload={onImageUpload} />
                     )}
                 </div>
-                <div className="item-details-compact">
-                    <div className="item-name-compact" onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar cantidad">
+                
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit' }} onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar detalles">
                         {item.nombre}
                     </div>
-                    <div className="item-brand-category-compact">
-                        <small className="text-muted">{item.product?.brand} / {item.product?.category}</small>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {item.product?.brand || 'Sin marca'} / {item.product?.category || 'Sin categoría'}
                     </div>
+                    
                     {isEditing ? (
-                        <InputGroup size="sm" className="quantity-edit-compact">
-                            <Form.Control type="number" value={editingItem.cantidad} onChange={(e) => setEditingItem({ ...editingItem, cantidad: parseFloat(e.target.value) || 0 })} />
-                            <Form.Select value={editingItem.unit} onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            <input 
+                                type="number" 
+                                className="premium-input" 
+                                style={{ width: '60px', padding: '4px' }}
+                                value={editingItem.cantidad} 
+                                onChange={(e) => setEditingItem({ ...editingItem, cantidad: parseFloat(e.target.value) || 0 })} 
+                            />
+                            <select 
+                                className="premium-input" 
+                                style={{ width: '80px', padding: '4px' }}
+                                value={editingItem.unit} 
+                                onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
+                            >
                                 <option value="piezas">piezas</option>
                                 <option value="kg">kg</option>
                                 <option value="g">g</option>
                                 <option value="L">L</option>
                                 <option value="ml">ml</option>
-                            </Form.Select>
-                            <Button variant="success" onClick={() => onItemUpdate(editingItem.id, { cantidad: editingItem.cantidad, unit: editingItem.unit })}>Ok</Button>
-                            <Button variant="secondary" onClick={() => setEditingItem(null)}>X</Button>
-                        </InputGroup>
+                            </select>
+                            <button className="btn-premium btn-primary" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => onItemUpdate(editingItem.id, { cantidad: editingItem.cantidad, unit: editingItem.unit })}>Ok</button>
+                            <button className="btn-premium btn-secondary" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => setEditingItem(null)}>X</button>
+                        </div>
                     ) : (
-                        <div className="item-quantity-compact" onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar cantidad">
-                            <span>{item.cantidad} {item.unit}</span>
+                        <div onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar cantidad" style={{ cursor: 'pointer', marginTop: '4px', fontSize: '0.9rem' }}>
+                            {item.cantidad} {item.unit}
                         </div>
                     )}
                 </div>
 
-                <div className="item-price-compact" onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })} title="Doble click para editar precio">
+                <div onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })} title="Doble click para editar precio" style={{ cursor: 'pointer', flexShrink: 0 }}>
                     {editingPrice?.id === item.id && editingPrice?.field === 'precio_confirmado' ? (
-                        <Form.Control
+                        <input
                             type="number"
+                            className="premium-input"
                             step="0.01"
-                            defaultValue={item.precio_confirmado}
+                            defaultValue={item.precio_confirmado || item.product?.last_price || ''}
                             autoFocus
                             onBlur={(e) => onPriceChange(item.id, 'precio_confirmado', e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && e.target.blur()}
-                            size="sm"
-                            className="price-input-compact"
+                            style={{ width: '80px', padding: '4px' }}
                         />
                     ) : (
-                        <Badge bg={`${item.precio_confirmado ? 'success' : item.product?.last_price ? 'warning' : 'primary'}`}>
-                            ${(item.precio_confirmado || item.product?.last_price || 0).toFixed(2)}
-                        </Badge>
+                        <span className={`badge ${priceBadgeClass}`}>${priceValue}</span>
                     )}
                 </div>
 
-                <div className="item-actions-compact">
-                    <Button variant="outline-info" size="sm" onClick={() => onShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id}>
-                        <ChatLeftText />
-                    </Button>
-                    <Button variant="outline-primary" size="sm" onClick={() => onShowPriceHistory(item)}>
-                        <GraphUp />
-                    </Button>
-                    <Button variant="outline-danger" size="sm" onClick={() => onDelete(item.id)} disabled={loading}>
-                        <Trash />
-                    </Button>
+                <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px' }} onClick={() => onShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id}>
+                        <MessageSquare size={16} />
+                    </button>
+                    <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--primary-color)', padding: '6px' }} onClick={() => onShowPriceHistory(item)}>
+                        <TrendingUp size={16} />
+                    </button>
+                    <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', padding: '6px' }} onClick={() => onDelete(item.id)} disabled={loading}>
+                        <Trash size={16} />
+                    </button>
                 </div>
             </div>
-            <Collapse in={showItemBlame === item.id}>
-                <div className="item-blame-details-compact">
-                    <h6>Historial del Producto</h6>
-                    {itemBlames[item.id] && itemBlames[item.id].length === 0 && <div className="text-muted small">Sin historial</div>}
-                    <ul className="list-unstyled">
+
+            {showItemBlame === item.id && (
+                <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                    <h6 style={{ margin: '0 0 8px 0', fontSize: '0.95rem' }}>Historial del Producto</h6>
+                    {itemBlames[item.id] && itemBlames[item.id].length === 0 && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Sin historial</div>}
+                    <div style={{ maxHeight: '100px', overflowY: 'auto', marginBottom: '12px' }}>
                         {itemBlames[item.id] && itemBlames[item.id].map(c => (
-                            <li key={c.id} className="mb-2 small">
-                                <Badge bg="secondary">{c.user?.username || 'Usuario'}</Badge>
-                                <span className="text-muted mx-1">({new Date(c.timestamp).toLocaleString()})</span>
-                                <p className="mb-0 ms-1">{c.detalles}</p>
-                            </li>
+                            <div key={c.id} style={{ marginBottom: '6px', fontSize: '0.8rem', padding: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                    <span className="badge badge-secondary" style={{ fontSize: '0.7rem' }}>{c.user?.username || 'Usuario'}</span>
+                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>{new Date(c.timestamp).toLocaleString()}</span>
+                                </div>
+                                <p style={{ margin: 0 }}>{c.detalles}</p>
+                            </div>
                         ))}
-                    </ul>
-                    <Form onSubmit={(e) => { e.preventDefault(); onItemCommentSubmit(item.id); }} className="mt-2 d-flex">
-                        <Form.Control type="text" className="me-2" placeholder="Nuevo comentario..." value={newItemComment} onChange={e => setNewItemComment(e.target.value)} size="sm" />
-                        <Button type="submit" variant="primary" size="sm">Comentar</Button>
-                    </Form>
+                    </div>
+                    <form onSubmit={(e) => { e.preventDefault(); onItemCommentSubmit(item.id); }} style={{ display: 'flex', gap: '8px' }}>
+                        <input type="text" className="premium-input" style={{ flex: 1, padding: '4px 8px', fontSize: '0.85rem' }} placeholder="Nuevo comentario..." value={newItemComment} onChange={e => setNewItemComment(e.target.value)} />
+                        <button type="submit" className="btn-premium btn-primary" style={{ padding: '4px 12px', fontSize: '0.85rem' }}>Comentar</button>
+                    </form>
                 </div>
-            </Collapse>
+            )}
         </div>
     );
 };

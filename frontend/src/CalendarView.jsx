@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Calendar from 'react-calendar';
-import './custom-calendar.css'; // Asegúrate que la ruta es correcta
-import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
-
-const API_URL = 'http://localhost:8000';
+import './custom-calendar.css';
+import PreviousItemsModal from './PreviousItemsModal';
+import { ArrowLeft, Plus, Trash2, Eye } from 'lucide-react';
 
 function CalendarView() {
     const location = useLocation();
@@ -15,10 +14,14 @@ function CalendarView() {
     const [activeStartDate, setActiveStartDate] = useState(new Date());
     const [listas, setListas] = useState([]);
     const [loading, setLoading] = useState(false);
+    
+    // form state
     const [nuevaListaNombre, setNuevaListaNombre] = useState('');
     const [nuevaListaNotas, setNuevaListaNotas] = useState('');
     const [nuevaListaComentarios, setNuevaListaComentarios] = useState('');
     const [showForm, setShowForm] = useState(false);
+    
+    // modals
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [newlyCreatedList, setNewlyCreatedList] = useState(null);
 
@@ -41,7 +44,6 @@ function CalendarView() {
             .finally(() => setLoading(false));
     };
 
-    // Cargar listas del calendario seleccionado
     useEffect(() => {
         if (calendar) {
             const startDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth(), 1);
@@ -50,7 +52,6 @@ function CalendarView() {
         }
     }, [calendar, activeStartDate]);
 
-    // Mapear listas por list_for_date
     const listasPorFecha = useMemo(() => {
         const map = {};
         listas.forEach(l => {
@@ -67,14 +68,13 @@ function CalendarView() {
 
     const dateKey = selectedDate.toISOString().slice(0, 10);
     const listsForSelectedDate = listasPorFecha[dateKey] || [];
-    // Estilos para días en el calendario
+    
     function getTileClassName({ date, view }) {
         if (view !== 'month') return '';
         const key = date.toISOString().slice(0, 10);
         const listsOnDate = listasPorFecha[key];
 
         if (listsOnDate && listsOnDate.length > 0) {
-            // Lógica de coloreado mejorada
             const isReviewed = listsOnDate.some(l => l.status === 'revisada');
             const isNotReviewed = listsOnDate.some(l => l.status === 'no revisada');
 
@@ -86,7 +86,6 @@ function CalendarView() {
         return '';
     }
 
-    // Crear nueva lista
     const handleCrearLista = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -112,7 +111,7 @@ function CalendarView() {
             setNuevaListaNombre('');
             setNuevaListaNotas('');
             setNuevaListaComentarios('');
-            setShowPreviousItemsModal(true); // Show modal after creating the list
+            setShowPreviousItemsModal(true);
         } catch (err) {
             alert(err.message);
         } finally {
@@ -154,7 +153,7 @@ function CalendarView() {
             if (!res.ok) throw new Error('Error al eliminar la lista');
             const startDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth(), 1);
             const endDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth() + 1, 0);
-            fetchLists(startDate, endDate); // Recargar las listas
+            fetchLists(startDate, endDate); 
         } catch (err) {
             alert(err.message);
         } finally {
@@ -162,16 +161,24 @@ function CalendarView() {
         }
     };
 
- const handleSelectList = (list) => {
+    const handleSelectList = (list) => {
         navigate(`/shopping-list/${list.id}`, { state: { list } });
     };
 
     return (
-        <div className="container mt-4">
-            <button className="btn btn-secondary mb-3" onClick={() => navigate('/family-panel')}>Volver</button>
-            <h2>Calendario: {calendar?.nombre || ''}</h2>
-            <div className="row">
-                <div className="col-md-7">
+        <div className="app-container animate-fade-in" style={{ maxWidth: '1200px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+                <button className="btn-premium btn-secondary" onClick={() => navigate('/family-panel')} style={{ padding: '8px 16px' }}>
+                    <ArrowLeft size={18} /> Volver
+                </button>
+                <h2 className="text-gradient" style={{ margin: 0, fontSize: '2rem' }}>
+                    Calendario: {calendar?.nombre || ''}
+                </h2>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1.5fr) 1fr', gap: '32px', alignItems: 'flex-start' }}>
+                {/* Calendar Area */}
+                <div className="glass-panel" style={{ padding: '24px' }}>
                     <Calendar
                         onChange={setSelectedDate}
                         value={selectedDate}
@@ -183,51 +190,85 @@ function CalendarView() {
                                 setActiveStartDate(activeStartDate);
                             }
                         }}
+                        className="custom-react-calendar"
                     />
+
+                    <div style={{ marginTop: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '0.9rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--warning-color)' }}></span>
+                            <span style={{ color: 'var(--text-secondary)' }}>Pendiente</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--success-color)' }}></span>
+                            <span style={{ color: 'var(--text-secondary)' }}>Revisada</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ width: 12, height: 12, borderRadius: '50%', background: 'var(--danger-color)' }}></span>
+                            <span style={{ color: 'var(--text-secondary)' }}>No revisada</span>
+                        </div>
+                    </div>
                 </div>
-                <div className="col-md-5">
-                    <h4 className="mt-3">{selectedDate.toLocaleDateString()}</h4>
-                    <button className="btn btn-success btn-sm mt-2" onClick={() => setShowForm(true)}>Crear lista para este día</button>
-                    <hr />
-                    {listsForSelectedDate.length > 0 ? (
-                        <div className="list-group">
-                            {listsForSelectedDate.map(list => (
-                                <div key={list.id} className="list-group-item d-flex justify-content-between align-items-center">
-                                    <span onClick={() => handleSelectList(list)} style={{ cursor: 'pointer' }}>
-                                        {list.name} <span className={`badge bg-${list.status === 'revisada' ? 'success' : 'warning'}`}>{list.status}</span>
-                                    </span>
-                                    <div>
-                                        <button className="btn btn-sm btn-primary me-2" onClick={() => handleSelectList(list)}>Ver</button>
-                                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteLista(list.id)} disabled={loading}>
-                                            {loading ? <span className="spinner-border spinner-border-sm"></span> : 'X'}
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="alert alert-info mt-3">
-                            No hay lista de compras para este día.<br />
-                        </div>
-                    )}
+
+                {/* Date Details Area */}
+                <div className="glass-panel" style={{ padding: '24px' }}>
+                    <h3 style={{ fontSize: '1.5rem', marginBottom: '16px', color: 'var(--text-primary)' }}>
+                        {selectedDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </h3>
+                    
+                    <button className="btn-premium btn-primary" onClick={() => setShowForm(true)} style={{ width: '100%', marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
+                        <Plus size={18} /> Crear lista para este día
+                    </button>
+
                     {showForm && (
-                        <form className="mt-3" onSubmit={handleCrearLista}>
-                            <input className="form-control mb-2" placeholder="Nombre de la lista" value={nuevaListaNombre} onChange={e => setNuevaListaNombre(e.target.value)} required />
-                            <textarea className="form-control mb-2" placeholder="Notas (opcional)" value={nuevaListaNotas} onChange={e => setNuevaListaNotas(e.target.value)} />
-                            <textarea className="form-control mb-2" placeholder="Comentarios (opcional)" value={nuevaListaComentarios} onChange={e => setNuevaListaComentarios(e.target.value)} />
-                            <button className="btn btn-success btn-sm" type="submit" disabled={loading}>{loading ? 'Creando...' : 'Crear lista'}</button>
-                            <button className="btn btn-secondary btn-sm ms-2" type="button" onClick={() => setShowForm(false)}>Cancelar</button>
-                        </form>
+                        <div style={{ background: 'rgba(0,0,0,0.2)', padding: '16px', borderRadius: 'var(--border-radius-md)', marginBottom: '24px', animation: 'fadeIn 0.2s ease forwards' }}>
+                            <form onSubmit={handleCrearLista} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <input className="premium-input" placeholder="Nombre de la lista" value={nuevaListaNombre} onChange={e => setNuevaListaNombre(e.target.value)} required />
+                                <textarea className="premium-input" placeholder="Notas (opcional)" value={nuevaListaNotas} onChange={e => setNuevaListaNotas(e.target.value)} style={{ minHeight: '80px', resize: 'vertical' }} />
+                                <textarea className="premium-input" placeholder="Comentarios (opcional)" value={nuevaListaComentarios} onChange={e => setNuevaListaComentarios(e.target.value)} style={{ minHeight: '80px', resize: 'vertical' }} />
+                                <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                                    <button className="btn-premium btn-success" type="submit" disabled={loading} style={{ flex: 1, justifyContent: 'center' }}>
+                                        {loading ? 'Creando...' : 'Guardar'}
+                                    </button>
+                                    <button className="btn-premium btn-secondary" type="button" onClick={() => setShowForm(false)} style={{ flex: 1, justifyContent: 'center' }}>
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     )}
+                    
+                    <div>
+                        <h4 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>Listas programadas</h4>
+                        {listsForSelectedDate.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {listsForSelectedDate.map(list => (
+                                    <div key={list.id} className="list-item" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
+                                        <div onClick={() => handleSelectList(list)} style={{ cursor: 'pointer', flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                            <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>{list.name}</span>
+                                            <span className="badge" style={{ background: list.status === 'revisada' ? 'var(--success-color)' : list.status === 'pendiente' ? 'var(--warning-color)' : 'var(--danger-color)' }}>
+                                                {list.status}
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#60a5fa', padding: '6px 10px' }} onClick={() => handleSelectList(list)}>
+                                                <Eye size={18} />
+                                            </button>
+                                            <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', padding: '6px 10px' }} onClick={() => handleDeleteLista(list.id)} disabled={loading}>
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="alert-info" style={{ margin: 0 }}>
+                                No hay lista de compras para este día.
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
-            <div className="mt-4">
-                <small>
-                    <span className="calendar-day-pending" style={{ padding: '0 10px', borderRadius: 4, marginRight: 8 }}>Pendiente</span>
-                    <span className="calendar-day-reviewed" style={{ padding: '0 10px', borderRadius: 4, marginRight: 8 }}>Revisada</span>
-                    <span className="calendar-day-not-reviewed" style={{ padding: '0 10px', borderRadius: 4 }}>No revisada</span>
-                </small>
-            </div>
+
             <PreviousItemsModal
                 show={showPreviousItemsModal}
                 handleClose={() => setShowPreviousItemsModal(false)}

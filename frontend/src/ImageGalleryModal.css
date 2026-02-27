@@ -1,0 +1,23 @@
+.gallery-image-wrapper {
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s ease-in-out;
+    padding: 5px;
+    border-radius: 5px;
+}
+
+.gallery-image-wrapper:hover {
+    border-color: #007bff; /* Bootstrap primary blue */
+}
+
+.gallery-image-wrapper.selected {
+    border-color: #28a745; /* Bootstrap success green */
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.gallery-image-wrapper img {
+    width: 100%;
+    height: 120px; /* Fixed height for consistency */
+    object-fit: cover; /* Cover the area, cropping if necessary */
+    border-radius: 3px;
+}

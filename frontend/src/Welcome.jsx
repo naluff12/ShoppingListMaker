@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Container, Row, Col, Card, ListGroup, Badge } from 'react-bootstrap';
-
-const API_URL = 'http://localhost:8000';
+import { Users, ListChecks, ShoppingBag } from 'lucide-react';
 
 function Welcome() {
     const [lastLists, setLastLists] = useState([]);
@@ -50,67 +48,92 @@ function Welcome() {
     }, []);
 
     if (loading) {
-        return <div>Loading...</div>;
+        return (
+            <div className="app-container" style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <div className="text-gradient" style={{ fontSize: '1.5rem', fontWeight: 600 }}>Cargando...</div>
+            </div>
+        );
     }
 
     return (
-        <Container className="mt-4">
-            <Row>
-                <Col md={8}>
-                    <h1>Bienvenido</h1>
-                    <p>Aquí tienes un resumen de la actividad reciente en tus familias.</p>
-                </Col>
-            </Row>
+        <div className="app-container animate-fade-in">
+            <header style={{ marginBottom: '24px' }}>
+                <h1 className="text-gradient" style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Bienvenido</h1>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
+                    Aquí tienes un resumen de la actividad reciente en tus familias.
+                </p>
+            </header>
 
-            <Row className="mt-4">
-                <Col md={4}>
-                    <Card>
-                        <Card.Header>Mis Familias</Card.Header>
-                        <ListGroup variant="flush">
-                            {families.length > 0 ? (
-                                families.map(family => (
-                                    <ListGroup.Item key={family.id}>{family.nombre}</ListGroup.Item>
-                                ))
-                            ) : (
-                                <ListGroup.Item>No perteneces a ninguna familia.</ListGroup.Item>
-                            )}
-                        </ListGroup>
-                    </Card>
-                </Col>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+                
+                {/* Familias */}
+                <div className="glass-panel">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                        <div style={{ padding: '8px', background: 'rgba(59, 130, 246, 0.2)', borderRadius: '50%', color: 'var(--primary-color)' }}>
+                            <Users size={24} />
+                        </div>
+                        <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Mis Familias</h2>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {families.length > 0 ? (
+                            families.map(family => (
+                                <div key={family.id} style={{ padding: '12px', background: 'rgba(240, 246, 252, 0.05)', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--border-color)' }}>
+                                    <span style={{ fontWeight: 500 }}>{family.nombre}</span>
+                                </div>
+                            ))
+                        ) : (
+                            <p style={{ color: 'var(--text-muted)' }}>No perteneces a ninguna familia.</p>
+                        )}
+                    </div>
+                </div>
 
-                <Col md={4}>
-                    <Card>
-                        <Card.Header>Últimas Listas Creadas</Card.Header>
-                        <ListGroup variant="flush">
-                            {lastLists.length > 0 ? (
-                                lastLists.map(list => (
-                                    <ListGroup.Item key={list.id}>
-                                        {list.name} <Badge bg="secondary">{new Date(list.list_for_date).toLocaleDateString()}</Badge>
-                                    </ListGroup.Item>
-                                ))
-                            ) : (
-                                <ListGroup.Item>No hay listas recientes.</ListGroup.Item>
-                            )}
-                        </ListGroup>
-                    </Card>
-                </Col>
+                {/* Listas */}
+                <div className="glass-panel">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                        <div style={{ padding: '8px', background: 'rgba(16, 185, 129, 0.2)', borderRadius: '50%', color: 'var(--success-color)' }}>
+                            <ListChecks size={24} />
+                        </div>
+                        <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Últimas Listas</h2>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {lastLists.length > 0 ? (
+                            lastLists.map(list => (
+                                <Link to={`/shopping-list/${list.id}`} key={list.id} style={{ padding: '12px', background: 'rgba(240, 246, 252, 0.05)', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{list.name}</span>
+                                    <span style={{ fontSize: '0.8rem', padding: '4px 8px', background: 'var(--bg-secondary)', borderRadius: '12px', color: 'var(--text-secondary)' }}>
+                                        {new Date(list.list_for_date).toLocaleDateString()}
+                                    </span>
+                                </Link>
+                            ))
+                        ) : (
+                            <p style={{ color: 'var(--text-muted)' }}>No hay listas recientes.</p>
+                        )}
+                    </div>
+                </div>
 
-                <Col md={4}>
-                    <Card>
-                        <Card.Header>Últimos Productos Agregados</Card.Header>
-                        <ListGroup variant="flush">
-                            {lastProducts.length > 0 ? (
-                                lastProducts.map(product => (
-                                    <ListGroup.Item key={product.id}>{product.name}</ListGroup.Item>
-                                ))
-                            ) : (
-                                <ListGroup.Item>No hay productos recientes.</ListGroup.Item>
-                            )}
-                        </ListGroup>
-                    </Card>
-                </Col>
-            </Row>
-        </Container>
+                {/* Productos */}
+                <div className="glass-panel">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                        <div style={{ padding: '8px', background: 'rgba(245, 158, 11, 0.2)', borderRadius: '50%', color: 'var(--warning-color)' }}>
+                            <ShoppingBag size={24} />
+                        </div>
+                        <h2 style={{ fontSize: '1.25rem', margin: 0 }}>Últimos Productos</h2>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {lastProducts.length > 0 ? (
+                            lastProducts.map(product => (
+                                <div key={product.id} style={{ padding: '12px', background: 'rgba(240, 246, 252, 0.05)', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--border-color)' }}>
+                                    <span style={{ fontWeight: 500 }}>{product.name}</span>
+                                </div>
+                            ))
+                        ) : (
+                            <p style={{ color: 'var(--text-muted)' }}>No hay productos recientes.</p>
+                        )}
+                    </div>
+                </div>
+
+            </div>
+        </div>
     );
 }
 

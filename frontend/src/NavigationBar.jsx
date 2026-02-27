@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Navbar, Nav, Button, Container, Dropdown, Badge } from 'react-bootstrap';
-import { Bell, CheckCircle } from 'react-bootstrap-icons';
+import { Bell, CheckCircle, XCircle, ShoppingCart } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function NavigationBar({ user, onLogout }) {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState({ items: [], total: 0, page: 1, size: 10 });
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef(null);
 
   const fetchNotifications = async () => {
     try {
@@ -14,16 +15,12 @@ function NavigationBar({ user, onLogout }) {
       if (!token) return;
 
       const response = await fetch('/api/notifications', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.ok) {
         const data = await response.json();
         setNotifications(data);
-      } else {
-        console.error('Failed to fetch notifications');
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -38,6 +35,17 @@ function NavigationBar({ user, onLogout }) {
     }
   }, [user]);
 
+  // Click outside to close dropdown
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const handleLogout = () => {
     onLogout();
     navigate('/login');
@@ -50,9 +58,7 @@ function NavigationBar({ user, onLogout }) {
 
       await fetch(`/api/notifications/${notificationId}/mark-as-read`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       setNotifications(prev => ({
@@ -72,15 +78,14 @@ function NavigationBar({ user, onLogout }) {
       if (!notification.is_read) {
         handleMarkOneRead(notification.id);
       }
+      setShowDropdown(false);
 
       if (notification.link) {
         const match = notification.link.match(/\/shopping-list\/(\d+)/);
         if (match) {
           const listId = match[1];
           const response = await fetch(`/api/listas/${listId}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
+            headers: { 'Authorization': `Bearer ${token}` },
           });
           if (response.ok) {
             navigate(notification.link);
@@ -91,7 +96,6 @@ function NavigationBar({ user, onLogout }) {
           navigate(notification.link);
         }
       }
-
     } catch (error) {
       console.error('Error handling notification click:', error);
     }
@@ -104,9 +108,7 @@ function NavigationBar({ user, onLogout }) {
 
       const response = await fetch('/api/notifications/mark-all-as-read', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.ok) {
@@ -114,8 +116,6 @@ function NavigationBar({ user, onLogout }) {
           const updatedItems = prev.items.map(item => ({ ...item, is_read: true }));
           return { ...prev, items: updatedItems };
         });
-      } else {
-        console.error('Failed to mark all notifications as read');
       }
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
@@ -129,9 +129,7 @@ function NavigationBar({ user, onLogout }) {
 
       const response = await fetch(`/api/notifications/${notificationId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.ok) {
@@ -139,8 +137,6 @@ function NavigationBar({ user, onLogout }) {
           const updatedItems = prev.items.filter(item => item.id !== notificationId);
           return { ...prev, items: updatedItems, total: prev.total - 1 };
         });
-      } else {
-        console.error('Failed to delete notification');
       }
     } catch (error) {
       console.error('Error deleting notification:', error);
@@ -151,71 +147,79 @@ function NavigationBar({ user, onLogout }) {
     return notifications.items?.filter(n => !n?.is_read).length;
   }, [notifications]);
 
-
   return (
-    <Navbar bg="dark" variant="dark" expand="lg">
-      <Container>
-        <Navbar.Brand as={Link} to="/">Shopping List App</Navbar.Brand>
-        <Navbar.Toggle aria-controls="basic-navbar-nav" />
-        <Navbar.Collapse id="basic-navbar-nav">
-          <Nav className="me-auto">
-            {user && <Nav.Link as={Link} to="/">Home</Nav.Link>}
-            {user && <Nav.Link as={Link} to="/family-panel">Panel Familiar</Nav.Link>}
-            {user && user.is_admin && <Nav.Link as={Link} to="/admin">Admin Dashboard</Nav.Link>}
-          </Nav>
-          <Nav>
-            {user ? (
-              <>
-                <Dropdown align="end">
-                  <Dropdown.Toggle as={Nav.Link} id="dropdown-notifications" className="d-flex align-items-center">
-                    <Bell size={20} />
-                    {unreadCount > 0 && <Badge pill bg="danger" style={{ marginLeft: '5px' }}>{unreadCount}</Badge>}
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu className="dropdown-menu-end" style={{ maxHeight: '400px', overflowY: 'auto', minWidth: '300px', right: 0, left: 'auto' }}>
-                    <Dropdown.Header style={{ whiteSpace: 'normal' }}>{unreadCount > 0 ? `${unreadCount} notificaciones nuevas` : 'No hay notificaciones nuevas'}</Dropdown.Header>
-                    {notifications.items?.length > 0 ? (
-                      <>
-                        <Dropdown.Item as="button" onClick={handleMarkAllRead}>Marcar todas como leídas</Dropdown.Item>
-                        <Dropdown.Divider />
-                        {notifications.items.map(notification => (
-                          <Dropdown.Item
-                            key={notification.id}
-                            onClick={() => handleNotificationClick(notification)}
-                            className={`d-flex justify-content-between align-items-start ${!notification.is_read ? 'fw-bold' : ''}`}
-                            style={{ whiteSpace: 'normal' }}
-                          >
-                            <div>
-                              <small>{new Date(notification.created_at).toLocaleString()}</small><br />
-                              {notification.message}
-                            </div>
-                            <div className="d-flex flex-column ms-2">
-                              <Button variant="outline-danger" size="sm" onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }}>&times;</Button>
-                              {!notification.is_read &&
-                                <Button variant="outline-success" size="sm" className="mt-1" onClick={(e) => { e.stopPropagation(); handleMarkOneRead(notification.id); }}><CheckCircle /></Button>
-                              }
-                            </div>
-                          </Dropdown.Item>
-                        ))}
-                      </>
-                    ) : (
-                      <Dropdown.Item disabled>No hay notificaciones</Dropdown.Item>
-                    )}
-                  </Dropdown.Menu>
-                </Dropdown>
+    <nav className="navbar">
+      <Link to="/" className="nav-brand">
+        <ShoppingCart className="text-gradient" size={28} />
+        <span>Shopping<span style={{color: 'var(--primary-color)'}}>Maker</span></span>
+      </Link>
+      
+      <div className="nav-links">
+        {user ? (
+          <>
+            <Link to="/" className="nav-link">Inicio</Link>
+            <Link to="/family-panel" className="nav-link">Familias</Link>
+            {user.is_admin && <Link to="/admin" className="nav-link">Administrar</Link>}
+            
+            <div className="dropdown-container" ref={dropdownRef}>
+              <button 
+                className="btn-premium btn-secondary" 
+                style={{ padding: '8px 12px', border: 'none', position: 'relative' }}
+                onClick={() => setShowDropdown(!showDropdown)}
+              >
+                <Bell size={20} />
+                {unreadCount > 0 && <span className="badge" style={{ position: 'absolute', top: '-4px', right: '-4px' }}>{unreadCount}</span>}
+              </button>
 
-                <Nav.Link as={Link} to="/profile">Perfil</Nav.Link>
-                <Button variant="outline-light" onClick={handleLogout}>Logout</Button>
-              </>
-            ) : (
-              <>
-                <Nav.Link as={Link} to="/login">Login</Nav.Link>
-                <Nav.Link as={Link} to="/register">Register</Nav.Link>
-              </>
-            )}
-          </Nav>
-        </Navbar.Collapse>
-      </Container>
-    </Navbar>
+              {showDropdown && (
+                <div className="dropdown-menu" style={{ display: 'flex' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', fontWeight: 600 }}>
+                    {unreadCount > 0 ? `${unreadCount} notificaciones nuevas` : 'Notificaciones'}
+                  </div>
+                  
+                  {notifications.items?.length > 0 ? (
+                    <>
+                      <button className="dropdown-item" style={{ color: 'var(--primary-color)', justifyContent: 'center' }} onClick={handleMarkAllRead}>
+                        Marcar todas como leídas
+                      </button>
+                      
+                      {notifications.items.map(notification => (
+                        <div key={notification.id} className="dropdown-item" style={{ fontWeight: !notification.is_read ? 600 : 400 }}>
+                          <div onClick={() => handleNotificationClick(notification)} style={{ flex: 1 }}>
+                            <small style={{ color: 'var(--text-muted)' }}>{new Date(notification.created_at).toLocaleString()}</small><br />
+                            {notification.message}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <button onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--danger-color)', cursor: 'pointer' }}>
+                              <XCircle size={16} />
+                            </button>
+                            {!notification.is_read &&
+                              <button onClick={(e) => { e.stopPropagation(); handleMarkOneRead(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--success-color)', cursor: 'pointer' }}>
+                                <CheckCircle size={16} />
+                              </button>
+                            }
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="dropdown-item" style={{ justifyContent: 'center', color: 'var(--text-muted)', cursor: 'default' }}>No hay notificaciones</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <Link to="/profile" className="nav-link">Perfil</Link>
+            <button className="btn-premium btn-secondary" onClick={handleLogout}>Salir</button>
+          </>
+        ) : (
+          <>
+            <Link to="/login" className="btn-premium btn-secondary">Ingresar</Link>
+            <Link to="/register" className="btn-premium btn-primary">Registrarse</Link>
+          </>
+        )}
+      </div>
+    </nav>
   );
 }
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Modal, Button } from 'react-bootstrap';
+import { UserPlus, User, Lock, Mail, Users, AlertCircle, X } from 'lucide-react';
 
 function Register() {
     const [username, setUsername] = useState('');
@@ -10,6 +10,7 @@ function Register() {
     const [familyCode, setFamilyCode] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
@@ -35,38 +36,119 @@ function Register() {
 
         } catch (err) {
             setError(err.message);
+            setShowErrorModal(true);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="container mt-5" style={{ maxWidth: 400 }}>
-            <h2 className="mb-4">Register</h2>
-            <form onSubmit={handleSubmit}>
-                <input type="text" className="form-control mb-2" placeholder="Usuario" value={username} onChange={e => setUsername(e.target.value)} required />
-                <input type="email" className="form-control mb-2" placeholder="Correo" value={email} onChange={e => setEmail(e.target.value)} required />
-                <input type="password" className="form-control mb-2" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} required />
-                <input type="text" className="form-control mb-2" placeholder="Full Name (optional)" value={nombre} onChange={e => setNombre(e.target.value)} />
-                <input type="text" className="form-control mb-2" placeholder="Family Code (optional)" value={familyCode} onChange={e => setFamilyCode(e.target.value)} />
-                <Button type="submit" className="w-100 mt-2" variant="primary" disabled={loading}>
-                    {loading ? 'Registering...' : 'Register'}
-                </Button>
-            </form>
-            <Link to="/login" className="btn btn-secondary w-100 mt-3">Back to Login</Link>
+        <div className="app-container animate-fade-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px' }}>
+            <div className="glass-panel" style={{ width: '100%', maxWidth: '450px', padding: '40px' }}>
+                <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+                    <h2 className="text-gradient" style={{ fontSize: '2.5rem', marginBottom: '8px' }}>Crear Cuenta</h2>
+                    <p style={{ color: 'var(--text-secondary)' }}>Únete a la plataforma hoy</p>
+                </div>
 
-            {error && (
-                <Modal show={true} onHide={() => setError('')} centered>
-                    <Modal.Header closeButton>
-                        <Modal.Title>Error</Modal.Title>
-                    </Modal.Header>
-                    <Modal.Body>{error}</Modal.Body>
-                    <Modal.Footer>
-                        <Button variant="secondary" onClick={() => setError('')}>
+                <form onSubmit={handleSubmit}>
+                    <div style={{ marginBottom: '16px', position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
+                            <User size={18} />
+                        </div>
+                        <input 
+                            type="text" 
+                            className="premium-input" 
+                            placeholder="Usuario" 
+                            value={username} 
+                            onChange={e => setUsername(e.target.value)} 
+                            required 
+                            style={{ width: '100%', paddingLeft: '48px', height: '48px' }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '16px', position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
+                            <Mail size={18} />
+                        </div>
+                        <input 
+                            type="email" 
+                            className="premium-input" 
+                            placeholder="Correo" 
+                            value={email} 
+                            onChange={e => setEmail(e.target.value)} 
+                            required 
+                            style={{ width: '100%', paddingLeft: '48px', height: '48px' }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '16px', position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
+                            <Lock size={18} />
+                        </div>
+                        <input 
+                            type="password" 
+                            className="premium-input" 
+                            placeholder="Contraseña" 
+                            value={password} 
+                            onChange={e => setPassword(e.target.value)} 
+                            required 
+                            style={{ width: '100%', paddingLeft: '48px', height: '48px' }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '16px', position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
+                            <User size={18} />
+                        </div>
+                        <input 
+                            type="text" 
+                            className="premium-input" 
+                            placeholder="Nombre Completo (Opcional)" 
+                            value={nombre} 
+                            onChange={e => setNombre(e.target.value)} 
+                            style={{ width: '100%', paddingLeft: '48px', height: '48px' }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '32px', position: 'relative' }}>
+                        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
+                            <Users size={18} />
+                        </div>
+                        <input 
+                            type="text" 
+                            className="premium-input" 
+                            placeholder="Código de Familia (Opcional)" 
+                            value={familyCode} 
+                            onChange={e => setFamilyCode(e.target.value)} 
+                            style={{ width: '100%', paddingLeft: '48px', height: '48px' }}
+                        />
+                    </div>
+
+                    <button type="submit" className="btn-premium btn-primary" disabled={loading} style={{ width: '100%', height: '48px', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        {loading ? 'Registrando...' : <><UserPlus size={20} /> Registrarse</>}
+                    </button>
+                </form>
+
+                <div style={{ marginTop: '24px', textAlign: 'center' }}>
+                    <Link to="/login" className="btn-premium btn-secondary" style={{ display: 'inline-block', width: '100%', textDecoration: 'none', height: '48px', lineHeight: '48px', padding: '0' }}>
+                        Volver al Login
+                    </Link>
+                </div>
+            </div>
+
+            {showErrorModal && (
+                <div className="modal-backdrop">
+                    <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center', padding: '32px' }}>
+                        <div style={{ color: 'var(--danger-color)', marginBottom: '16px' }}>
+                            <AlertCircle size={48} style={{ margin: '0 auto' }} />
+                        </div>
+                        <h4 style={{ marginBottom: '16px' }}>Error en el Registro</h4>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>{error}</p>
+                        <button className="btn-premium btn-secondary" style={{ width: '100%' }} onClick={() => setShowErrorModal(false)}>
                             Cerrar
-                        </Button>
-                    </Modal.Footer>
-                </Modal>
+                        </button>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Modal, Form, InputGroup, FormControl, DropdownButton, Dropdown, Row, Col } from 'react-bootstrap';
-import PriceHistoryModal from './PriceHistoryModal'; // Import the new modal
+import ReactDOM from 'react-dom';
+import { Package, Plus, Search, Filter, Edit2, Trash2, History, Image as ImageIcon, X, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import PriceHistoryModal from './PriceHistoryModal';
+import ImageGalleryModal from './ImageGalleryModal';
 
-const API_URL = 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 function ProductManagement() {
   const [products, setProducts] = useState({ items: [], total: 0, page: 1, size: 10 });
@@ -10,26 +12,22 @@ function ProductManagement() {
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [currentProduct, setCurrentProduct] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '', category: '', brand: '', last_price: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', category: '', brand: '', last_price: '', image_url: '' });
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ category: '', brand: '' });
   const [imageFile, setImageFile] = useState(null);
   const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState(null);
+  const [showImageGalleryModal, setShowImageGalleryModal] = useState(false);
+  const [selectedImageFromGallery, setSelectedImageFromGallery] = useState(null);
+  const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
 
   const fetchFamilies = async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/admin/families`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(`/api/admin/families`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (response.ok) {
-        const data = await response.json();
-        setFamilies(data);
-      } else {
-        console.error('Failed to fetch families');
+        setFamilies(await response.json());
       }
     } catch (error) {
       console.error('Error fetching families:', error);
@@ -52,14 +50,10 @@ function ProductManagement() {
     }
 
     try {
-      const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
       if (response.ok) {
-        const data = await response.json();
-        setProducts(data);
+        setProducts(await response.json());
       } else {
-        console.error('Failed to fetch products');
         setProducts({ items: [], total: 0, page: 1, size: 10 });
       }
     } catch (error) {
@@ -94,9 +88,11 @@ function ProductManagement() {
       description: product.description || '',
       category: product.category || '',
       brand: product.brand || '',
-      last_price: product.last_price || ''
+      last_price: product.last_price || '',
+      image_url: product.shared_image ? `${API_BASE_URL}${product.shared_image.file_path}` : ''
     });
     setImageFile(null);
+    setSelectedImageFromGallery(product.shared_image ? { id: product.shared_image.id, file_path: product.shared_image.file_path } : null);
     setShowModal(true);
   };
 
@@ -107,21 +103,18 @@ function ProductManagement() {
     try {
       const response = await fetch(`/api/families/${selectedFamily.id}/products/${productId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
-        fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand); // Refresh the list
-      } else {
-        console.error('Failed to delete product');
+        fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
       }
     } catch (error) {
       console.error('Error deleting product:', error);
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e) => {
+    e.preventDefault();
     const token = localStorage.getItem('token');
     if (!selectedFamily) return;
 
@@ -135,6 +128,22 @@ function ProductManagement() {
       payload.last_price = parseFloat(payload.last_price);
     } else {
       delete payload.last_price;
+    }
+
+    if (selectedImageFromGallery) {
+      payload.shared_image_id = selectedImageFromGallery.id;
+      delete payload.image_url;
+    } else if (currentProduct && currentProduct.shared_image_id && !imageFile) {
+      payload.shared_image_id = currentProduct.shared_image_id;
+      delete payload.image_url;
+    } else if (!imageFile) {
+      payload.shared_image_id = null;
+      delete payload.image_url;
+    }
+
+    if (imageFile) {
+      delete payload.shared_image_id;
+      delete payload.image_url;
     }
 
     try {
@@ -153,32 +162,31 @@ function ProductManagement() {
           await handleImageUpload(product.id, imageFile);
         }
         setShowModal(false);
-        fetchProducts(selectedFamily.id, currentProduct ? products.page : 1, searchTerm, filters.category, filters.brand); // Refresh the list
+        fetchProducts(selectedFamily.id, currentProduct ? products.page : 1, searchTerm, filters.category, filters.brand);
       } else {
         const errorData = await response.json();
-        console.error('Failed to save product:', errorData.detail);
         alert('Failed to save product: ' + errorData.detail);
       }
     } catch (error) {
-      console.error('Error saving product:', error);
       alert('Error saving product.');
     }
   };
 
   const handleImageUpload = async (productId, file) => {
     if (!file) return;
-
     const token = localStorage.getItem('token');
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const res = await fetch(`/api/products/${productId}/upload-image`, {
+      const res = await fetch(`${API_BASE_URL}/products/${productId}/upload-image`, {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
         body: formData,
       });
       if (!res.ok) throw new Error('Error al subir la imagen');
+      const updatedProduct = await res.json();
+      setFormData(prev => ({ ...prev, image_url: updatedProduct.shared_image ? `${API_BASE_URL}${updatedProduct.shared_image.file_path}` : '' }));
     } catch (err) {
       alert(err.message);
     }
@@ -189,10 +197,17 @@ function ProductManagement() {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
+  const handleSelectImageFromGallery = (image) => {
+    setSelectedImageFromGallery(image);
+    setFormData(prev => ({ ...prev, image_url: `${API_BASE_URL}${image.file_path}` }));
+    setShowImageGalleryModal(false);
+  };
+
   const openAddProductModal = () => {
     setCurrentProduct(null);
-    setFormData({ name: '', description: '', category: '', brand: '', last_price: '' });
+    setFormData({ name: '', description: '', category: '', brand: '', last_price: '', image_url: '' });
     setImageFile(null);
+    setSelectedImageFromGallery(null);
     setShowModal(true);
   };
 
@@ -203,149 +218,240 @@ function ProductManagement() {
 
   return (
     <div>
-      <h2>Product Management</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <h2 style={{ margin: 0 }}>Gestión de Productos</h2>
+      </div>
 
-      <DropdownButton
-        id="dropdown-basic-button"
-        title={selectedFamily ? selectedFamily.nombre : "Select a Family"}
-        onSelect={(eventKey) => {
-          const family = families.find(f => f.id.toString() === eventKey);
-          setSelectedFamily(family);
-        }}
-        className="mb-3"
-      >
-        {families.map(family => (
-          <Dropdown.Item key={family.id} eventKey={family.id}>{family.nombre}</Dropdown.Item>
-        ))}
-      </DropdownButton>
+      <div style={{ position: 'relative', marginBottom: '24px', zIndex: 100 }}>
+        <div 
+            className="premium-input" 
+            style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: 'var(--panel-bg)' }}
+            onClick={() => setShowFamilyDropdown(!showFamilyDropdown)}
+        >
+            <span>{selectedFamily ? selectedFamily.nombre : "Seleccionar Familia..."}</span>
+            <ChevronDown size={20} style={{ transition: 'transform 0.3s', transform: showFamilyDropdown ? 'rotate(180deg)' : 'rotate(0)' }} />
+        </div>
+        
+        {showFamilyDropdown && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 9999, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', maxHeight: '300px', overflowY: 'auto' }}>
+                {families.map(family => (
+                    <div 
+                        key={family.id} 
+                        className="dropdown-item" 
+                        onClick={() => { setSelectedFamily(family); setShowFamilyDropdown(false); }}
+                    >
+                        {family.nombre}
+                    </div>
+                ))}
+            </div>
+        )}
+      </div>
 
       {selectedFamily && (
-        <>
-          <Button variant="primary" onClick={openAddProductModal}>Add Product</Button>
-          <InputGroup className="mt-3 mb-3">
-            <FormControl
-              placeholder="Search for products..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </InputGroup>
-          <Row className="mb-3">
-            <Col md={6}>
-              <FormControl
-                placeholder="Filter by category"
-                name="category"
-                value={filters.category}
-                onChange={handleFilterChange}
-              />
-            </Col>
-            <Col md={6}>
-              <FormControl
-                placeholder="Filter by brand"
-                name="brand"
-                value={filters.brand}
-                onChange={handleFilterChange}
-              />
-            </Col>
-          </Row>
-          <Table striped bordered hover>
-            <thead>
-              <tr>
-                <th>Image</th>
-                <th>Name</th>
-                <th>Description</th>
-                <th>Category</th>
-                <th>Brand</th>
-                <th>Last Price</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(products.items || []).map(product => (
-                <tr key={product.id}>
-                  <td>
-                    {
-                      <img
-                        src={product.image_url ? `data:image/webp;base64,${product.image_url}` : `/img_placeholder.png`}
-                        alt={product.name}
-                        style={{ width: 50, height: 50, objectFit: 'cover' }}
-                      />
-                    }
-                  </td>
-                  <td>{product.name}</td>
-                  <td>{product.description}</td>
-                  <td>{product.category}</td>
-                  <td>{product.brand}</td>
-                  <td>{product.last_price ? `${product.last_price.toFixed(2)}` : 'N/A'}</td>
-                  <td>
-                    <Button variant="warning" size="sm" onClick={() => handleEdit(product)}>Edit</Button>{' '}
-                    <Button variant="danger" size="sm" onClick={() => handleDelete(product.id)}>Delete</Button>{' '}
-                    <Button variant="info" size="sm" onClick={() => handleShowPriceHistory(product)}>History</Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-          <div className="d-flex justify-content-center align-items-center mt-3">
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              disabled={!products.items.length || products.page <= 1}
-              onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm, filters.category, filters.brand)}
-            >
-              Anterior
-            </Button>
-            <span className="mx-2">
-              Página {products.page} de {products.total ? Math.ceil(products.total / products.size) : 1}
-            </span>
-            <Button
-              variant="outline-secondary"
-              size="sm"
-              disabled={!products.items.length || products.page >= Math.ceil(products.total / products.size)}
-              onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm, filters.category, filters.brand)}
-            >
-              Siguiente
-            </Button>
+        <div className="animate-fade-in">
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+            <button className="btn-premium btn-primary" onClick={openAddProductModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plus size={18} /> Agregar Producto
+            </button>
+            
+            <div style={{ position: 'relative', flex: '1 1 250px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                <input 
+                    type="text" 
+                    className="premium-input" 
+                    placeholder="Buscar productos..." 
+                    style={{ width: '100%', paddingLeft: '40px' }}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            
+            <div style={{ position: 'relative', flex: '1 1 200px' }}>
+                <Filter size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                <input 
+                    type="text" 
+                    className="premium-input" 
+                    placeholder="Categoría" 
+                    name="category"
+                    style={{ width: '100%', paddingLeft: '40px' }}
+                    value={filters.category}
+                    onChange={handleFilterChange}
+                />
+            </div>
+            
+            <div style={{ position: 'relative', flex: '1 1 200px' }}>
+                <Filter size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                <input 
+                    type="text" 
+                    className="premium-input" 
+                    placeholder="Marca" 
+                    name="brand"
+                    style={{ width: '100%', paddingLeft: '40px' }}
+                    value={filters.brand}
+                    onChange={handleFilterChange}
+                />
+            </div>
           </div>
-        </>
+
+          <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Imagen</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nombre</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Descripción</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Categoría</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Marca</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Precio M. Reciente</th>
+                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {(products.items || []).map((product, index) => (
+                        <tr key={product.id} style={{ borderBottom: '1px solid var(--border-color)', background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
+                            <td style={{ padding: '12px 16px' }}>
+                                <img
+                                    src={product.shared_image ? `${API_BASE_URL}${product.shared_image.file_path}` : `/img_placeholder.png`}
+                                    alt={product.name}
+                                    style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                                />
+                            </td>
+                            <td style={{ padding: '12px 16px' }}>{product.name}</td>
+                            <td style={{ padding: '12px 16px', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.description}</td>
+                            <td style={{ padding: '12px 16px' }}>{product.category || '-'}</td>
+                            <td style={{ padding: '12px 16px' }}>{product.brand || '-'}</td>
+                            <td style={{ padding: '12px 16px' }}>{product.last_price ? `$${product.last_price.toFixed(2)}` : 'N/A'}</td>
+                            <td style={{ padding: '12px 16px' }}>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button className="btn-premium" style={{ background: 'rgba(234, 179, 8, 0.1)', color: 'var(--warning-color)', padding: '6px' }} onClick={() => handleEdit(product)} title="Editar">
+                                        <Edit2 size={16} />
+                                    </button>
+                                    <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px' }} onClick={() => handleShowPriceHistory(product)} title="Historial">
+                                        <History size={16} />
+                                    </button>
+                                    <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', padding: '6px' }} onClick={() => handleDelete(product.id)} title="Eliminar">
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            {(!products.items || products.items.length === 0) && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>No se encontraron productos.</div>}
+          </div>
+
+          {(products.total > 0 && products.items.length > 0) && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '24px' }}>
+                <button 
+                    className="btn-premium btn-secondary" 
+                    style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    disabled={products.page <= 1}
+                    onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm, filters.category, filters.brand)}
+                >
+                    <ChevronLeft size={18} /> Anterior
+                </button>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                    Página {products.page} de {Math.ceil(products.total / products.size)}
+                </span>
+                <button 
+                    className="btn-premium btn-secondary" 
+                    style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    disabled={products.page >= Math.ceil(products.total / products.size)}
+                    onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm, filters.category, filters.brand)}
+                >
+                    Siguiente <ChevronRight size={18} />
+                </button>
+              </div>
+          )}
+        </div>
       )}
 
-      <Modal show={showModal} onHide={() => setShowModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>{currentProduct ? 'Edit Product' : 'Add Product'}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group controlId="name">
-              <Form.Label>Name</Form.Label>
-              <Form.Control type="text" value={formData.name} onChange={handleFormChange} />
-            </Form.Group>
-            <Form.Group controlId="description">
-              <Form.Label>Description</Form.Label>
-              <Form.Control as="textarea" rows={3} value={formData.description} onChange={handleFormChange} />
-            </Form.Group>
-            <Form.Group controlId="category">
-              <Form.Label>Category</Form.Label>
-              <Form.Control type="text" value={formData.category} onChange={handleFormChange} />
-            </Form.Group>
-            <Form.Group controlId="brand">
-              <Form.Label>Brand</Form.Label>
-              <Form.Control type="text" value={formData.brand} onChange={handleFormChange} />
-            </Form.Group>
-            <Form.Group controlId="last_price">
-              <Form.Label>Price</Form.Label>
-              <Form.Control type="number" placeholder="Enter price" value={formData.last_price} onChange={handleFormChange} />
-            </Form.Group>
-            <Form.Group controlId="image">
-              <Form.Label>Image</Form.Label>
-              <Form.Control type="file" onChange={(e) => setImageFile(e.target.files[0])} />
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>Close</Button>
-          <Button variant="primary" onClick={handleSave}>Save Changes</Button>
-        </Modal.Footer>
-      </Modal>
+      {showModal && ReactDOM.createPortal(
+        <div className="modal-backdrop" onClick={() => setShowModal(false)}>
+            <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="modal-header">
+                    <h5 className="modal-title">{currentProduct ? 'Editar Producto' : 'Agregar Producto'}</h5>
+                    <button className="modal-close" onClick={() => setShowModal(false)}><X size={24} /></button>
+                </div>
+                <form onSubmit={handleSave}>
+                    <div className="modal-body">
+                        <div style={{ marginBottom: '16px' }}>
+                            <label htmlFor="name" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Nombre</label>
+                            <input type="text" id="name" className="premium-input" style={{ width: '100%' }} value={formData.name} onChange={handleFormChange} required />
+                        </div>
+                        <div style={{ marginBottom: '16px' }}>
+                            <label htmlFor="description" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Descripción</label>
+                            <textarea id="description" className="premium-input" style={{ width: '100%', minHeight: '80px' }} value={formData.description} onChange={handleFormChange} />
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                            <div style={{ flex: 1 }}>
+                                <label htmlFor="category" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Categoría</label>
+                                <input type="text" id="category" className="premium-input" style={{ width: '100%' }} value={formData.category} onChange={handleFormChange} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <label htmlFor="brand" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Marca</label>
+                                <input type="text" id="brand" className="premium-input" style={{ width: '100%' }} value={formData.brand} onChange={handleFormChange} />
+                            </div>
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label htmlFor="last_price" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Precio</label>
+                            <input type="number" id="last_price" step="0.01" className="premium-input" style={{ width: '100%' }} value={formData.last_price} onChange={handleFormChange} />
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Imagen</label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                                <img 
+                                    src={formData.image_url ? (formData.image_url.startsWith('http') || formData.image_url.startsWith('blob') ? formData.image_url : `${API_BASE_URL}${formData.image_url}`) : '/img_placeholder.png'} 
+                                    alt="Product" 
+                                    style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} 
+                                />
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <button 
+                                        type="button" 
+                                        className="btn-premium btn-secondary" 
+                                        style={{ padding: '6px 16px', fontSize: '0.9rem' }}
+                                        onClick={() => {
+                                            const input = document.createElement('input');
+                                            input.type = 'file';
+                                            input.accept = 'image/jpeg,image/png';
+                                            input.onchange = (e) => {
+                                                const file = e.target.files[0];
+                                                if (file) {
+                                                    setImageFile(file);
+                                                    setSelectedImageFromGallery(null);
+                                                    setFormData(prev => ({ ...prev, image_url: URL.createObjectURL(file) }));
+                                                }
+                                            };
+                                            input.click();
+                                        }}
+                                    >
+                                        Subir nueva imagen
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        className="btn-premium" 
+                                        style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                                        onClick={() => setShowImageGalleryModal(true)}
+                                    >
+                                        <ImageIcon size={16} /> De la galería
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="btn-premium btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
+                        <button type="submit" className="btn-premium btn-primary">Guardar</button>
+                    </div>
+                </form>
+            </div>
+        </div>,
+        document.body
+      )}
 
       {selectedProductForHistory && (
         <PriceHistoryModal
@@ -354,6 +460,12 @@ function ProductManagement() {
           item={selectedProductForHistory}
         />
       )}
+
+      <ImageGalleryModal
+        show={showImageGalleryModal}
+        handleClose={() => setShowImageGalleryModal(false)}
+        handleSelectImage={handleSelectImageFromGallery}
+      />
     </div>
   );
 }

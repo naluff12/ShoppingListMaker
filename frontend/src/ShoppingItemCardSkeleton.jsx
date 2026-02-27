@@ -1,35 +1,32 @@
 import React from 'react';
-import { Card, Row, Col } from 'react-bootstrap';
 import './Skeleton.css';
 
 const ShoppingItemCardSkeleton = () => {
     return (
-        <Card className="mb-3 shadow-sm">
-            <Card.Header className="d-flex justify-content-between align-items-center">
-                <div className="skeleton skeleton-text" style={{ width: '60%' }}></div>
-                <div className="skeleton skeleton-switch"></div>
-            </Card.Header>
-            <Card.Body>
-                <Row>
-                    <Col xs={4} md={3} className="d-flex align-items-center justify-content-center">
-                        <div className="skeleton skeleton-image"></div>
-                    </Col>
-                    <Col xs={8} md={9}>
-                        <div className="skeleton skeleton-text" style={{ width: '40%' }}></div>
-                        <div className="skeleton skeleton-text"></div>
-                        <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
-                        <div className="d-flex align-items-center mt-3">
-                            <div className="skeleton skeleton-button"></div>
-                            <div className="skeleton skeleton-button"></div>
-                            <div className="skeleton skeleton-button"></div>
-                        </div>
-                    </Col>
-                </Row>
-            </Card.Body>
-            <Card.Footer>
-                <div className="skeleton skeleton-text" style={{ width: '40%' }}></div>
-            </Card.Footer>
-        </Card>
+        <div className="glass-panel" style={{ padding: '0', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '16px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div className="skeleton skeleton-text" style={{ width: '60%', margin: 0 }}></div>
+                <div className="skeleton skeleton-switch" style={{ margin: 0 }}></div>
+            </div>
+            <div style={{ padding: '16px', display: 'flex', gap: '16px', overflow: 'hidden' }}>
+                <div style={{ width: '100px', height: '100px', flexShrink: 0 }}>
+                    <div className="skeleton skeleton-image" style={{ width: '100px', height: '100px' }}></div>
+                </div>
+                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <div className="skeleton skeleton-text" style={{ width: '40%' }}></div>
+                    <div className="skeleton skeleton-text" style={{ width: '100%' }}></div>
+                    <div className="skeleton skeleton-text" style={{ width: '80%' }}></div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                        <div className="skeleton skeleton-button"></div>
+                        <div className="skeleton skeleton-button"></div>
+                        <div className="skeleton skeleton-button"></div>
+                    </div>
+                </div>
+            </div>
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
+                <div className="skeleton skeleton-text" style={{ width: '40%', margin: 0 }}></div>
+            </div>
+        </div>
     );
 };
 

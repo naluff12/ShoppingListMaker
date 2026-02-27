@@ -1,18 +1,29 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
-import { Button, Spinner, Form, InputGroup, Card, Badge, OverlayTrigger, Tooltip, Modal, ProgressBar, Dropdown, DropdownButton, FormControl } from 'react-bootstrap';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Eye, EyeSlash, PlusCircle, PlusLg, PencilSquare, Funnel } from 'react-bootstrap-icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { Eye, EyeOff, PlusCircle, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
-import './ShoppingListView.css'; // Importar los nuevos estilos
-import PreviousItemsModal from './PreviousItemsModal'; // Importar el modal
-import ShoppingItemCard from './ShoppingItemCard'; // Importar el nuevo componente
+import './ShoppingListView.css';
+import PreviousItemsModal from './PreviousItemsModal';
+import ShoppingItemCard from './ShoppingItemCard';
 import ShoppingListItem from './ShoppingListItem';
-import PriceHistoryModal from './PriceHistoryModal'; // Importar el modal de historial de precios
+import PriceHistoryModal from './PriceHistoryModal';
 import ShoppingItemCardSkeleton from './ShoppingItemCardSkeleton';
 import ShoppingListItemSkeleton from './ShoppingListItemSkeleton';
+import ImageGalleryModal from './ImageGalleryModal';
+import { useWebSocket } from './useWebSocket';
 
 const API_URL = 'http://localhost:8000';
+
+function ProgressBar({ progress, variant, label }) {
+    const bgColor = variant === 'danger' ? 'var(--danger-color)' : variant === 'success' ? 'var(--success-color)' : variant === 'warning' ? 'var(--warning-color)' : 'var(--info-color, #3b82f6)';
+    return (
+        <div style={{ position: 'relative', width: '100%', height: '24px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', overflow: 'hidden', marginTop: '8px' }}>
+            <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, backgroundColor: bgColor, transition: 'width 0.3s ease' }}></div>
+            {label && <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{label}</div>}
+        </div>
+    );
+}
 
 function ShoppingListView() {
     const location = useLocation();
@@ -45,6 +56,8 @@ function ShoppingListView() {
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [quickAddItemName, setQuickAddItemName] = useState('');
     const [isQuickAdding, setIsQuickAdding] = useState(false);
+    
+    // Modals & Popovers
     const [showBudgetModal, setShowBudgetModal] = useState(false);
     const [newBudget, setNewBudget] = useState('');
     const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
@@ -54,13 +67,33 @@ function ShoppingListView() {
     const [itemsTotalCount, setItemsTotalCount] = useState(0);
     const [purchasedItemsCount, setPurchasedItemsCount] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState(''); // e.g., 'comprado', 'pendiente'
+    
+    // Filters
+    const [showFilters, setShowFilters] = useState(false);
+    const filtersRef = useRef(null);
+    const [statusFilter, setStatusFilter] = useState(''); 
     const [categoryFilter, setCategoryFilter] = useState('');
     const [brandFilter, setBrandFilter] = useState('');
     const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
+    
+    // App Modals
     const [showNewProductModal, setShowNewProductModal] = useState(false);
     const [modalBrand, setModalBrand] = useState('');
     const [modalCategory, setModalCategory] = useState('');
+    const [showGalleryModal, setShowGalleryModal] = useState(false);
+    const [selectedItemForGallery, setSelectedItemForGallery] = useState(null);
+    
+    // WebSocket setup moved down
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (filtersRef.current && !filtersRef.current.contains(event.target)) {
+                setShowFilters(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (!listId) return;
@@ -98,14 +131,14 @@ function ShoppingListView() {
                 body: JSON.stringify({
                     list_id: listId,
                     nombre: quickAddItemName,
-                    cantidad: 1, // Default quantity
-                    unit: 'piezas' // Default unit
+                    cantidad: 1, 
+                    unit: 'piezas' 
                 })
             });
             if (!res.ok) throw new Error('Error al agregar el producto');
             await res.json();
             setQuickAddItemName('');
-            fetchListAndBlame(itemsPage); // Recargar la página actual de items
+            fetchListAndBlame(itemsPage); 
             fetchBudgetDetails();
         } catch (err) {
             alert(err.message);
@@ -197,6 +230,20 @@ function ShoppingListView() {
         return () => clearTimeout(handler);
     }, [listId, searchTerm, statusFilter, categoryFilter, brandFilter]);
 
+    // WebSocket Integration
+    const familyId = listDetails?.calendar?.family_id || null;
+    const { lastMessage, isConnected } = useWebSocket(familyId);
+
+    useEffect(() => {
+        if (lastMessage) {
+            if (lastMessage.list_id && lastMessage.list_id === parseInt(listId)) {
+                console.log("WebSocket update received for current list UI. Trigerring refresh...", lastMessage.action);
+                fetchListAndBlame(itemsPage);
+                fetchBudgetDetails();
+            }
+        }
+    }, [lastMessage]);
+
     const handleShowItemBlame = async (itemId) => {
         if (showItemBlame === itemId) {
             setShowItemBlame(null);
@@ -255,7 +302,7 @@ function ShoppingListView() {
             setNewPrice('');
             setNewBrand('');
             setNewCategory('');
-            fetchListAndBlame(); // Recargar todo
+            fetchListAndBlame();
             fetchBudgetDetails();
         } catch (err) {
             alert(err.message);
@@ -302,7 +349,7 @@ function ShoppingListView() {
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                 body: JSON.stringify({ items })
             });
-            fetchListAndBlame(); // Recargar todo
+            fetchListAndBlame(); 
             fetchBudgetDetails();
         } catch (err) {
             alert('Error adding items to the list.');
@@ -348,7 +395,7 @@ function ShoppingListView() {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
             if (!res.ok) throw new Error('Error al eliminar item');
-            fetchListAndBlame(); // Recargar todo
+            fetchListAndBlame(); 
             fetchBudgetDetails();
         } catch (err) {
             alert(err.message);
@@ -401,7 +448,6 @@ function ShoppingListView() {
         const parsedValue = parseFloat(value);
 
         try {
-            // Solo enviar la actualización si el valor es un número válido
             if (!isNaN(parsedValue)) {
                 const token = localStorage.getItem('token');
                 const res = await fetch(`/api/items/${itemId}`,
@@ -417,9 +463,8 @@ function ShoppingListView() {
             }
         } catch (err) {
             alert(err.message);
-            fetchListAndBlame(); // Recargar en caso de error
+            fetchListAndBlame(); 
         } finally {
-            // Siempre restablecer el estado de edición para volver a mostrar la insignia
             setEditingPrice(null);
         }
     };
@@ -447,14 +492,14 @@ function ShoppingListView() {
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const res = await fetch(`/api/items/${itemId}/upload-image`, {
+            const res = await fetch(`${API_URL}/items/${itemId}/upload-image`, {
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + token },
                 body: formData,
             });
             if (!res.ok) throw new Error('Error al subir la imagen');
             const updatedItem = await res.json();
-            setItems(items.map(i => i.id === itemId ? { ...i, product: { ...i.product, image_url: updatedItem.image_url } } : i));
+            setItems(items.map(i => i.id === itemId ? updatedItem : i));
         } catch (err) {
             alert(err.message);
         }
@@ -508,6 +553,32 @@ function ShoppingListView() {
         setShowPriceHistoryModal(true);
     };
 
+    const handleShowGallery = (item) => {
+        setSelectedItemForGallery(item);
+        setShowGalleryModal(true);
+    };
+
+    const handleImageSelect = async (image) => {
+        if (!selectedItemForGallery) return;
+
+        const token = localStorage.getItem('token');
+        try {
+            const res = await fetch(`${API_URL}/items/${selectedItemForGallery.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify({
+                    shared_image_id: image.id
+                })
+            });
+            if (!res.ok) throw new Error('Error al actualizar la imagen del item');
+            const updatedItem = await res.json();
+            setItems(items.map(i => i.id === selectedItemForGallery.id ? updatedItem : i));
+            setShowGalleryModal(false);
+        } catch (err) {
+            alert(err.message);
+        }
+    };
+
     const budget = listDetails?.budget || 0;
     const budgetProgress = budget > 0 ? (budgetDetails.total_estimado / budget) * 100 : 0;
     const budgetVariant = budgetProgress > 100 ? 'danger' : budgetProgress > 75 ? 'warning' : 'success';
@@ -515,261 +586,309 @@ function ShoppingListView() {
     const itemsProgress = itemsTotalCount > 0 ? (purchasedItemsCount / itemsTotalCount) * 100 : 0;
 
     return (
-        <div className="container mt-4" style={{ maxWidth: 800 }}>
-            <Button variant="secondary" className="mb-3" onClick={() => navigate('/calendar', { state: { calendar: listDetails.calendar } })}>Volver</Button>
-            <Card className="mb-4">
-                <Card.Body>
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                        <h2 className="mb-0">{listDetails?.name || ''}</h2>
-                        {listDetails && (
-                            <span onClick={handleListStatusChange} style={{ cursor: 'pointer', color: listDetails.status === 'revisada' ? 'green' : 'red' }} title={listDetails.status === 'revisada' ? 'Marcar como Pendiente' : 'Marcar como Revisada'}>
-                                {listDetails.status === 'revisada' ? <Eye size={24} /> : <EyeSlash size={24} />}
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Budget Section */}
-                    <div className="mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                            <h5>Presupuesto: ${budget.toFixed(2)}</h5>
-                            <Button variant="outline-primary" size="sm" onClick={() => setShowBudgetModal(true)}><PencilSquare className="me-1" /> Editar</Button>
+        <div className="app-container animate-fade-in" style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
+            
+            <button className="btn-premium btn-secondary mb-4" onClick={() => navigate('/calendar', { state: { calendar: listDetails?.calendar } })} style={{ display: 'inline-flex', padding: '8px 16px' }}>
+                <ArrowLeft size={18} /> Volver
+            </button>
+            
+            <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                    <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
+                    {listDetails && (
+                        <div 
+                            onClick={handleListStatusChange} 
+                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: 'var(--border-radius-md)', background: listDetails.status === 'revisada' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: listDetails.status === 'revisada' ? 'var(--success-color)' : 'var(--danger-color)', transition: 'all 0.3s ease' }} 
+                            title={listDetails.status === 'revisada' ? 'Marcar como Pendiente' : 'Marcar como Revisada'}
+                        >
+                            {listDetails.status === 'revisada' ? <><Eye size={20} /> <span style={{ fontWeight: 600 }}>Revisada</span></> : <><EyeOff size={20} /> <span style={{ fontWeight: 600 }}>No Revisada</span></>}
                         </div>
-                        <ProgressBar now={budgetProgress} variant={budgetVariant} label={`Estimado ${budgetProgress.toFixed(0)}%`} />
-                        <div className="d-flex justify-content-between mt-1 text-muted small">
-                            <span>Total Estimado: ${budgetDetails.total_estimado.toFixed(2)}</span>
-                            <span>Restante: <span className={budgetDetails.total_estimado > budget ? 'text-danger' : 'text-success'}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
-                        </div>
-                        <ProgressBar className="mt-2" now={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
-                        
-                        <h5 className="mt-3">Progreso de Artículos</h5>
-                        <ProgressBar now={itemsProgress} label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
-                    </div>
-                    <hr />
+                    )}
+                </div>
 
-                    <Form onSubmit={handleAdd} className="mb-3 position-relative" style={{ zIndex: 10 }}>
-                        <InputGroup>
-                            <Form.Control
-                                type="text"
-                                placeholder="Nuevo producto (con detalles)"
-                                value={newItem}
-                                onChange={async (e) => {
-                                    const value = e.target.value;
-                                    setNewItem(value);
-                                    setHighlightedIndex(-1);
-                                    setProductsPage(1);
-                                    if (!value.trim() || !listDetails?.calendar?.family_id) {
-                                        setProducts([]);
-                                        return;
-                                    }
-                                    fetchProducts(value, 1);
-                                }}
-                                onKeyDown={(e) => {
-                                    if (products.length === 0) return;
-                                    if (e.key === "ArrowDown") {
-                                        e.preventDefault();
-                                        setHighlightedIndex((prev) => (prev + 1) % products.length);
-                                    } else if (e.key === "ArrowUp") {
-                                        e.preventDefault();
-                                        setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
-                                    } else if (e.key === "Enter" && highlightedIndex >= 0) {
-                                        e.preventDefault();
-                                        const selected = products[highlightedIndex];
-                                        if (selected) {
-                                            setNewItem(selected.name);
-                                            if (selected.last_price) {
-                                                setNewPrice(selected.last_price);
-                                            }
-                                            setNewBrand(selected.brand);
-                                            setNewCategory(selected.category);
-                                            setProducts([]);
+                {/* Budget Section */}
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '24px', borderRadius: 'var(--border-radius-lg)', marginTop: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.4rem' }}>Presupuesto: ${budget.toFixed(2)}</h4>
+                        <button className="btn-premium btn-secondary" style={{ padding: '6px 12px' }} onClick={() => setShowBudgetModal(true)}>
+                            <Pencil size={16} /> Editar
+                        </button>
+                    </div>
+                    
+                    <ProgressBar progress={budgetProgress} variant={budgetVariant} label={`Estimado ${budgetProgress.toFixed(0)}%`} />
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontWeight: 500 }}>Total Estimado: ${budgetDetails.total_estimado.toFixed(2)}</span>
+                        <span>Restante: <span style={{ fontWeight: 600, color: budgetDetails.total_estimado > budget ? 'var(--danger-color)' : 'var(--success-color)' }}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
+                    </div>
+                    
+                    <div style={{ marginTop: '24px' }}>
+                        <ProgressBar progress={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
+                    </div>
+                    
+                    <div style={{ marginTop: '24px' }}>
+                        <h5 style={{ fontSize: '1.1rem', marginBottom: '8px', color: 'var(--text-primary)' }}>Progreso de Artículos</h5>
+                        <ProgressBar progress={itemsProgress} variant="success" label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
+                    </div>
+                </div>
+
+                <div style={{ height: '1px', background: 'var(--border-color)', margin: '32px 0' }} />
+
+                <form onSubmit={handleAdd} style={{ display: 'flex', gap: '8px', position: 'relative', zIndex: 10 }}>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                        <input
+                            type="text"
+                            className="premium-input"
+                            placeholder="Nuevo producto (con detalles)"
+                            value={newItem}
+                            onChange={async (e) => {
+                                const value = e.target.value;
+                                setNewItem(value);
+                                setHighlightedIndex(-1);
+                                setProductsPage(1);
+                                if (!value.trim() || !listDetails?.calendar?.family_id) {
+                                    setProducts([]);
+                                    return;
+                                }
+                                fetchProducts(value, 1);
+                            }}
+                            onKeyDown={(e) => {
+                                if (products.length === 0) return;
+                                if (e.key === "ArrowDown") {
+                                    e.preventDefault();
+                                    setHighlightedIndex((prev) => (prev + 1) % products.length);
+                                } else if (e.key === "ArrowUp") {
+                                    e.preventDefault();
+                                    setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
+                                } else if (e.key === "Enter" && highlightedIndex >= 0) {
+                                    e.preventDefault();
+                                    const selected = products[highlightedIndex];
+                                    if (selected) {
+                                        setNewItem(selected.name);
+                                        if (selected.last_price) {
+                                            setNewPrice(selected.last_price);
                                         }
+                                        setNewBrand(selected.brand);
+                                        setNewCategory(selected.category);
+                                        setProducts([]);
                                     }
-                                }}
-                                onFocus={(e) => { if (products.length > 0) e.target.parentElement.classList.add("show"); }}
-                                onBlur={() => { setTimeout(() => { const dropdown = document.querySelector(".autocomplete-dropdown"); if (dropdown) dropdown.style.display = "none"; }, 200); }}
-                            />
-                            <Form.Control type="number" value={newQuantity} onChange={(e) => setNewQuantity(parseFloat(e.target.value))} style={{ maxWidth: '80px' }} />
-                            <Form.Select value={newUnit} onChange={(e) => setNewUnit(e.target.value)} style={{ maxWidth: '100px' }}>
-                                <option value="piezas">piezas</option>
-                                <option value="kg">kg</option>
-                                <option value="g">g</option>
-                                <option value="L">L</option>
-                                <option value="ml">ml</option>
-                            </Form.Select>
-                            <Button type="submit" variant="primary" disabled={loading}>Agregar</Button>
-                            <OverlayTrigger
-                                placement="top"
-                                overlay={<Tooltip id="tooltip-add-previous">Agregar productos no comprados de otra lista</Tooltip>}
-                            >
-                                <Button variant="info" onClick={() => setShowPreviousItemsModal(true)}>
-                                    <PlusCircle />
-                                </Button>
-                            </OverlayTrigger>
-                        </InputGroup>
+                                }
+                            }}
+                            onBlur={() => { setTimeout(() => { setProducts([]); }, 200); }}
+                        />
                         {products.length > 0 && newItem.trim() !== "" && (
-                            <div className="autocomplete-dropdown position-absolute bg-white border rounded shadow-sm mt-1 w-100" style={{ maxHeight: "350px", overflowY: "auto" }} onMouseDown={(e) => e.preventDefault()}>
+                            <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', marginTop: '4px', maxHeight: "350px", overflowY: "auto", padding: '8px' }} onMouseDown={(e) => e.preventDefault()}>
                                 {products.map((p, index) => {
-                                    const highlightMatch = (text, query) => {
-                                        const regex = new RegExp(`(${query})`, "gi");
-                                        const parts = text.split(regex);
-                                        return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <span key={i} style={{ fontWeight: "bold", color: "#007bff" }}>{part}</span> : part);
-                                    };
                                     return (
-                                        <div key={p.id} className={`d-flex align-items-center p-2 hover-bg-light ${index === highlightedIndex ? "bg-light border-start border-primary border-3" : ""}`} style={{ cursor: "pointer" }} onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} onMouseEnter={() => setHighlightedIndex(index)}>
-                                            {<img src={p.image_url ? `data:image/webp;base64,${p.image_url}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 10 }} />}
+                                        <div 
+                                            key={p.id} 
+                                            className="dropdown-item" 
+                                            style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: index === highlightedIndex ? 'rgba(255,255,255,0.1)' : 'transparent', borderRadius: '4px', cursor: 'pointer', marginBottom: '4px' }}
+                                            onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} 
+                                            onMouseEnter={() => setHighlightedIndex(index)}
+                                        >
+                                            <img src={p.shared_image ? `${API_URL}${p.shared_image.file_path}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
                                             <div>
-                                                <span>{highlightMatch(p.name, newItem)}</span>
-                                                <div className="text-muted small">{p.brand} / {p.category}</div>
+                                                <div style={{ fontWeight: 500 }}>{p.name}</div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.brand} / {p.category}</div>
                                             </div>
                                         </div>
                                     );
                                 })}
-                                <div className="d-flex justify-content-between p-2">
-                                    <Button size="sm" disabled={productsPage <= 1} onClick={() => fetchProducts(newItem, productsPage - 1)}>Anterior</Button>
-                                    <span>Página {productsPage} de {productsTotalPages}</span>
-                                    <Button size="sm" disabled={productsPage >= productsTotalPages} onClick={() => fetchProducts(newItem, productsPage + 1)}>Siguiente</Button>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderTop: '1px solid var(--border-color)', marginTop: '8px' }}>
+                                    <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage <= 1} onClick={() => fetchProducts(newItem, productsPage - 1)}>Anterior</button>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Página {productsPage} de {productsTotalPages}</span>
+                                    <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage >= productsTotalPages} onClick={() => fetchProducts(newItem, productsPage + 1)}>Siguiente</button>
                                 </div>
                             </div>
                         )}
-                    </Form>
-
-                    <hr />
-
-                    <div className="d-flex justify-content-end gap-3">
-                        <h5>Total Comprado: <Badge bg="success">${budgetDetails.total_comprado.toFixed(2)}</Badge></h5>
                     </div>
-                </Card.Body>
-            </Card>
+                    
+                    <input type="number" className="premium-input" value={newQuantity} onChange={(e) => setNewQuantity(parseFloat(e.target.value))} style={{ width: '80px', flex: 'none' }} min="1" step="any" />
+                    
+                    <select className="premium-input" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} style={{ width: '120px', flex: 'none' }}>
+                        <option value="piezas">piezas</option>
+                        <option value="kg">kg</option>
+                        <option value="g">g</option>
+                        <option value="L">L</option>
+                        <option value="ml">ml</option>
+                    </select>
+                    
+                    <button type="submit" className="btn-premium btn-primary" disabled={loading} style={{ padding: '8px 24px' }}>Agregar</button>
+                    
+                    <button type="button" className="btn-premium" style={{ background: 'var(--info-color)', padding: '8px 16px' }} title="Agregar productos no comprados de otra lista" onClick={() => setShowPreviousItemsModal(true)}>
+                        <PlusCircle size={20} color="white" />
+                    </button>
+                </form>
 
-            <InputGroup className="mb-3">
-                <Form.Control
-                    placeholder="Buscar items..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <DropdownButton
-                    variant="outline-secondary"
-                    title={<Funnel />}
-                    id="input-group-dropdown-2"
-                    align="end"
-                >
-                    <div className="p-3" style={{ width: '250px' }}>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Estado</Form.Label>
-                            <Form.Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                                <option value="">Todos</option>
-                                <option value="pendiente">Pendiente</option>
-                                <option value="comprado">Comprado</option>
-                            </Form.Select>
-                        </Form.Group>
-                        <Form.Group className="mb-3">
-                            <Form.Label>Categoría</Form.Label>
-                            <Form.Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                                <option value="">Todas</option>
-                                {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
-                            </Form.Select>
-                        </Form.Group>
-                        <Form.Group>
-                            <Form.Label>Marca</Form.Label>
-                            <Form.Select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
-                                <option value="">Todas</option>
-                                {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
-                            </Form.Select>
-                        </Form.Group>
-                    </div>
-                </DropdownButton>
-            </InputGroup>
-
-            <div className="d-flex justify-content-end mb-3">
-                <Button variant="outline-secondary" size="sm" onClick={() => setViewMode('list')} active={viewMode === 'list'}>Lista</Button>
-                <Button variant="outline-secondary" size="sm" onClick={() => setViewMode('card')} active={viewMode === 'card'}>Tarjetas</Button>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px' }}>
+                    <h5 style={{ margin: 0, fontWeight: 600 }}>Total Comprado: <span className="badge" style={{ background: 'var(--success-color)', fontSize: '1.2rem', padding: '6px 12px' }}>${budgetDetails.total_comprado.toFixed(2)}</span></h5>
+                </div>
             </div>
 
+            {/* Filtering and View Options */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: '300px', position: 'relative' }} ref={filtersRef}>
+                    <input
+                        type="text"
+                        className="premium-input"
+                        placeholder="Buscar items..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        style={{ flex: 1 }}
+                    />
+                    <button className="btn-premium btn-secondary" onClick={() => setShowFilters(!showFilters)}>
+                        <Filter size={20} />
+                    </button>
+                    
+                    {showFilters && (
+                        <div className="glass-panel" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 100, width: '300px', padding: '16px' }}>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Estado</label>
+                                <select className="premium-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                                    <option value="">Todos</option>
+                                    <option value="pendiente">Pendiente</option>
+                                    <option value="comprado">Comprado</option>
+                                </select>
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Categoría</label>
+                                <select className="premium-input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                                    <option value="">Todas</option>
+                                    {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Marca</label>
+                                <select className="premium-input" value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
+                                    <option value="">Todas</option>
+                                    {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className={`btn-premium ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('list')} style={{ padding: '6px 16px' }}>
+                        Lista
+                    </button>
+                    <button className={`btn-premium ${viewMode === 'card' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('card')} style={{ padding: '6px 16px' }}>
+                        Tarjetas
+                    </button>
+                </div>
+            </div>
+
+            {/* Items List */}
             <div>
                 {loading ? (
-                    Array.from({ length: 5 }).map((_, index) =>
-                        viewMode === 'card' ? (
-                            <ShoppingItemCardSkeleton key={index} />
-                        ) : (
-                            <ShoppingListItemSkeleton key={index} />
-                        )
-                    )
+                    <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '16px' }}>
+                        {Array.from({ length: 5 }).map((_, index) =>
+                            viewMode === 'card' ? (
+                                <ShoppingItemCardSkeleton key={index} />
+                            ) : (
+                                <ShoppingListItemSkeleton key={index} />
+                            )
+                        )}
+                    </div>
                 ) : (
-                    <TransitionGroup>
-                        {items.map(item => (
-                            <CSSTransition key={item.id} timeout={400} classNames="fade">
-                                {viewMode === 'card' ? (
-                                    <ShoppingItemCard
-                                        item={item}
-                                        onStatusChange={handleStatus}
-                                        onDelete={handleDelete}
-                                        onImageUpload={handleImageUpload}
-                                        onItemUpdate={handleItemUpdate}
-                                        onPriceChange={handlePriceChange}
-                                        onShowItemBlame={handleShowItemBlame}
-                                        onItemCommentSubmit={handleItemCommentSubmit}
-                                        onShowPriceHistory={handleShowPriceHistory}
-                                        editingItem={editingItem}
-                                        setEditingItem={setEditingItem}
-                                        editingPrice={editingPrice}
-                                        setEditingPrice={setEditingPrice}
-                                        showItemBlame={showItemBlame}
-                                        itemBlames={itemBlames}
-                                        newItemComment={newItemComment}
-                                        setNewItemComment={setNewItemComment}
-                                        loadingItemBlame={loadingItemBlame}
-                                        loading={loading}
-                                    />
-                                ) : (
-                                    <ShoppingListItem
-                                        item={item}
-                                        onStatusChange={handleStatus}
-                                        onDelete={handleDelete}
-                                        onImageUpload={handleImageUpload}
-                                        onItemUpdate={handleItemUpdate}
-                                        onPriceChange={handlePriceChange}
-                                        onShowItemBlame={handleShowItemBlame}
-                                        onItemCommentSubmit={handleItemCommentSubmit}
-                                        onShowPriceHistory={handleShowPriceHistory}
-                                        editingItem={editingItem}
-                                        setEditingItem={setEditingItem}
-                                        editingPrice={editingPrice}
-                                        setEditingPrice={setEditingPrice}
-                                        showItemBlame={showItemBlame}
-                                        itemBlames={itemBlames}
-                                        newItemComment={newItemComment}
-                                        setNewItemComment={setNewItemComment}
-                                        loadingItemBlame={loadingItemBlame}
-                                        loading={loading}
-                                    />
-                                )}
-                            </CSSTransition>
-                        ))}
-                    </TransitionGroup>
+                    <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '24px' }}>
+                        <TransitionGroup component={null}>
+                            {items.map(item => (
+                                <CSSTransition key={item.id} timeout={400} classNames="fade">
+                                    {viewMode === 'card' ? (
+                                        <ShoppingItemCard
+                                            item={item}
+                                            onStatusChange={handleStatus}
+                                            onDelete={handleDelete}
+                                            onImageUpload={handleImageUpload}
+                                            onItemUpdate={handleItemUpdate}
+                                            onPriceChange={handlePriceChange}
+                                            onShowItemBlame={handleShowItemBlame}
+                                            onItemCommentSubmit={handleItemCommentSubmit}
+                                            onShowPriceHistory={handleShowPriceHistory}
+                                            onShowGallery={handleShowGallery}
+                                            editingItem={editingItem}
+                                            setEditingItem={setEditingItem}
+                                            editingPrice={editingPrice}
+                                            setEditingPrice={setEditingPrice}
+                                            showItemBlame={showItemBlame}
+                                            itemBlames={itemBlames}
+                                            newItemComment={newItemComment}
+                                            setNewItemComment={setNewItemComment}
+                                            loadingItemBlame={loadingItemBlame}
+                                            loading={loading}
+                                        />
+                                    ) : (
+                                        <ShoppingListItem
+                                            item={item}
+                                            onStatusChange={handleStatus}
+                                            onDelete={handleDelete}
+                                            onImageUpload={handleImageUpload}
+                                            onItemUpdate={handleItemUpdate}
+                                            onPriceChange={handlePriceChange}
+                                            onShowItemBlame={handleShowItemBlame}
+                                            onItemCommentSubmit={handleItemCommentSubmit}
+                                            onShowPriceHistory={handleShowPriceHistory}
+                                            onShowGallery={handleShowGallery}
+                                            editingItem={editingItem}
+                                            setEditingItem={setEditingItem}
+                                            editingPrice={editingPrice}
+                                            setEditingPrice={setEditingPrice}
+                                            showItemBlame={showItemBlame}
+                                            itemBlames={itemBlames}
+                                            newItemComment={newItemComment}
+                                            setNewItemComment={setNewItemComment}
+                                            loadingItemBlame={loadingItemBlame}
+                                            loading={loading}
+                                        />
+                                    )}
+                                </CSSTransition>
+                            ))}
+                        </TransitionGroup>
+                    </div>
                 )}
             </div>
-            <div className="d-flex justify-content-center align-items-center mt-3">
-                <Button variant="outline-secondary" size="sm" disabled={itemsPage <= 1} onClick={() => fetchListAndBlame(itemsPage - 1)}>Anterior</Button>
-                <span className="mx-2">Página {itemsPage} de {itemsTotalPages}</span>
-                <Button variant="outline-secondary" size="sm" disabled={itemsPage >= itemsTotalPages} onClick={() => fetchListAndBlame(itemsPage + 1)}>Siguiente</Button>
-            </div>
+            
+            {itemsTotalPages > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '32px', gap: '16px' }}>
+                    <button className="btn-premium btn-secondary" disabled={itemsPage <= 1} onClick={() => fetchListAndBlame(itemsPage - 1)} style={{ padding: '8px' }}>
+                        <ChevronLeft size={20} />
+                    </button>
+                    <span style={{ fontWeight: 500 }}>Página {itemsPage} de {itemsTotalPages}</span>
+                    <button className="btn-premium btn-secondary" disabled={itemsPage >= itemsTotalPages} onClick={() => fetchListAndBlame(itemsPage + 1)} style={{ padding: '8px' }}>
+                        <ChevronRight size={20} />
+                    </button>
+                </div>
+            )}
 
-            <div className="mt-4">
-                <h5>Comentarios de la lista</h5>
-                {blame.length === 0 && <div className="text-muted">Sin historial</div>}
-                <ul className="list-group mb-3">
-                    {blame.map(b => (
-                        <li key={b.id} className="list-group-item">
-                            <b>{b.user && b.user.username ? b.user.username : 'Usuario'}</b> {b.action} ({b.timestamp ? new Date(b.timestamp).toLocaleString() : ''})<br />
-                            <small className="text-muted">{b.detalles}</small>
-                        </li>
-                    ))}
-                </ul>
-                <form onSubmit={handleListCommentSubmit} className="d-flex">
-                    <input type="text" className="form-control me-2" placeholder="Nuevo comentario para la lista" value={newListComment} onChange={e => setNewListComment(e.target.value)} />
-                    <Button type="submit" variant="primary" size="sm">Comentar</Button>
+            {/* List Comments */}
+            <div className="glass-panel" style={{ marginTop: '48px', padding: '24px' }}>
+                <h3 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>Comentarios de la lista</h3>
+                
+                {blame.length === 0 ? (
+                    <div className="alert-info" style={{ marginBottom: '24px' }}>Sin historial de comentarios</div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px', maxHeight: '300px', overflowY: 'auto', paddingRight: '8px' }}>
+                        {blame.map(b => (
+                            <div key={b.id} style={{ padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--border-radius-md)', borderLeft: '4px solid var(--primary-color)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontWeight: 600 }}>{b.user && b.user.username ? b.user.username : 'Usuario'} {b.action}</span>
+                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{b.timestamp ? new Date(b.timestamp).toLocaleString() : ''}</span>
+                                </div>
+                                <div style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>{b.detalles}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                
+                <form onSubmit={handleListCommentSubmit} style={{ display: 'flex', gap: '12px' }}>
+                    <input type="text" className="premium-input" placeholder="Nuevo comentario para la lista" value={newListComment} onChange={e => setNewListComment(e.target.value)} />
+                    <button type="submit" className="btn-premium btn-primary" style={{ padding: '8px 24px' }}>Comentar</button>
                 </form>
             </div>
+
+            {/* Modals */}
             <PreviousItemsModal
                 show={showPreviousItemsModal}
                 handleClose={() => setShowPreviousItemsModal(false)}
@@ -778,34 +897,37 @@ function ShoppingListView() {
                 handleAddItems={handleAddItemsFromModal}
             />
 
-            <Modal show={showBudgetModal} onHide={() => setShowBudgetModal(false)} centered>
-                <Modal.Header closeButton>
-                    <Modal.Title>Establecer Presupuesto</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <Form.Group>
-                        <Form.Label>Monto del Presupuesto</Form.Label>
-                        <InputGroup>
-                            <InputGroup.Text>$</InputGroup.Text>
-                            <Form.Control
-                                type="number"
-                                placeholder="Ej: 500.00"
-                                value={newBudget}
-                                onChange={(e) => setNewBudget(e.target.value)}
-                                autoFocus
-                            />
-                        </InputGroup>
-                    </Form.Group>
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={() => setShowBudgetModal(false)}>
-                        Cancelar
-                    </Button>
-                    <Button variant="primary" onClick={handleBudgetUpdate}>
-                        Guardar Presupuesto
-                    </Button>
-                </Modal.Footer>
-            </Modal>
+            {/* Budget Modal - Vanilla Implementation */}
+            {showBudgetModal && ReactDOM.createPortal(
+                <div className="modal-backdrop" onClick={() => setShowBudgetModal(false)}>
+                    <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h5 className="modal-title">Establecer Presupuesto</h5>
+                            <button className="modal-close" onClick={() => setShowBudgetModal(false)}><X size={24} /></button>
+                        </div>
+                        <div className="modal-body">
+                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Monto del Presupuesto</label>
+                            <div style={{ display: 'flex', position: 'relative' }}>
+                                <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontWeight: 600, color: 'var(--text-secondary)' }}>$</div>
+                                <input
+                                    type="number"
+                                    className="premium-input"
+                                    style={{ paddingLeft: '32px' }}
+                                    placeholder="Ej: 500.00"
+                                    value={newBudget}
+                                    onChange={(e) => setNewBudget(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn-premium btn-secondary" onClick={() => setShowBudgetModal(false)}>Cancelar</button>
+                            <button className="btn-premium btn-primary" onClick={handleBudgetUpdate}>Guardar Presupuesto</button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
 
             <PriceHistoryModal 
                 show={showPriceHistoryModal} 
@@ -813,36 +935,53 @@ function ShoppingListView() {
                 item={selectedItemForPriceHistory} 
             />
 
-            <Modal show={showNewProductModal} onHide={() => setShowNewProductModal(false)}>
-                <Modal.Header closeButton>
-                    <Modal.Title>Producto Nuevo</Modal.Title>
-                </Modal.Header>
-                <Modal.Body>
-                    <p>'{newItem}' parece ser un producto nuevo. Si lo deseas, puedes agregar una marca y categoría.</p>
-                    <Form.Group className="mb-3">
-                        <Form.Label>Marca</Form.Label>
-                        <Form.Control type="text" value={modalBrand} onChange={(e) => setModalBrand(e.target.value)} />
-                    </Form.Group>
-                    <Form.Group>
-                        <Form.Label>Categoría</Form.Label>
-                        <Form.Control type="text" value={modalCategory} onChange={(e) => setModalCategory(e.target.value)} />
-                    </Form.Group>
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button variant="secondary" onClick={() => {
-                        setShowNewProductModal(false);
-                        proceedWithAdd();
-                    }}>
-                        Agregar sin detalles
-                    </Button>
-                    <Button variant="primary" onClick={() => {
-                        setShowNewProductModal(false);
-                        proceedWithAdd(modalBrand, modalCategory);
-                    }}>
-                        Guardar y Agregar
-                    </Button>
-                </Modal.Footer>
-            </Modal>
+            {/* New Product Modal - Vanilla Implementation */}
+            {showNewProductModal && ReactDOM.createPortal(
+                <div className="modal-backdrop" onClick={() => setShowNewProductModal(false)}>
+                    <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h5 className="modal-title">Producto Nuevo</h5>
+                            <button className="modal-close" onClick={() => setShowNewProductModal(false)}><X size={24} /></button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="alert-info" style={{ marginBottom: '24px' }}>
+                                '{newItem}' parece ser un producto nuevo. Si lo deseas, puedes agregar una marca y categoría para ayudar a organizarlo.
+                            </div>
+                            
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Marca</label>
+                                <input type="text" className="premium-input" value={modalBrand} onChange={(e) => setModalBrand(e.target.value)} placeholder="Ej. Nestlé, Coca-Cola..." />
+                            </div>
+                            
+                            <div>
+                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Categoría</label>
+                                <input type="text" className="premium-input" value={modalCategory} onChange={(e) => setModalCategory(e.target.value)} placeholder="Ej. Lácteos, Bebidas..." />
+                            </div>
+                        </div>
+                        <div className="modal-footer" style={{ gap: '16px' }}>
+                            <button className="btn-premium btn-secondary" style={{ flex: 1, padding: '10px' }} onClick={() => {
+                                setShowNewProductModal(false);
+                                proceedWithAdd();
+                            }}>
+                                Agregar sin detalles
+                            </button>
+                            <button className="btn-premium btn-primary" style={{ flex: 1, padding: '10px' }} onClick={() => {
+                                setShowNewProductModal(false);
+                                proceedWithAdd(modalBrand, modalCategory);
+                            }}>
+                                Guardar y Agregar
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
+            <ImageGalleryModal
+                show={showGalleryModal}
+                handleClose={() => setShowGalleryModal(false)}
+                handleSelectImage={handleImageSelect}
+            />
 
         </div>
     );

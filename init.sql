@@ -71,8 +71,7 @@ CREATE TABLE products (
     description TEXT,
     category VARCHAR(100),
     brand VARCHAR(100),
-    family_id INT,
-    image_url LONGTEXT,
+    image_url VARCHAR(255),
     last_price FLOAT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -104,7 +103,7 @@ CREATE TABLE list_items (
     precio_estimado FLOAT,
     precio_confirmado FLOAT,
     creado_por_id INT,
-    image_url LONGTEXT,
+    image_url VARCHAR(255),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (list_id) REFERENCES shopping_lists (id),
     FOREIGN KEY (creado_por_id) REFERENCES users (id),
@@ -134,4 +133,12 @@ CREATE TABLE notifications (
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (family_id) REFERENCES families (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES users (id) ON DELETE SET NULL
+);
+
+CREATE TABLE shared_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    file_path VARCHAR(255) NOT NULL,
+    uploaded_by_user_id INT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (uploaded_by_user_id) REFERENCES users (id) ON DELETE SET NULL
 );
