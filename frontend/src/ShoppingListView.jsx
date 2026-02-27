@@ -236,10 +236,20 @@ function ShoppingListView() {
 
     useEffect(() => {
         if (lastMessage) {
+            // Check for list-specific updates
             if (lastMessage.list_id && lastMessage.list_id === parseInt(listId)) {
                 console.log("WebSocket update received for current list UI. Trigerring refresh...", lastMessage.action);
                 fetchListAndBlame(itemsPage);
                 fetchBudgetDetails();
+            }
+            // Check for global product updates that might affect our displayed items
+            if (lastMessage.type === 'product_update' && lastMessage.action === 'image_updated') {
+                const affectedProduct = items.find(i => i.product_id === lastMessage.product_id);
+                if (affectedProduct) {
+                    console.log("WebSocket product update received for an item in this list. Refreshing...");
+                    fetchListAndBlame(itemsPage);
+                    fetchBudgetDetails();
+                }
             }
         }
     }, [lastMessage]);
@@ -818,6 +828,7 @@ function ShoppingListView() {
                                             setNewItemComment={setNewItemComment}
                                             loadingItemBlame={loadingItemBlame}
                                             loading={loading}
+                                            onProductUpdate={() => fetchListAndBlame(itemsPage)}
                                         />
                                     ) : (
                                         <ShoppingListItem
@@ -841,6 +852,7 @@ function ShoppingListView() {
                                             setNewItemComment={setNewItemComment}
                                             loadingItemBlame={loadingItemBlame}
                                             loading={loading}
+                                            onProductUpdate={() => fetchListAndBlame(itemsPage)}
                                         />
                                     )}
                                 </CSSTransition>

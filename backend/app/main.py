@@ -1087,12 +1087,9 @@ async def update_product_image_from_url(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Permission check (admin or owner)
-    # Simple check for now based on project patterns
+    # Permission check (admin or family member)
     if not current_user.is_admin:
-        # Check if product belongs to user's family
-        # (Assuming family check is standard in this codebase)
-        pass
+        get_family_for_user(product.family_id, current_user)
 
     url = image_data.get("image_url")
     if not url:
@@ -1102,6 +1099,16 @@ async def update_product_image_from_url(
     product.shared_image_id = shared_image.id
     db.commit()
     db.refresh(product)
+    
+    # Notify family members via WebSocket
+    if product.family_id:
+        await manager.broadcast_to_family(product.family_id, {
+            "type": "product_update",
+            "product_id": product.id,
+            "action": "image_updated",
+            "new_image_url": shared_image.file_path
+        })
+
     return product
 
 @app.websocket("/ws/{family_id}")

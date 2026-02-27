@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon } from 'lucide-react';
+import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon, Search } from 'lucide-react';
 import ImageUploader from './ImageUploader';
+import WebImageSearchModal from './WebImageSearchModal';
 
 const API_URL = 'http://localhost:8000';
 
@@ -25,10 +26,12 @@ const ShoppingListItem = ({
     newItemComment,
     setNewItemComment,
     loadingItemBlame,
-    loading
+    loading,
+    onProductUpdate
 }) => {
     const isEditing = editingItem && editingItem.id === item.id;
     const [showImageModal, setShowImageModal] = useState(false);
+    const [showWebSearchModal, setShowWebSearchModal] = useState(false);
     const [showDropdown, setShowDropdown] = useState(false);
     const dropdownRef = useRef(null);
     const fileInputRef = useRef(null);
@@ -102,6 +105,7 @@ const ShoppingListItem = ({
                                 <div style={{ position: 'absolute', bottom: '100%', left: 0, minWidth: '160px', zIndex: 9999, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginBottom: '4px' }}>
                                     <div className="dropdown-item" onClick={handleViewClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Eye size={16} style={{marginRight: '8px', flexShrink: 0}} /> Ver imagen</div>
                                     <div className="dropdown-item" onClick={handleChangeClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Camera size={16} style={{marginRight: '8px', flexShrink: 0}} /> Cambiar</div>
+                                    <div className="dropdown-item" onClick={() => { setShowWebSearchModal(true); setShowDropdown(false); }} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Search size={16} style={{marginRight: '8px', flexShrink: 0}} /> Web Search</div>
                                     <div className="dropdown-item" onClick={handleGalleryClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><ImageIcon size={16} style={{marginRight: '8px', flexShrink: 0}} /> Galería</div>
                                 </div>
                             )}
@@ -127,6 +131,16 @@ const ShoppingListItem = ({
                                 </div>,
                                 document.body
                             )}
+
+                            <WebImageSearchModal 
+                                show={showWebSearchModal}
+                                handleClose={() => setShowWebSearchModal(false)}
+                                productName={item.nombre}
+                                productId={item.product?.id}
+                                onImageSelected={(updatedProduct) => {
+                                    if (onProductUpdate) onProductUpdate();
+                                }}
+                            />
                         </>
                     ) : (
                         <ImageUploader itemId={item.id} imageUrl={''} onImageUpload={onImageUpload} />

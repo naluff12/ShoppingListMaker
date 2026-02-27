@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom';
 import { Package, Plus, Search, Filter, Edit2, Trash2, History, Image as ImageIcon, X, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import PriceHistoryModal from './PriceHistoryModal';
 import ImageGalleryModal from './ImageGalleryModal';
+import WebImageSearchModal from './WebImageSearchModal';
+import { useWebSocket } from './useWebSocket';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -22,9 +24,14 @@ function ProductManagement() {
   const [selectedImageFromGallery, setSelectedImageFromGallery] = useState(null);
   const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
   const [showImageSearch, setShowImageSearch] = useState(false);
-  const [imageSearchQuery, setImageSearchQuery] = useState('');
-  const [imageSearchResults, setImageSearchResults] = useState([]);
-  const [isSearchingImages, setIsSearchingImages] = useState(false);
+  
+  const { lastMessage } = useWebSocket(selectedFamily?.id);
+
+  useEffect(() => {
+    if (lastMessage && lastMessage.type === 'product_update' && lastMessage.action === 'image_updated') {
+      fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
+    }
+  }, [lastMessage]);
 
   const fetchFamilies = async () => {
     const token = localStorage.getItem('token');
@@ -47,42 +54,51 @@ function ProductManagement() {
     } else {
       if (category) queryParams.append('category', category);
       if (brand) queryParams.append('brand', brand);
+      const queryString = queryParams.toString();
+      if (queryString) url += `&${queryString}`;
     }
-
-    if (queryParams.toString()) {
-      url += `&${queryParams.toString()}`;
-    }
-
+    
     try {
       const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
       if (response.ok) {
         setProducts(await response.json());
-      } else {
-        setProducts({ items: [], total: 0, page: 1, size: 10 });
       }
     } catch (error) {
       console.error('Error fetching products:', error);
     }
   };
 
+  const fetchFilterOptions = async (familyId) => {
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`/api/families/${familyId}/filters`, { headers: { 'Authorization': `Bearer ${token}` } });
+      if (response.ok) {
+        setFilterOptions(await response.json());
+      }
+    } catch (error) {
+      console.error('Error fetching filters:', error);
+    }
+  };
+
+  const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
+
   useEffect(() => {
     fetchFamilies();
   }, []);
 
   useEffect(() => {
-    if (selectedFamily) {
-      const handler = setTimeout(() => {
-        fetchProducts(selectedFamily.id, 1, searchTerm, filters.category, filters.brand);
-      }, 300);
-      return () => clearTimeout(handler);
-    } else {
-      setProducts({ items: [], total: 0, page: 1, size: 10 });
+    if (families.length > 0 && !selectedFamily) {
+      setSelectedFamily(families[0]);
+      fetchProducts(families[0].id);
+      fetchFilterOptions(families[0].id);
     }
-  }, [selectedFamily, searchTerm, filters]);
+  }, [families]);
 
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
+  const handleFamilyChange = (family) => {
+    setSelectedFamily(family);
+    setShowFamilyDropdown(false);
+    fetchProducts(family.id, 1, searchTerm);
+    fetchFilterOptions(family.id);
   };
 
   const handleEdit = (product) => {
@@ -93,21 +109,20 @@ function ProductManagement() {
       category: product.category || '',
       brand: product.brand || '',
       last_price: product.last_price || '',
-      image_url: product.shared_image ? `${API_BASE_URL}${product.shared_image.file_path}` : ''
+      image_url: product.shared_image ? product.shared_image.file_path : ''
     });
     setImageFile(null);
-    setSelectedImageFromGallery(product.shared_image ? { id: product.shared_image.id, file_path: product.shared_image.file_path } : null);
+    setSelectedImageFromGallery(null);
     setShowModal(true);
   };
 
   const handleDelete = async (productId) => {
+    if (!window.confirm('¿Estás seguro de eliminar este producto?')) return;
     const token = localStorage.getItem('token');
-    if (!selectedFamily) return;
-
     try {
-      const response = await fetch(`/api/families/${selectedFamily.id}/products/${productId}`, {
+      const response = await fetch(`/api/products/${productId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
@@ -120,85 +135,70 @@ function ProductManagement() {
   const handleSave = async (e) => {
     e.preventDefault();
     const token = localStorage.getItem('token');
-    if (!selectedFamily) return;
+    
+    let shared_image_id = currentProduct?.shared_image_id;
 
-    const method = currentProduct ? 'PUT' : 'POST';
-    const url = currentProduct
-      ? `/api/families/${selectedFamily.id}/products/${currentProduct.id}`
-      : `/api/families/${selectedFamily.id}/products`;
-
-    const payload = { ...formData };
-    if (payload.last_price) {
-      payload.last_price = parseFloat(payload.last_price);
-    } else {
-      delete payload.last_price;
-    }
-
-    if (selectedImageFromGallery) {
-      payload.shared_image_id = selectedImageFromGallery.id;
-      delete payload.image_url;
-    } else if (currentProduct && currentProduct.shared_image_id && !imageFile) {
-      payload.shared_image_id = currentProduct.shared_image_id;
-      delete payload.image_url;
-    } else if (!imageFile) {
-      payload.shared_image_id = null;
-      delete payload.image_url;
-    }
-
+    // Handle image upload if there's a new file
     if (imageFile) {
-      delete payload.shared_image_id;
-      delete payload.image_url;
+      const imageData = new FormData();
+      imageData.append('file', imageFile);
+      try {
+        const uploadRes = await fetch(`/api/images/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: imageData
+        });
+        if (uploadRes.ok) {
+          const uploadedImage = await uploadRes.json();
+          shared_image_id = uploadedImage.id;
+        }
+      } catch (err) {
+        console.error('Error uploading image:', err);
+      }
+    } else if (selectedImageFromGallery) {
+      shared_image_id = selectedImageFromGallery.id;
+    } else if (formData.image_from_url) {
+      // If an image was selected from search for a NEW product
+      try {
+        const imageRes = await persistImageFromUrl(formData.image_from_url);
+        if (imageRes) shared_image_id = imageRes.shared_image.id;
+      } catch (err) {
+        console.error('Error persisting searched image:', err);
+      }
     }
+
+    const payload = {
+      name: formData.name,
+      description: formData.description,
+      category: formData.category,
+      brand: formData.brand,
+      last_price: parseFloat(formData.last_price) || 0,
+      family_id: selectedFamily.id,
+      shared_image_id: shared_image_id
+    };
+
+    const url = currentProduct ? `/api/products/${currentProduct.id}` : `/api/products`;
+    const method = currentProduct ? 'PUT' : 'POST';
 
     try {
       const response = await fetch(url, {
         method,
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
-
       if (response.ok) {
-        const product = await response.json();
-        if (imageFile) {
-          await handleImageUpload(product.id, imageFile);
-        } else if (formData.image_from_url) {
-          await saveImageFromUrl(product.id, formData.image_from_url);
-        }
         setShowModal(false);
-        fetchProducts(selectedFamily.id, currentProduct ? products.page : 1, searchTerm, filters.category, filters.brand);
-      } else {
-        const errorData = await response.json();
-        alert('Failed to save product: ' + errorData.detail);
+        fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
       }
     } catch (error) {
-      alert('Error saving product.');
+      console.error('Error saving product:', error);
     }
   };
 
-  const handleImageUpload = async (productId, file) => {
-    if (!file) return;
-    const token = localStorage.getItem('token');
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/products/${productId}/upload-image`, {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token },
-        body: formData,
-      });
-      if (!res.ok) throw new Error('Error al subir la imagen');
-      const updatedProduct = await res.json();
-      setFormData(prev => ({ ...prev, image_url: updatedProduct.shared_image ? `${API_BASE_URL}${updatedProduct.shared_image.file_path}` : '' }));
-    } catch (err) {
-      alert(err.message);
-    }
-  };
- 
-  const saveImageFromUrl = async (productId, imageUrl) => {
+  const persistImageFromUrl = async (productId, imageUrl) => {
     const token = localStorage.getItem('token');
     try {
       const res = await fetch(`/api/products/${productId}/image-from-url`, {
@@ -227,62 +227,6 @@ function ProductManagement() {
     setShowImageGalleryModal(false);
   };
  
-  const handleImageSearch = async (e) => {
-    if (e) e.preventDefault();
-    if (!imageSearchQuery.trim()) return;
-    
-    setIsSearchingImages(true);
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(`/api/images/search?q=${encodeURIComponent(imageSearchQuery)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        setImageSearchResults(await response.json());
-      }
-    } catch (error) {
-      console.error('Error searching images:', error);
-    } finally {
-      setIsSearchingImages(false);
-    }
-  };
-
-  const handleSelectImageFromSearch = async (imageUrl) => {
-    if (!currentProduct) {
-      // If adding a new product, we just set the URL as a preview for now
-      // and we'll handle the persistence after the product is created.
-      // Actually, it's better to persist it once the product exists.
-      // For new products, we can store it in formData.image_from_url 
-      // and process it in handleSave.
-      setFormData(prev => ({ ...prev, image_url: imageUrl, image_from_url: imageUrl }));
-      setShowImageSearch(false);
-      return;
-    }
-
-    setIsSearchingImages(true);
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(`/api/products/${currentProduct.id}/image-from-url`, {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}` 
-        },
-        body: JSON.stringify({ image_url: imageUrl })
-      });
-      if (response.ok) {
-        const updatedProduct = await response.json();
-        setFormData(prev => ({ ...prev, image_url: `${API_BASE_URL}${updatedProduct.shared_image.file_path}` }));
-        fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
-        setShowImageSearch(false);
-      }
-    } catch (error) {
-      console.error('Error selecting image from search:', error);
-    } finally {
-      setIsSearchingImages(false);
-    }
-  };
-
   const openAddProductModal = () => {
     setCurrentProduct(null);
     setFormData({ name: '', description: '', category: '', brand: '', last_price: '', image_url: '' });
@@ -297,291 +241,260 @@ function ProductManagement() {
   };
 
   return (
-    <div>
+    <div className="product-management">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h2 style={{ margin: 0 }}>Gestión de Productos</h2>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <div style={{ position: 'relative' }}>
+            <button 
+              className="btn-premium btn-secondary" 
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              onClick={() => setShowFamilyDropdown(!showFamilyDropdown)}
+            >
+              {selectedFamily ? selectedFamily.name : 'Seleccionar Familia'} <ChevronDown size={18} />
+            </button>
+            {showFamilyDropdown && (
+              <div 
+                className="glass-panel" 
+                style={{ 
+                  position: 'absolute', 
+                  top: '100%', 
+                  left: 0, 
+                  zIndex: 1000, 
+                  minWidth: '200px', 
+                  marginTop: '8px', 
+                  padding: '8px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                }}
+              >
+                {families.map(f => (
+                  <div 
+                    key={f.id} 
+                    className="dropdown-item" 
+                    style={{ 
+                      padding: '10px 16px', 
+                      cursor: 'pointer', 
+                      borderRadius: '4px',
+                      background: selectedFamily?.id === f.id ? 'rgba(139, 92, 246, 0.2)' : 'transparent'
+                    }}
+                    onClick={() => handleFamilyChange(f)}
+                  >
+                    {f.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button 
+            className="btn-premium btn-primary" 
+            onClick={openAddProductModal}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <Plus size={20} /> Nuevo Producto
+          </button>
+        </div>
       </div>
 
-      <div style={{ position: 'relative', marginBottom: '24px', zIndex: 100 }}>
-        <div 
-            className="premium-input" 
-            style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: 'var(--panel-bg)' }}
-            onClick={() => setShowFamilyDropdown(!showFamilyDropdown)}
-        >
-            <span>{selectedFamily ? selectedFamily.nombre : "Seleccionar Familia..."}</span>
-            <ChevronDown size={20} style={{ transition: 'transform 0.3s', transform: showFamilyDropdown ? 'rotate(180deg)' : 'rotate(0)' }} />
+      <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+            <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} size={18} />
+            <input 
+              type="text" 
+              className="premium-input" 
+              style={{ paddingLeft: '40px', width: '100%' }} 
+              placeholder="Buscar productos..." 
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                if (selectedFamily) fetchProducts(selectedFamily.id, 1, e.target.value, filters.category, filters.brand);
+              }}
+            />
+          </div>
+          <div style={{ minWidth: '150px' }}>
+            <select 
+              className="premium-input" 
+              style={{ width: '100%' }}
+              value={filters.category}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, category: e.target.value }));
+                if (selectedFamily) fetchProducts(selectedFamily.id, 1, searchTerm, e.target.value, filters.brand);
+              }}
+            >
+              <option value="">Todas las Categorías</option>
+              {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div style={{ minWidth: '150px' }}>
+            <select 
+              className="premium-input" 
+              style={{ width: '100%' }}
+              value={filters.brand}
+              onChange={(e) => {
+                setFilters(prev => ({ ...prev, brand: e.target.value }));
+                if (selectedFamily) fetchProducts(selectedFamily.id, 1, searchTerm, filters.category, e.target.value);
+              }}
+            >
+              <option value="">Todas las Marcas</option>
+              {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
         </div>
-        
-        {showFamilyDropdown && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', zIndex: 9999, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-md)', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', maxHeight: '300px', overflowY: 'auto' }}>
-                {families.map(family => (
-                    <div 
-                        key={family.id} 
-                        className="dropdown-item" 
-                        onClick={() => { setSelectedFamily(family); setShowFamilyDropdown(false); }}
-                    >
-                        {family.nombre}
+
+        <div style={{ overflowX: 'auto' }}>
+          <table className="premium-table">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th>Marca</th>
+                <th>Último Precio</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.items.map(product => (
+                <tr key={product.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <img 
+                        src={product.shared_image ? `${API_BASE_URL}${product.shared_image.file_path}` : '/img_placeholder.png'} 
+                        alt={product.name} 
+                        style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
+                      />
+                      <span>{product.name}</span>
                     </div>
-                ))}
+                  </td>
+                  <td>{product.category || '-'}</td>
+                  <td>{product.brand || '-'}</td>
+                  <td>${product.last_price?.toFixed(2) || '0.00'}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      <button className="btn-icon" onClick={() => handleShowPriceHistory(product)} title="Historial de Precios"><History size={18} /></button>
+                      <button className="btn-icon" onClick={() => handleEdit(product)} title="Editar"><Edit2 size={18} /></button>
+                      <button className="btn-icon btn-icon-danger" onClick={() => handleDelete(product.id)} title="Eliminar"><Trash2 size={18} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {products.total > products.size && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+            <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              Mostrando {products.items.length} de {products.total} productos
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className="btn-premium btn-secondary" 
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                disabled={products.page === 1}
+                onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm, filters.category, filters.brand)}
+              >
+                <ChevronLeft size={18} /> Anterior
+              </button>
+              <button 
+                className="btn-premium btn-secondary" 
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                disabled={products.page >= Math.ceil(products.total / products.size)}
+                onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm, filters.category, filters.brand)}
+              >
+                Siguiente <ChevronRight size={18} />
+              </button>
             </div>
+          </div>
         )}
       </div>
 
-      {selectedFamily && (
-        <div className="animate-fade-in">
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-            <button className="btn-premium btn-primary" onClick={openAddProductModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Plus size={18} /> Agregar Producto
-            </button>
-            
-            <div style={{ position: 'relative', flex: '1 1 250px' }}>
-                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                <input 
-                    type="text" 
-                    className="premium-input" 
-                    placeholder="Buscar productos..." 
-                    style={{ width: '100%', paddingLeft: '40px' }}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-            </div>
-            
-            <div style={{ position: 'relative', flex: '1 1 200px' }}>
-                <Filter size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                <input 
-                    type="text" 
-                    className="premium-input" 
-                    placeholder="Categoría" 
-                    name="category"
-                    style={{ width: '100%', paddingLeft: '40px' }}
-                    value={filters.category}
-                    onChange={handleFilterChange}
-                />
-            </div>
-            
-            <div style={{ position: 'relative', flex: '1 1 200px' }}>
-                <Filter size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                <input 
-                    type="text" 
-                    className="premium-input" 
-                    placeholder="Marca" 
-                    name="brand"
-                    style={{ width: '100%', paddingLeft: '40px' }}
-                    value={filters.brand}
-                    onChange={handleFilterChange}
-                />
-            </div>
-          </div>
-
-          <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                    <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Imagen</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Nombre</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Descripción</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Categoría</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Marca</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Precio M. Reciente</th>
-                        <th style={{ padding: '12px 16px', fontWeight: 600 }}>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {(products.items || []).map((product, index) => (
-                        <tr key={product.id} style={{ borderBottom: '1px solid var(--border-color)', background: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent' }}>
-                            <td style={{ padding: '12px 16px' }}>
-                                <img
-                                    src={product.shared_image ? `${API_BASE_URL}${product.shared_image.file_path}` : `/img_placeholder.png`}
-                                    alt={product.name}
-                                    style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
-                                />
-                            </td>
-                            <td style={{ padding: '12px 16px' }}>{product.name}</td>
-                            <td style={{ padding: '12px 16px', maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{product.description}</td>
-                            <td style={{ padding: '12px 16px' }}>{product.category || '-'}</td>
-                            <td style={{ padding: '12px 16px' }}>{product.brand || '-'}</td>
-                            <td style={{ padding: '12px 16px' }}>{product.last_price ? `$${product.last_price.toFixed(2)}` : 'N/A'}</td>
-                            <td style={{ padding: '12px 16px' }}>
-                                <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button className="btn-premium" style={{ background: 'rgba(234, 179, 8, 0.1)', color: 'var(--warning-color)', padding: '6px' }} onClick={() => handleEdit(product)} title="Editar">
-                                        <Edit2 size={16} />
-                                    </button>
-                                    <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px' }} onClick={() => handleShowPriceHistory(product)} title="Historial">
-                                        <History size={16} />
-                                    </button>
-                                    <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', padding: '6px' }} onClick={() => handleDelete(product.id)} title="Eliminar">
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-            {(!products.items || products.items.length === 0) && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>No se encontraron productos.</div>}
-          </div>
-
-          {(products.total > 0 && products.items.length > 0) && (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '24px' }}>
-                <button 
-                    className="btn-premium btn-secondary" 
-                    style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                    disabled={products.page <= 1}
-                    onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm, filters.category, filters.brand)}
-                >
-                    <ChevronLeft size={18} /> Anterior
-                </button>
-                <span style={{ color: 'var(--text-secondary)' }}>
-                    Página {products.page} de {Math.ceil(products.total / products.size)}
-                </span>
-                <button 
-                    className="btn-premium btn-secondary" 
-                    style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                    disabled={products.page >= Math.ceil(products.total / products.size)}
-                    onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm, filters.category, filters.brand)}
-                >
-                    Siguiente <ChevronRight size={18} />
-                </button>
-              </div>
-          )}
-        </div>
-      )}
-
       {showModal && ReactDOM.createPortal(
         <div className="modal-backdrop" onClick={() => setShowModal(false)}>
-            <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h5 className="modal-title">{currentProduct ? 'Editar Producto' : 'Agregar Producto'}</h5>
-                    <button className="modal-close" onClick={() => setShowModal(false)}><X size={24} /></button>
-                </div>
-                <form onSubmit={handleSave}>
-                    <div className="modal-body">
-                        <div style={{ marginBottom: '16px' }}>
-                            <label htmlFor="name" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Nombre</label>
-                            <input type="text" id="name" className="premium-input" style={{ width: '100%' }} value={formData.name} onChange={handleFormChange} required />
-                        </div>
-                        <div style={{ marginBottom: '16px' }}>
-                            <label htmlFor="description" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Descripción</label>
-                            <textarea id="description" className="premium-input" style={{ width: '100%', minHeight: '80px' }} value={formData.description} onChange={handleFormChange} />
-                        </div>
-                        
-                        <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-                            <div style={{ flex: 1 }}>
-                                <label htmlFor="category" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Categoría</label>
-                                <input type="text" id="category" className="premium-input" style={{ width: '100%' }} value={formData.category} onChange={handleFormChange} />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <label htmlFor="brand" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Marca</label>
-                                <input type="text" id="brand" className="premium-input" style={{ width: '100%' }} value={formData.brand} onChange={handleFormChange} />
-                            </div>
-                        </div>
-
-                        <div style={{ marginBottom: '16px' }}>
-                            <label htmlFor="last_price" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Precio</label>
-                            <input type="number" id="last_price" step="0.01" className="premium-input" style={{ width: '100%' }} value={formData.last_price} onChange={handleFormChange} />
-                        </div>
-
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Imagen</label>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                                <img 
-                                    src={formData.image_url ? (formData.image_url.startsWith('http') || formData.image_url.startsWith('blob') ? formData.image_url : `${API_BASE_URL}${formData.image_url}`) : '/img_placeholder.png'} 
-                                    alt="Product" 
-                                    style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} 
-                                />
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                    <button 
-                                        type="button" 
-                                        className="btn-premium btn-secondary" 
-                                        style={{ padding: '6px 16px', fontSize: '0.9rem' }}
-                                        onClick={() => {
-                                            const input = document.createElement('input');
-                                            input.type = 'file';
-                                            input.accept = 'image/jpeg,image/png';
-                                            input.onchange = (e) => {
-                                                const file = e.target.files[0];
-                                                if (file) {
-                                                    setImageFile(file);
-                                                    setSelectedImageFromGallery(null);
-                                                    setFormData(prev => ({ ...prev, image_url: URL.createObjectURL(file) }));
-                                                }
-                                            };
-                                            input.click();
-                                        }}
-                                    >
-                                        Subir nueva imagen
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        className="btn-premium" 
-                                        style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                                        onClick={() => setShowImageGalleryModal(true)}
-                                    >
-                                        <ImageIcon size={16} /> De la galería
-                                    </button>
-                                    <button 
-                                        type="button" 
-                                        className="btn-premium" 
-                                        style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--primary-color)', padding: '6px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                                        onClick={() => {
-                                            setShowImageSearch(true);
-                                            setImageSearchQuery(formData.name || '');
-                                            if (formData.name) handleImageSearch();
-                                        }}
-                                    >
-                                        <Search size={16} /> Buscar en línea
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {showImageSearch && (
-                            <div className="glass-panel" style={{ padding: '16px', marginBottom: '16px', border: '1px solid var(--primary-color)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                    <h6 style={{ margin: 0, fontWeight: 600 }}>Buscador de Imágenes</h6>
-                                    <button type="button" onClick={() => setShowImageSearch(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
-                                </div>
-                                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                                    <input 
-                                        type="text" 
-                                        className="premium-input" 
-                                        style={{ flex: 1, height: '36px', fontSize: '0.9rem' }} 
-                                        placeholder="Buscar..." 
-                                        value={imageSearchQuery}
-                                        onChange={e => setImageSearchQuery(e.target.value)}
-                                        onKeyPress={e => e.key === 'Enter' && handleImageSearch(e)}
-                                    />
-                                    <button type="button" className="btn-premium btn-primary" style={{ padding: '0 12px' }} onClick={handleImageSearch} disabled={isSearchingImages}>
-                                        {isSearchingImages ? '...' : <Search size={16} />}
-                                    </button>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', maxHeight: '150px', overflowY: 'auto', paddingRight: '4px' }}>
-                                    {imageSearchResults.map(img => (
-                                        <div 
-                                            key={img.id} 
-                                            style={{ cursor: 'pointer', borderRadius: '4px', overflow: 'hidden', border: '2px solid transparent', transition: 'border-color 0.2s', position: 'relative' }}
-                                            onClick={() => handleSelectImageFromSearch(img.largeImageURL)}
-                                            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary-color)'}
-                                            onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
-                                        >
-                                            <img src={img.previewURL} alt="Result" style={{ width: '100%', height: '60px', objectFit: 'cover' }} />
-                                        </div>
-                                    ))}
-                                    {imageSearchResults.length === 0 && !isSearchingImages && (
-                                        <div style={{ gridColumn: 'span 4', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '12px' }}>
-                                            Ingresa un término para buscar imágenes.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    <div className="modal-footer">
-                        <button type="button" className="btn-premium btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
-                        <button type="submit" className="btn-premium btn-primary">Guardar</button>
-                    </div>
-                </form>
+          <div className="modal-content" style={{ maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h5 className="modal-title">{currentProduct ? 'Editar Producto' : 'Agregar Producto'}</h5>
+              <button className="modal-close" onClick={() => setShowModal(false)}><X size={24} /></button>
             </div>
+            <form onSubmit={handleSave}>
+              <div className="modal-body">
+                <div style={{ marginBottom: '16px' }}>
+                  <label htmlFor="name" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Nombre</label>
+                  <input type="text" id="name" className="premium-input" style={{ width: '100%' }} value={formData.name} onChange={handleFormChange} required />
+                </div>
+                <div style={{ marginBottom: '16px' }}>
+                  <label htmlFor="description" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Descripción</label>
+                  <textarea id="description" className="premium-input" style={{ width: '100%', minHeight: '80px' }} value={formData.description} onChange={handleFormChange} />
+                </div>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <label htmlFor="category" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Categoría</label>
+                    <input type="text" id="category" className="premium-input" style={{ width: '100%' }} value={formData.category} onChange={handleFormChange} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label htmlFor="brand" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Marca</label>
+                    <input type="text" id="brand" className="premium-input" style={{ width: '100%' }} value={formData.brand} onChange={handleFormChange} />
+                  </div>
+                </div>
+                <div style={{ marginBottom: '16px' }}>
+                  <label htmlFor="last_price" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Precio</label>
+                  <input type="number" id="last_price" step="0.01" className="premium-input" style={{ width: '100%' }} value={formData.last_price} onChange={handleFormChange} />
+                </div>
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Imagen</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <img 
+                      src={formData.image_url ? (formData.image_url.startsWith('http') || formData.image_url.startsWith('blob') ? formData.image_url : `${API_BASE_URL}${formData.image_url}`) : '/img_placeholder.png'} 
+                      alt="Product" 
+                      style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} 
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <button 
+                        type="button" 
+                        className="btn-premium btn-secondary" 
+                        style={{ padding: '6px 16px', fontSize: '0.9rem' }}
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/jpeg,image/png';
+                          input.onchange = (e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              setImageFile(file);
+                              setSelectedImageFromGallery(null);
+                              setFormData(prev => ({ ...prev, image_url: URL.createObjectURL(file) }));
+                            }
+                          };
+                          input.click();
+                        }}
+                      >
+                        Subir nueva imagen
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn-premium" 
+                        style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                        onClick={() => setShowImageGalleryModal(true)}
+                      >
+                        <ImageIcon size={16} /> De la galería
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn-premium" 
+                        style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--primary-color)', padding: '6px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                        onClick={() => setShowImageSearch(true)}
+                      >
+                        <Search size={16} /> Buscar en línea
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-premium btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
+                <button type="submit" className="btn-premium btn-primary">Guardar</button>
+              </div>
+            </form>
+          </div>
         </div>,
         document.body
       )}
@@ -594,10 +507,28 @@ function ProductManagement() {
         />
       )}
 
-      <ImageGalleryModal
-        show={showImageGalleryModal}
-        handleClose={() => setShowImageGalleryModal(false)}
-        handleSelectImage={handleSelectImageFromGallery}
+      {showImageGalleryModal && ReactDOM.createPortal(
+        <ImageGalleryModal
+          show={showImageGalleryModal}
+          handleClose={() => setShowImageGalleryModal(false)}
+          handleSelectImage={handleSelectImageFromGallery}
+        />,
+        document.body
+      )}
+
+      <WebImageSearchModal
+        show={showImageSearch}
+        handleClose={() => setShowImageSearch(false)}
+        productName={formData.name}
+        productId={currentProduct?.id}
+        onImageSelected={(updatedProduct) => {
+          if (updatedProduct.isPreview) {
+            setFormData(prev => ({ ...prev, image_url: updatedProduct.shared_image.file_path, image_from_url: updatedProduct.shared_image.file_path }));
+          } else {
+            setFormData(prev => ({ ...prev, image_url: `${API_BASE_URL}${updatedProduct.shared_image.file_path}` }));
+            fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
+          }
+        }}
       />
     </div>
   );
