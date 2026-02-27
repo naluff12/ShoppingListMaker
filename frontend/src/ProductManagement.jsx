@@ -21,6 +21,10 @@ function ProductManagement() {
   const [showImageGalleryModal, setShowImageGalleryModal] = useState(false);
   const [selectedImageFromGallery, setSelectedImageFromGallery] = useState(null);
   const [showFamilyDropdown, setShowFamilyDropdown] = useState(false);
+  const [showImageSearch, setShowImageSearch] = useState(false);
+  const [imageSearchQuery, setImageSearchQuery] = useState('');
+  const [imageSearchResults, setImageSearchResults] = useState([]);
+  const [isSearchingImages, setIsSearchingImages] = useState(false);
 
   const fetchFamilies = async () => {
     const token = localStorage.getItem('token');
@@ -160,6 +164,8 @@ function ProductManagement() {
         const product = await response.json();
         if (imageFile) {
           await handleImageUpload(product.id, imageFile);
+        } else if (formData.image_from_url) {
+          await saveImageFromUrl(product.id, formData.image_from_url);
         }
         setShowModal(false);
         fetchProducts(selectedFamily.id, currentProduct ? products.page : 1, searchTerm, filters.category, filters.brand);
@@ -191,6 +197,24 @@ function ProductManagement() {
       alert(err.message);
     }
   };
+ 
+  const saveImageFromUrl = async (productId, imageUrl) => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/products/${productId}/image-from-url`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token 
+        },
+        body: JSON.stringify({ image_url: imageUrl }),
+      });
+      if (!res.ok) throw new Error('Error al guardar la imagen desde URL');
+      return await res.json();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleFormChange = (e) => {
     const { id, value } = e.target;
@@ -201,6 +225,62 @@ function ProductManagement() {
     setSelectedImageFromGallery(image);
     setFormData(prev => ({ ...prev, image_url: `${API_BASE_URL}${image.file_path}` }));
     setShowImageGalleryModal(false);
+  };
+ 
+  const handleImageSearch = async (e) => {
+    if (e) e.preventDefault();
+    if (!imageSearchQuery.trim()) return;
+    
+    setIsSearchingImages(true);
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`/api/images/search?q=${encodeURIComponent(imageSearchQuery)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setImageSearchResults(await response.json());
+      }
+    } catch (error) {
+      console.error('Error searching images:', error);
+    } finally {
+      setIsSearchingImages(false);
+    }
+  };
+
+  const handleSelectImageFromSearch = async (imageUrl) => {
+    if (!currentProduct) {
+      // If adding a new product, we just set the URL as a preview for now
+      // and we'll handle the persistence after the product is created.
+      // Actually, it's better to persist it once the product exists.
+      // For new products, we can store it in formData.image_from_url 
+      // and process it in handleSave.
+      setFormData(prev => ({ ...prev, image_url: imageUrl, image_from_url: imageUrl }));
+      setShowImageSearch(false);
+      return;
+    }
+
+    setIsSearchingImages(true);
+    const token = localStorage.getItem('token');
+    try {
+      const response = await fetch(`/api/products/${currentProduct.id}/image-from-url`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ image_url: imageUrl })
+      });
+      if (response.ok) {
+        const updatedProduct = await response.json();
+        setFormData(prev => ({ ...prev, image_url: `${API_BASE_URL}${updatedProduct.shared_image.file_path}` }));
+        fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
+        setShowImageSearch(false);
+      }
+    } catch (error) {
+      console.error('Error selecting image from search:', error);
+    } finally {
+      setIsSearchingImages(false);
+    }
   };
 
   const openAddProductModal = () => {
@@ -439,9 +519,62 @@ function ProductManagement() {
                                     >
                                         <ImageIcon size={16} /> De la galería
                                     </button>
+                                    <button 
+                                        type="button" 
+                                        className="btn-premium" 
+                                        style={{ background: 'rgba(139, 92, 246, 0.1)', color: 'var(--primary-color)', padding: '6px 16px', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                                        onClick={() => {
+                                            setShowImageSearch(true);
+                                            setImageSearchQuery(formData.name || '');
+                                            if (formData.name) handleImageSearch();
+                                        }}
+                                    >
+                                        <Search size={16} /> Buscar en línea
+                                    </button>
                                 </div>
                             </div>
                         </div>
+
+                        {showImageSearch && (
+                            <div className="glass-panel" style={{ padding: '16px', marginBottom: '16px', border: '1px solid var(--primary-color)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                    <h6 style={{ margin: 0, fontWeight: 600 }}>Buscador de Imágenes</h6>
+                                    <button type="button" onClick={() => setShowImageSearch(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={16} /></button>
+                                </div>
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                                    <input 
+                                        type="text" 
+                                        className="premium-input" 
+                                        style={{ flex: 1, height: '36px', fontSize: '0.9rem' }} 
+                                        placeholder="Buscar..." 
+                                        value={imageSearchQuery}
+                                        onChange={e => setImageSearchQuery(e.target.value)}
+                                        onKeyPress={e => e.key === 'Enter' && handleImageSearch(e)}
+                                    />
+                                    <button type="button" className="btn-premium btn-primary" style={{ padding: '0 12px' }} onClick={handleImageSearch} disabled={isSearchingImages}>
+                                        {isSearchingImages ? '...' : <Search size={16} />}
+                                    </button>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', maxHeight: '150px', overflowY: 'auto', paddingRight: '4px' }}>
+                                    {imageSearchResults.map(img => (
+                                        <div 
+                                            key={img.id} 
+                                            style={{ cursor: 'pointer', borderRadius: '4px', overflow: 'hidden', border: '2px solid transparent', transition: 'border-color 0.2s', position: 'relative' }}
+                                            onClick={() => handleSelectImageFromSearch(img.largeImageURL)}
+                                            onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary-color)'}
+                                            onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
+                                        >
+                                            <img src={img.previewURL} alt="Result" style={{ width: '100%', height: '60px', objectFit: 'cover' }} />
+                                        </div>
+                                    ))}
+                                    {imageSearchResults.length === 0 && !isSearchingImages && (
+                                        <div style={{ gridColumn: 'span 4', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', padding: '12px' }}>
+                                            Ingresa un término para buscar imágenes.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <div className="modal-footer">
                         <button type="button" className="btn-premium btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
