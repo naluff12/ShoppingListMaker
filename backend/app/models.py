@@ -193,3 +193,29 @@ class SharedImage(Base):
     created_at = Column(DateTime, default=tz_util.now)
 
     uploaded_by = relationship("User")
+
+class ImageSearchConfig(Base):
+    __tablename__ = 'image_search_configs'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    base_url = Column(String(255), nullable=False)
+    
+    # Dynamic parameters configuration (JSON string)
+    # Format: [{"key": "q", "value": "{{q}}"}, {"key": "start", "value": "{{start}}"}, ...]
+    params_config = Column(Text, nullable=True) 
+    results_per_page = Column(Integer, default=20)
+    
+    # Response processing
+    response_type = Column(Enum('json', 'html', name='response_type'), default='json')
+    # For JSON: path to image list (e.g. 'hits') and paths to preview/large URLs within item
+    json_list_path = Column(String(100), nullable=True) 
+    json_preview_path = Column(String(100), nullable=True) 
+    json_large_path = Column(String(100), nullable=True) 
+    
+    # For HTML
+    image_selector = Column(String(100), nullable=True) 
+    image_attribute = Column(String(50), default='src')
+    
+    is_active = Column(Boolean, default=True)
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=tz_util.now)

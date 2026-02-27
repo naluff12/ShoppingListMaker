@@ -1,5 +1,5 @@
 from datetime import date, timedelta, datetime
-from typing import List
+from typing import List, Optional
 import time
 import os
 import random
@@ -1006,48 +1006,316 @@ def get_list_filter_options_endpoint(
 
 # --- IMAGE SEARCH ENDPOINTS ---
 
+def extract_images_from_client_response(response_type: str, response_text: str, extraction_config: dict):
+    """
+    Helper function to extract images from a response based on config.
+    extraction_config: {json_list_path, json_preview_path, json_large_path, image_selector, image_attribute}
+    """
+    if response_type == 'json':
+        import json
+        try:
+            data = json.loads(response_text)
+        except: return []
+        
+        # Extract list of items
+        items = data
+        list_path = extraction_config.get('json_list_path')
+        if list_path:
+            for part in list_path.split('.'):
+                if isinstance(items, dict):
+                    items = items.get(part, [])
+        
+        results = []
+        if not isinstance(items, (list, tuple)): return []
+        
+        for idx, item in enumerate(items):
+            if not isinstance(item, dict): continue
+            
+            preview = item
+            preview_path = extraction_config.get('json_preview_path')
+            if preview_path:
+                for part in preview_path.split('.'):
+                    if isinstance(preview, dict):
+                        preview = preview.get(part)
+            
+            large = item
+            large_path = extraction_config.get('json_large_path')
+            if large_path:
+                for part in large_path.split('.'):
+                    if isinstance(large, dict):
+                        large = large.get(part)
+            
+            if preview and large and isinstance(preview, str) and isinstance(large, str):
+                results.append({
+                    "id": idx,
+                    "previewURL": preview,
+                    "largeImageURL": large
+                })
+        return results
+    
+    else: # HTML
+        from html.parser import HTMLParser
+        import html
+        import re
+
+        class MyHTMLParser(HTMLParser):
+            def __init__(self, selector_str, attr):
+                super().__init__()
+                self.selectors = [s.strip('.') for s in selector_str.split() if s.strip()]
+                self.attr = attr
+                self.results = []
+                self.matching_stack = []
+
+            def handle_starttag(self, tag, attrs):
+                attrs_dict = dict(attrs)
+                classes = attrs_dict.get('class', '').split()
+                target_idx = len(self.matching_stack)
+                if target_idx < len(self.selectors):
+                    if self.selectors[target_idx] in classes:
+                        self.matching_stack.append(tag)
+                
+                if len(self.matching_stack) == len(self.selectors):
+                    val = attrs_dict.get(self.attr)
+                    if val:
+                        if self.attr == 'style' and 'url(' in val:
+                            val = html.unescape(val)
+                            match = re.search(r'url\([\'"]?(.*?)[\'"]?\)', val)
+                            if match: val = match.group(1)
+                        val = val.strip().strip('"').strip("'")
+                        if val: self.results.append(val)
+
+            def handle_endtag(self, tag):
+                if self.matching_stack and self.matching_stack[-1] == tag:
+                    self.matching_stack.pop()
+
+        parser = MyHTMLParser(extraction_config.get('image_selector') or "", extraction_config.get('image_attribute') or "src")
+        parser.feed(response_text)
+        
+        return [
+            {"id": i, "previewURL": url, "largeImageURL": url}
+            for i, url in enumerate(parser.results[:30])
+        ]
+
 @app.get("/images/search")
 async def search_images(
     q: str,
+    engine_id: Optional[int] = None,
+    page: int = 1,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     """
-    Proxies image search requests. Currently uses Pixabay (Open API) for demonstration.
-    In a real app, you'd use a private API key.
+    Proxies image search requests using configurable engines.
     """
-    # Pixabay public key for demo/easy setup or just use a placeholder search
-    # For now, let's use a simple simulated search if no key is provided, or a generic mock
-    # But to be helpful, let's use a real public search if possible or just return a mock structure
-    # since I can't guarantee a key. 
-    # Actually, let's use a very basic implementation that the user can later add a key to.
+    if engine_id:
+        config = crud.get_image_search_config(db, engine_id)
+    else:
+        config = crud.get_default_image_search_config(db)
+        
+    if not config:
+        # Fallback to mock search if no config exists
+        return [
+            {"id": 1, "previewURL": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200", "largeImageURL": "https://images.unsplash.com/photo-1542838132-92c53300491e"},
+            {"id": 2, "previewURL": "https://images.unsplash.com/photo-1588964895597-cfccd6e2dbf9?w=200", "largeImageURL": "https://images.unsplash.com/photo-1588964895597-cfccd6e2dbf9"},
+            {"id": 3, "previewURL": "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=200", "largeImageURL": "https://images.unsplash.com/photo-1550989460-0adf9ea622e2"}
+        ]
+
+    # Prepare parameters
+    params = {}
+    limit = config.results_per_page or 20
+    start_val = (page - 1) * limit
     
-    # PIXABAY_API_KEY = "ADD_YOUR_KEY_HERE"
-    # url = f"https://pixabay.com/api/?key={PIXABAY_API_KEY}&q={q}&image_type=photo"
-    
-    # For now, to make it work "out of the box" for the user, I'll implement a basic proxy 
-    # that defaults to a known free search or just returns a few results if I can find a keyless one.
-    # Wikipedia/Commons is often keyless for certain endpoints.
-    
-    # Let's try to use a simple approach with httpx to fetch from a public search
+    if config.params_config:
+        import json
+        import re
+        try:
+            config_list = json.loads(config.params_config)
+            context = {
+                "page": page,
+                "limit": limit,
+                "start": start_val,
+                "offset": start_val,
+                "end": start_val + limit
+            }
+            
+            for item in config_list:
+                k = item.get('key')
+                v = item.get('value', '')
+                if k:
+                    # 1. Replace the search query (non-numeric)
+                    v = v.replace('{{q}}', q)
+                    
+                    # 2. Find complex expressions like {{page * 24}}
+                    def evaluate_expr(match):
+                        expr = match.group(1).strip()
+                        # Sanity check: allow only numbers, basic operators and context keys
+                        safe_expr = expr
+                        for key in context:
+                            safe_expr = safe_expr.replace(key, str(context[key]))
+                        
+                        # Remove whitespace and check if only valid chars remain
+                        clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
+                        if clean_expr == '':
+                            try:
+                                # Safe eval since it's just numbers and operators now
+                                return str(int(eval(safe_expr)))
+                            except:
+                                return match.group(0)
+                        return match.group(0)
+
+                    v = re.sub(r'\{\{(.*?)\}\}', evaluate_expr, v)
+                    params[k] = v
+        except Exception as e:
+            print(f"Error parsing params_config: {e}")
+            # Fallback to basic q if parsing fails and it's missing
+            if not params: params = {"q": q}
+    else:
+        # Default behavior if no config
+        params = {"q": q}
+
     try:
-        async with httpx.AsyncClient() as client:
-            # We use a public search or just return an empty list if it fails
-            # For this exercise, I'll assume the user might want to add their own key.
-            # I will provide a working structure.
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            response = await client.get(config.base_url, params=params, timeout=15.0)
+            response.raise_for_status()
             
-            # Using Unsplash (requires key) or Pixabay (requires key).
-            # To be proactive, I'll use a mock result if I can't find a free one, 
-            # OR I can use a duckduckgo search if I can scrape it (though risky).
+            extraction_config = {
+                "json_list_path": config.json_list_path,
+                "json_preview_path": config.json_preview_path,
+                "json_large_path": config.json_large_path,
+                "image_selector": config.image_selector,
+                "image_attribute": config.image_attribute
+            }
             
-            # Let's stick to Pixabay structure but use a mock if key is missing.
-            return [
-                {"id": 1, "previewURL": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200", "largeImageURL": "https://images.unsplash.com/photo-1542838132-92c53300491e"},
-                {"id": 2, "previewURL": "https://images.unsplash.com/photo-1588964895597-cfccd6e2dbf9?w=200", "largeImageURL": "https://images.unsplash.com/photo-1588964895597-cfccd6e2dbf9"},
-                {"id": 3, "previewURL": "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=200", "largeImageURL": "https://images.unsplash.com/photo-1550989460-0adf9ea622e2"}
-            ]
+            return extract_images_from_client_response(config.response_type, response.text, extraction_config)
+
     except Exception as e:
+        print(f"Error in dynamic search: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/image-search-configs/test", dependencies=[Depends(get_current_admin_user)])
+async def admin_test_image_search_config(
+    test_data: dict = Body(...), # {"base_url": "...", "params_config": "...", "q": "..."}
+):
+    """
+    Tests a search configuration and returns the raw response.
+    """
+    base_url = test_data.get("base_url")
+    params_config = test_data.get("params_config")
+    q = test_data.get("q", "tomate")
+    page = 1
+    limit = 20
+    start_val = 0
+
+    if not base_url:
+        raise HTTPException(status_code=400, detail="base_url is required")
+
+    # Prepare parameters (copied logic from search_images)
+    params = {}
+    if params_config:
+        import json
+        import re
+        try:
+            config_list = json.loads(params_config)
+            context = {
+                "page": page,
+                "limit": limit,
+                "start": start_val,
+                "offset": start_val,
+                "end": start_val + limit
+            }
+            for item in config_list:
+                k = item.get('key')
+                v = item.get('value', '')
+                if k:
+                    v = v.replace('{{q}}', q)
+                    def evaluate_expr(match):
+                        expr = match.group(1).strip()
+                        safe_expr = expr
+                        for key in context:
+                            safe_expr = safe_expr.replace(key, str(context[key]))
+                        clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
+                        if clean_expr == '':
+                            try:
+                                return str(int(eval(safe_expr)))
+                            except: return match.group(0)
+                        return match.group(0)
+                    v = re.sub(r'\{\{(.*?)\}\}', evaluate_expr, v)
+                    params[k] = v
+        except Exception as e:
+            print(f"Error parsing params_config: {e}")
+            if not params: params = {"q": q}
+    else:
+        params = {"q": q}
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            response = await client.get(base_url, params=params, timeout=10.0)
+            
+            # Extract visual results using the helper
+            extraction_config = {
+                "json_list_path": test_data.get("json_list_path"),
+                "json_preview_path": test_data.get("json_preview_path"),
+                "json_large_path": test_data.get("json_large_path"),
+                "image_selector": test_data.get("image_selector"),
+                "image_attribute": test_data.get("image_attribute")
+            }
+            
+            extracted_images = extract_images_from_client_response(
+                test_data.get("response_type", "json"), 
+                response.text, 
+                extraction_config
+            )
+                
+            # Try to parse as JSON first
+            raw_data = None
+            is_json = False
+            try:
+                raw_data = response.json()
+                is_json = True
+            except:
+                raw_data = response.text
+                is_json = False
+                
+            return {
+                "url": str(response.url),
+                "status": response.status_code,
+                "is_json": is_json,
+                "data": raw_data,
+                "extracted_images": extracted_images
+            }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": 500
+        }
+
+# --- ADMIN: IMAGE SEARCH CONFIG ENDPOINTS ---
+
+@app.get("/admin/image-search-configs", response_model=List[schemas.ImageSearchConfig], dependencies=[Depends(get_current_admin_user)])
+def admin_get_image_search_configs(active_only: bool = False, db: Session = Depends(get_db)):
+    return crud.get_image_search_configs(db, active_only=active_only)
+
+@app.post("/admin/image-search-configs", response_model=schemas.ImageSearchConfig, dependencies=[Depends(get_current_admin_user)])
+def admin_create_image_search_config(config: schemas.ImageSearchConfigCreate, db: Session = Depends(get_db)):
+    return crud.create_image_search_config(db, config=config)
+
+@app.put("/admin/image-search-configs/{config_id}", response_model=schemas.ImageSearchConfig, dependencies=[Depends(get_current_admin_user)])
+def admin_update_image_search_config(config_id: int, config: schemas.ImageSearchConfigBase, db: Session = Depends(get_db)):
+    db_config = crud.update_image_search_config(db, config_id, config)
+    if not db_config:
+        raise HTTPException(status_code=404, detail="Config not found")
+    return db_config
+
+@app.delete("/admin/image-search-configs/{config_id}", response_model=schemas.ImageSearchConfig, dependencies=[Depends(get_current_admin_user)])
+def admin_delete_image_search_config(config_id: int, db: Session = Depends(get_db)):
+    db_config = crud.delete_image_search_config(db, config_id)
+    if not db_config:
+        raise HTTPException(status_code=404, detail="Config not found")
+    return db_config
+
+@app.get("/images/engines", response_model=List[schemas.ImageSearchConfig])
+def get_available_engines(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return crud.get_image_search_configs(db, active_only=True)
 
 @app.get("/products/search", response_model=schemas.Page[schemas.Product])
 def search_products_endpoint(

@@ -352,3 +352,28 @@ Blame.model_rebuild()
 ShoppingList.model_rebuild()
 Product.model_rebuild()
 ListItem.model_rebuild()
+
+# ---------- IMAGE SEARCH CONFIG ----------
+class ImageSearchConfigBase(BaseModel):
+    name: str
+    base_url: str
+    params_config: Optional[str] = None # JSON string
+    results_per_page: int = 20
+    response_type: str = 'json'
+    json_list_path: Optional[str] = None
+    json_preview_path: Optional[str] = None
+    json_large_path: Optional[str] = None
+    image_selector: Optional[str] = None
+    image_attribute: str = 'src'
+    is_active: bool = True
+    is_default: bool = False
+
+class ImageSearchConfigCreate(ImageSearchConfigBase):
+    pass
+
+class ImageSearchConfig(ImageSearchConfigBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

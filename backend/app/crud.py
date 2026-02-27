@@ -684,4 +684,51 @@ def get_list_filter_options(db: Session, list_id: int):
 
     return {"categories": categories, "brands": brands}
 
+def get_image_search_configs(db: Session, active_only: bool = False):
+    query = db.query(models.ImageSearchConfig)
+    if active_only:
+        query = query.filter(models.ImageSearchConfig.is_active == True)
+    return query.order_by(models.ImageSearchConfig.name).all()
+
+def get_image_search_config(db: Session, config_id: int):
+    return db.query(models.ImageSearchConfig).filter(models.ImageSearchConfig.id == config_id).first()
+
+def get_default_image_search_config(db: Session):
+    return db.query(models.ImageSearchConfig).filter(models.ImageSearchConfig.is_default == True).first()
+
+def create_image_search_config(db: Session, config: schemas.ImageSearchConfigCreate):
+    db_config = models.ImageSearchConfig(**config.dict())
+    if db_config.is_default:
+        # Reset other defaults
+        db.query(models.ImageSearchConfig).update({models.ImageSearchConfig.is_default: False})
+    db.add(db_config)
+    db.commit()
+    db.refresh(db_config)
+    return db_config
+
+def update_image_search_config(db: Session, config_id: int, config_update: schemas.ImageSearchConfigBase):
+    db_config = get_image_search_config(db, config_id)
+    if not db_config:
+        return None
+    
+    update_data = config_update.dict(exclude_unset=True)
+    if update_data.get('is_default'):
+        # Reset other defaults
+        db.query(models.ImageSearchConfig).filter(models.ImageSearchConfig.id != config_id).update({models.ImageSearchConfig.is_default: False})
+        
+    for key, value in update_data.items():
+        setattr(db_config, key, value)
+        
+    db.commit()
+    db.refresh(db_config)
+    return db_config
+
+def delete_image_search_config(db: Session, config_id: int):
+    db_config = get_image_search_config(db, config_id)
+    if db_config:
+        db.delete(db_config)
+        db.commit()
+    return db_config
+
+
 

@@ -71,14 +71,16 @@ CREATE TABLE products (
     description TEXT,
     category VARCHAR(100),
     brand VARCHAR(100),
-    image_url VARCHAR(255),
+    family_id INT,
+    shared_image_id INT NULL,
     last_price FLOAT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (family_id) REFERENCES families (id) ON DELETE CASCADE,
+    FOREIGN KEY (shared_image_id) REFERENCES shared_images (id) ON DELETE SET NULL,
     UNIQUE KEY (name, family_id)
 );
---ALTER TABLE products ADD COLUMN category VARCHAR(100); ALTER TABLE products ADD COLUMN brand VARCHAR(100);
+
 CREATE TABLE price_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     product_id INT NOT NULL,
@@ -109,7 +111,7 @@ CREATE TABLE list_items (
     FOREIGN KEY (creado_por_id) REFERENCES users (id),
     FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
 );
--- ALTER TABLE list_items ADD COLUMN brand VARCHAR(100) AFTER unit;ALTER TABLE list_items ADD COLUMN category VARCHAR(100) AFTER brand;
+
 CREATE TABLE blames (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
@@ -141,4 +143,21 @@ CREATE TABLE shared_images (
     uploaded_by_user_id INT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (uploaded_by_user_id) REFERENCES users (id) ON DELETE SET NULL
+);
+
+CREATE TABLE image_search_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    base_url VARCHAR(255) NOT NULL,
+    params_config TEXT,
+    results_per_page INT DEFAULT 20,
+    response_type ENUM('json', 'html') DEFAULT 'json',
+    json_list_path VARCHAR(100),
+    json_preview_path VARCHAR(100),
+    json_large_path VARCHAR(100),
+    image_selector VARCHAR(100),
+    image_attribute VARCHAR(50) DEFAULT 'src',
+    is_active BOOLEAN DEFAULT TRUE,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Users, Home, Package } from 'lucide-react';
+import { Users, Home, Package, Globe } from 'lucide-react';
 import UserManagement from './UserManagement';
 import FamilyManagement from './FamilyManagement';
 import ProductManagement from './ProductManagement';
+import ImageSearchAdmin from './ImageSearchAdmin';
 
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('users');
@@ -15,6 +16,8 @@ function AdminDashboard() {
         return <FamilyManagement />;
       case 'products':
         return <ProductManagement />;
+      case 'search':
+        return <ImageSearchAdmin apiBaseUrl="/api" />;
       default:
         return <UserManagement />;
     }
@@ -45,6 +48,13 @@ function AdminDashboard() {
             onClick={() => setActiveTab('products')}
         >
             <Package size={18} /> Gestión de Productos
+        </button>
+        <button 
+            className={`btn-premium ${activeTab === 'search' ? 'btn-primary' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('search')}
+        >
+            <Globe size={18} /> Motores de Búsqueda
         </button>
       </div>
 
