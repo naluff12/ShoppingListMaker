@@ -98,8 +98,7 @@ function ShoppingListView() {
 
     useEffect(() => {
         if (!listId) return;
-        const token = localStorage.getItem('token');
-        fetch(`/api/listas/${listId}/filter-options`, { headers: { 'Authorization': 'Bearer ' + token } })
+        fetch(`/api/listas/${listId}/filter-options`)
             .then(res => res.json())
             .then(data => setFilterOptions(data))
             .catch(() => setFilterOptions({ categories: [], brands: [] }));
@@ -107,9 +106,8 @@ function ShoppingListView() {
 
     const fetchBudgetDetails = async () => {
         if (!listId) return;
-        const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/listas/${listId}/budget-details`, { headers: { 'Authorization': 'Bearer ' + token } });
+            const res = await fetch(`/api/listas/${listId}/budget-details`);
             if (res.ok) {
                 const data = await res.json();
                 setBudgetDetails(data);
@@ -124,11 +122,10 @@ function ShoppingListView() {
         if (!quickAddItemName.trim()) return;
 
         setIsQuickAdding(true);
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/items/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     list_id: listId,
                     nombre: quickAddItemName,
@@ -155,11 +152,10 @@ function ShoppingListView() {
             return;
         }
 
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/listas/${listId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ budget: budgetValue })
             });
             if (!res.ok) throw new Error('Error al actualizar el presupuesto');
@@ -174,9 +170,6 @@ function ShoppingListView() {
 
     const fetchListAndBlame = (page = 1) => {
         if (!listId) return;
-        const token = localStorage.getItem('token');
-        setLoading(true);
-
         const queryParams = new URLSearchParams({
             page: page,
             size: 10,
@@ -185,12 +178,13 @@ function ShoppingListView() {
             category: categoryFilter,
             brand: brandFilter
         });
+        setLoading(true);
 
-        const listDetailsPromise = fetch(`/api/listas/${listId}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const itemsPromise = fetch(`/api/listas/${listId}/items?${queryParams.toString()}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const blamePromise = fetch(`/api/blame/lista/${listId}`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const purchasedCountPromise = fetch(`/api/listas/${listId}/items?status=comprado&size=1`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
-        const totalItemsCountPromise = fetch(`/api/listas/${listId}/items?size=1`, { headers: { 'Authorization': 'Bearer ' + token } }).then(res => res.json());
+        const listDetailsPromise = fetch(`/api/listas/${listId}`).then(res => res.json());
+        const itemsPromise = fetch(`/api/listas/${listId}/items?${queryParams.toString()}`).then(res => res.json());
+        const blamePromise = fetch(`/api/blame/lista/${listId}`).then(res => res.json());
+        const purchasedCountPromise = fetch(`/api/listas/${listId}/items?status=comprado&size=1`).then(res => res.json());
+        const totalItemsCountPromise = fetch(`/api/listas/${listId}/items?size=1`).then(res => res.json());
 
         Promise.all([
             listDetailsPromise,
@@ -208,7 +202,7 @@ function ShoppingListView() {
                 setPurchasedItemsCount(purchasedCountData.total);
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
-                    fetch(`/api/families/${listData.calendar.family_id}/products`, { headers: { 'Authorization': 'Bearer ' + token } })
+                    fetch(`/api/families/${listData.calendar.family_id}/products`)
                         .then(res => res.json())
                         .then(data => setProducts(data.items))
                         .catch(() => setProducts([]));
@@ -265,11 +259,8 @@ function ShoppingListView() {
             return;
         }
         setLoadingItemBlame(true);
-        const token = localStorage.getItem('token');
         try {
-            const res = await fetch(`/api/blame/item/${itemId}`, {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
+            const res = await fetch(`/api/blame/item/${itemId}`);
             const data = await res.json();
             setItemBlames(prev => ({ ...prev, [itemId]: Array.isArray(data) ? data : [] }));
             setShowItemBlame(itemId);
@@ -282,11 +273,10 @@ function ShoppingListView() {
 
     const proceedWithAdd = async (brand = '', category = '') => {
         setLoading(true);
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/items/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     list_id: listId, 
                     nombre: newItem, 
@@ -326,10 +316,7 @@ function ShoppingListView() {
         e.preventDefault();
         if (!newItem) return;
 
-        const token = localStorage.getItem('token');
-        const searchRes = await fetch(`/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(newItem)}`, {
-            headers: { 'Authorization': 'Bearer ' + token }
-        });
+        const searchRes = await fetch(`/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(newItem)}`);
         const searchData = await searchRes.json();
         
         const existingProduct = searchData.items.find(p => p.name.toLowerCase() === newItem.toLowerCase());
@@ -345,19 +332,10 @@ function ShoppingListView() {
 
     const handleAddItemsFromModal = async (itemsToAdd) => {
         if (!listId) return;
-        const token = localStorage.getItem('token');
-        const items = itemsToAdd.map(item => ({
-            nombre: item.nombre,
-            cantidad: item.cantidad,
-            unit: item.unit,
-            comentario: item.comentario,
-            precio_estimado: item.precio_estimado,
-        }));
-
         try {
             await fetch(`/api/listas/${listId}/items/bulk`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ items })
             });
             fetchListAndBlame(); 
@@ -369,11 +347,10 @@ function ShoppingListView() {
 
     const handleStatus = async (id, status) => {
         const newStatus = status === 'comprado' ? 'pendiente' : 'comprado';
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/items/${id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus })
             });
             if (!res.ok) throw new Error('Error al actualizar estado');
@@ -386,7 +363,7 @@ function ShoppingListView() {
                 setPurchasedItemsCount(prev => prev - 1);
             }
             if (showItemBlame === id) {
-                const resHist = await fetch(`/api/blame/item/${id}`, { headers: { 'Authorization': 'Bearer ' + token } });
+                const resHist = await fetch(`/api/blame/item/${id}`);
                 const dataHist = await resHist.json();
                 setItemBlames(prev => ({ ...prev, [id]: Array.isArray(dataHist) ? dataHist : [] }));
             }
@@ -398,12 +375,10 @@ function ShoppingListView() {
 
     const handleDelete = async (id) => {
         setLoading(true);
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/items/${id}`,
                 {
                     method: 'DELETE',
-                    headers: { 'Authorization': 'Bearer ' + token }
                 });
             if (!res.ok) throw new Error('Error al eliminar item');
             fetchListAndBlame(); 
@@ -415,12 +390,11 @@ function ShoppingListView() {
 
     const handleItemCommentSubmit = async (itemId) => {
         if (!newItemComment) return;
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/items/${itemId}/blames`,
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ detalles: newItemComment })
                 });
             if (!res.ok) throw new Error('Error al agregar comentario');
@@ -438,12 +412,11 @@ function ShoppingListView() {
     const handleListCommentSubmit = async (e) => {
         e.preventDefault();
         if (!newListComment) return;
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/listas/${listId}/blames`,
                 {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ detalles: newListComment })
                 });
             if (!res.ok) throw new Error('Error al agregar comentario a la lista');
@@ -460,11 +433,10 @@ function ShoppingListView() {
 
         try {
             if (!isNaN(parsedValue)) {
-                const token = localStorage.getItem('token');
                 const res = await fetch(`/api/items/${itemId}`,
                     {
                         method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ [field]: parsedValue })
                     });
                 if (!res.ok) throw new Error('Error al actualizar el precio');
@@ -482,11 +454,10 @@ function ShoppingListView() {
 
     const handleListStatusChange = async () => {
         const newStatus = listDetails.status === 'revisada' ? 'pendiente' : 'revisada';
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/listas/${listId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ status: newStatus })
             });
             if (!res.ok) throw new Error('Error al actualizar estado de la lista');
@@ -499,13 +470,11 @@ function ShoppingListView() {
 
     const handleImageUpload = async (itemId, file) => {
         if (!file) return;
-        const token = localStorage.getItem('token');
         const formData = new FormData();
         formData.append('file', file);
         try {
             const res = await fetch(`${API_URL}/items/${itemId}/upload-image`, {
                 method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + token },
                 body: formData,
             });
             if (!res.ok) throw new Error('Error al subir la imagen');
@@ -517,11 +486,10 @@ function ShoppingListView() {
     }
 
     const handleItemUpdate = async (itemId, data) => {
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/items/${itemId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
             if (!res.ok) throw new Error('Error al actualizar el item');
@@ -540,11 +508,9 @@ function ShoppingListView() {
             setProducts([]);
             return;
         }
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(
-                `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(query)}&page=${page}&size=5`,
-                { headers: { 'Authorization': 'Bearer ' + token } }
+                `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(query)}&page=${page}&size=5`
             );
             if (res.ok) {
                 const data = await res.json();
@@ -572,11 +538,10 @@ function ShoppingListView() {
     const handleImageSelect = async (image) => {
         if (!selectedItemForGallery) return;
 
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`${API_URL}/items/${selectedItemForGallery.id}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     shared_image_id: image.id
                 })

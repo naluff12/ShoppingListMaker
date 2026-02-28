@@ -27,18 +27,13 @@ function CalendarView() {
 
     const fetchLists = (startDate, endDate) => {
         if (!calendar || !calendar.id) return;
-        const token = localStorage.getItem('token');
-        setLoading(true);
-        
         const params = new URLSearchParams({
             calendar_id: calendar.id,
-            start_date: startDate.toISOString().slice(0, 10),
-            end_date: endDate.toISOString().slice(0, 10),
+            start_date: startDate.toISOString().split('T')[0],
+            end_date: endDate.toISOString().split('T')[0]
         });
-
-        fetch(`/api/listas/?${params.toString()}`, {
-            headers: { 'Authorization': 'Bearer ' + token }
-        })
+        setLoading(true);
+        fetch(`/api/listas/?${params.toString()}`)
             .then(res => res.json())
             .then(data => setListas(Array.isArray(data?.items) ? data.items : []))
             .finally(() => setLoading(false));
@@ -89,12 +84,11 @@ function CalendarView() {
     const handleCrearLista = async (e) => {
         e.preventDefault();
         setLoading(true);
-        const token = localStorage.getItem('token');
         const dateKeyActual = selectedDate.toISOString().slice(0, 10);
         try {
             const res = await fetch(`/api/listas/`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: nuevaListaNombre,
                     list_for_date: dateKeyActual,
@@ -121,7 +115,6 @@ function CalendarView() {
 
     const handleAddItems = async (itemsToAdd) => {
         if (!newlyCreatedList) return;
-        const token = localStorage.getItem('token');
         const items = itemsToAdd.map(item => ({
             nombre: item.nombre,
             cantidad: item.cantidad,
@@ -133,7 +126,7 @@ function CalendarView() {
         try {
             await fetch(`/api/listas/${newlyCreatedList.id}/items/bulk`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ items })
             });
         } catch (err) {
@@ -144,11 +137,9 @@ function CalendarView() {
     const handleDeleteLista = async (listId) => {
         if (!window.confirm('¿Estás seguro de que quieres eliminar esta lista?')) return;
         setLoading(true);
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/listas/${listId}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': 'Bearer ' + token }
             });
             if (!res.ok) throw new Error('Error al eliminar la lista');
             const startDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth(), 1);

@@ -10,17 +10,11 @@ function Welcome() {
 
     useEffect(() => {
         const fetchData = async () => {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                setLoading(false);
-                return;
-            }
-
             try {
                 const [listsRes, productsRes, userRes] = await Promise.all([
-                    fetch(`/api/home/last-lists`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`/api/home/last-products`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`/api/users/me`, { headers: { 'Authorization': `Bearer ${token}` } })
+                    fetch(`/api/home/last-lists`),
+                    fetch(`/api/home/last-products`),
+                    fetch(`/api/users/me`)
                 ]);
 
                 if (listsRes.ok) {

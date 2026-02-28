@@ -11,12 +11,7 @@ function NavigationBar({ user, onLogout }) {
 
   const fetchNotifications = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await fetch('/api/notifications', {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+      const response = await fetch('/api/notifications');
 
       if (response.ok) {
         const data = await response.json();
@@ -53,12 +48,8 @@ function NavigationBar({ user, onLogout }) {
 
   const handleMarkOneRead = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
       await fetch(`/api/notifications/${notificationId}/mark-as-read`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       setNotifications(prev => ({
@@ -72,9 +63,6 @@ function NavigationBar({ user, onLogout }) {
 
   const handleNotificationClick = async (notification) => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
       if (!notification.is_read) {
         handleMarkOneRead(notification.id);
       }
@@ -84,9 +72,7 @@ function NavigationBar({ user, onLogout }) {
         const match = notification.link.match(/\/shopping-list\/(\d+)/);
         if (match) {
           const listId = match[1];
-          const response = await fetch(`/api/listas/${listId}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
+          const response = await fetch(`/api/listas/${listId}`);
           if (response.ok) {
             navigate(notification.link);
           } else {
@@ -103,12 +89,8 @@ function NavigationBar({ user, onLogout }) {
 
   const handleMarkAllRead = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
       const response = await fetch('/api/notifications/mark-all-as-read', {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.ok) {
@@ -124,12 +106,8 @@ function NavigationBar({ user, onLogout }) {
 
   const handleDeleteNotification = async (notificationId) => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
       const response = await fetch(`/api/notifications/${notificationId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.ok) {

@@ -11,13 +11,8 @@ function UserManagement() {
   const [formData, setFormData] = useState({ name: '', username: '', email: '', password: '', role: 'User' });
 
   const fetchUsers = async () => {
-    const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/admin/users`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(`/api/admin/users`);
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
@@ -40,13 +35,9 @@ function UserManagement() {
   };
 
   const handleDelete = async (userId) => {
-    const token = localStorage.getItem('token');
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
       });
       if (response.ok) {
         fetchUsers();
@@ -60,7 +51,6 @@ function UserManagement() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
     const method = currentUser ? 'PUT' : 'POST';
     const url = currentUser ? `/api/admin/users/${currentUser.id}` : `/api/admin/users`;
 
@@ -80,7 +70,6 @@ function UserManagement() {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(body),
       });

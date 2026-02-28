@@ -10,7 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import OperationalError
 from .schemas import ListItem as ListItemSchema
 
-from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect, Response, Request
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,12 +64,27 @@ def get_db():
 def get_status(db: Session = Depends(get_db)):
     return {"needs_setup": db.query(models.User).count() == 0}
 
-def get_current_user(db: Session = Depends(get_db), token: str = Depends(security.oauth2_scheme)):
+def get_current_user(db: Session = Depends(get_db), request: Request = None):
+    token = None
+    
+    # Check Authorization header first (legacy/API support)
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+    
+    # If not in header, check cookies
+    if not token and request:
+        token = request.cookies.get("access_token")
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    if not token:
+        raise credentials_exception
+
     try:
         payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
         username: str = payload.get("sub")
@@ -78,6 +93,7 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(securit
         token_data = schemas.TokenData(username=username)
     except JWTError:
         raise credentials_exception
+        
     user = crud.get_user_by_username(db, username=token_data.username)
     if user is None:
         raise credentials_exception
@@ -238,7 +254,7 @@ def setup_inicial(payload: schemas.SetupRequest, db: Session = Depends(get_db)):
     return {"family": fam, "admin": admin}
 
 @app.post("/token", response_model=schemas.Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_for_access_token(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = crud.authenticate_user(db, username=form_data.username, password=form_data.password)
     if not user:
         raise HTTPException(
@@ -250,7 +266,24 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
     access_token = security.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    
+    # Set HttpOnly Cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        max_age=security.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        expires=security.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        secure=False  # Set to True in production with HTTPS
+    )
+    
     return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/logout")
+def logout(response: Response):
+    response.delete_cookie("access_token")
+    return {"message": "Logged out"}
 
 @app.post("/users/register", response_model=schemas.User)
 def register_user(payload: schemas.UserRegister, db: Session = Depends(get_db)):

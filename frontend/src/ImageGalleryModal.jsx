@@ -19,12 +19,7 @@ const ImageGalleryModal = ({ show, handleClose, handleSelectImage }) => {
         setLoading(true);
         setError(null);
         try {
-            const token = localStorage.getItem('token');
-            const response = await axios.get('http://localhost:8000/images/gallery', {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
+            const response = await axios.get('http://localhost:8000/images/gallery');
             setImages(response.data);
         } catch (err) {
             setError('Error al cargar las imágenes de la galería.');

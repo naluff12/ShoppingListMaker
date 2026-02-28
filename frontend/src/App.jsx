@@ -19,33 +19,29 @@ function App() {
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+        } catch (e) {
+            console.error("Error during logout", e);
+        }
         setUser(null);
         navigate('/login');
     };
 
     const fetchUser = async () => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            try {
-                const response = await fetch(`/api/users/me`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                    },
-                });
-                if (response.ok) {
-                    const userData = await response.json();
-                    setUser(userData);
-                } else {
-                    localStorage.removeItem('token');
-                    setUser(null);
-                }
-            } catch (error) {
-                console.error('Failed to fetch user', error);
-                localStorage.removeItem('token');
+        // Check for session (automatic via cookies)
+        try {
+            const response = await fetch(`/api/users/me`);
+            if (response.ok) {
+                const userData = await response.json();
+                setUser(userData);
+            } else {
                 setUser(null);
             }
+        } catch (error) {
+            console.error('Failed to fetch user', error);
+            setUser(null);
         }
         setLoading(false);
     };
@@ -73,9 +69,8 @@ function App() {
         checkStatus();
     }, [navigate]);
 
-    const onLogin = () => {
-        setLoading(true);
-        fetchUser();
+    const onLogin = (userData) => {
+        setUser(userData);
         navigate('/family-panel');
     }
 

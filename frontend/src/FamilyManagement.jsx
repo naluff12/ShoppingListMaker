@@ -18,9 +18,8 @@ function FamilyManagement() {
   const [userToAdd, setUserToAdd] = useState('');
 
   const fetchFamilies = async () => {
-    const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/admin/families`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const response = await fetch(`/api/admin/families`);
       if (response.ok) {
         setFamilies(await response.json());
       }
@@ -30,9 +29,8 @@ function FamilyManagement() {
   };
 
   const fetchUsers = async () => {
-    const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/admin/users`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const response = await fetch(`/api/admin/users`);
       if (response.ok) {
         setUsers(await response.json());
       }
@@ -53,11 +51,9 @@ function FamilyManagement() {
   };
 
   const handleDelete = async (familyId) => {
-    const token = localStorage.getItem('token');
     try {
       const response = await fetch(`/api/admin/families/${familyId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
         fetchFamilies();
@@ -72,7 +68,6 @@ function FamilyManagement() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
     const method = currentFamily ? 'PUT' : 'POST';
     const url = currentFamily ? `/api/admin/families/${currentFamily.id}` : `/api/admin/families`;
 
@@ -81,7 +76,6 @@ function FamilyManagement() {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
@@ -111,9 +105,8 @@ function FamilyManagement() {
 
   const handleManageMembers = async (family) => {
     setSelectedFamilyForMembers(family);
-    const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/admin/families/${family.id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const response = await fetch(`/api/admin/families/${family.id}`);
       if (response.ok) {
         const data = await response.json();
         setFamilyMembers(data.users);
@@ -128,11 +121,9 @@ function FamilyManagement() {
 
   const handleAddMember = async () => {
     if (!userToAdd || !selectedFamilyForMembers) return;
-    const token = localStorage.getItem('token');
     try {
       const response = await fetch(`/api/admin/families/${selectedFamilyForMembers.id}/members/${userToAdd}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
         handleManageMembers(selectedFamilyForMembers);
@@ -149,11 +140,9 @@ function FamilyManagement() {
 
   const handleRemoveMember = async (userId) => {
     if (!selectedFamilyForMembers) return;
-    const token = localStorage.getItem('token');
     try {
       const response = await fetch(`/api/admin/families/${selectedFamilyForMembers.id}/members/${userId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
         handleManageMembers(selectedFamilyForMembers);

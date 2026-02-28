@@ -24,11 +24,9 @@ function Login({ onLogin }) {
                 throw new Error('Credenciales incorrectas');
             }
             const data = await res.json();
-            localStorage.setItem('token', data.access_token);
+            // El token ahora se gestiona automáticamente por Cookies HttpOnly
 
-            const userRes = await fetch('/api/users/me', {
-                headers: { 'Authorization': 'Bearer ' + data.access_token }
-            });
+            const userRes = await fetch('/api/users/me');
             if (!userRes.ok) throw new Error('No se pudo obtener la información del usuario');
             const userData = await userRes.json();
             onLogin(userData);

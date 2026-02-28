@@ -18,22 +18,14 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
                     const startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
                     const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-                    const response = await fetch(`/api/families/${familyId}/previous_lists?start_date=${startDate}&end_date=${endDate}`, {
-                        headers: {
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        }
-                    });
+                    const response = await fetch(`/api/families/${familyId}/previous_lists?start_date=${startDate}&end_date=${endDate}`);
                     if (response.ok) {
                         const data = await response.json();
                         const filteredLists = data.items.filter(list => list.id !== listId);
                         setPreviousLists(filteredLists);
 
                         const itemsPromises = filteredLists.map(list =>
-                            fetch(`/api/listas/${list.id}/items?status=pendiente`, {
-                                headers: {
-                                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                }
-                            }).then(res => res.json())
+                            fetch(`/api/listas/${list.id}/items?status=pendiente`).then(res => res.json())
                         );
                         const itemsResults = await Promise.all(itemsPromises);
                         const itemsMap = filteredLists.reduce((acc, list, index) => {

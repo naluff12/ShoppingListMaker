@@ -9,10 +9,7 @@ const PriceHistoryModal = ({ show, handleClose, item }) => {
     useEffect(() => {
         if (show && item) {
             setLoading(true);
-            const token = localStorage.getItem('token');
-            fetch(`/api/products/${item.product?.id}/prices`, {
-                headers: { 'Authorization': 'Bearer ' + token }
-            })
+            fetch(`/api/products/${item.product?.id}/prices`)
             .then(res => res.json())
             .then(data => {
                 setHistory(Array.isArray(data) ? data : []);

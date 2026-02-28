@@ -35,10 +35,8 @@ function ProductManagement() {
   }, [lastMessage]);
 
   const fetchFamilies = async () => {
-    const token = localStorage.getItem('token');
     try {
-      // First figure out if the user is an admin
-      const meResponse = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+      const meResponse = await fetch('/api/users/me');
       let isSuperuser = false;
       if (meResponse.ok) {
         const meData = await meResponse.json();
@@ -46,7 +44,7 @@ function ProductManagement() {
         setIsAdmin(isSuperuser);
       }
 
-      const response = await fetch(`/api/families/my`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const response = await fetch(`/api/families/my`);
       if (response.ok) {
         let f = await response.json();
         if (isSuperuser) {
@@ -60,10 +58,8 @@ function ProductManagement() {
   };
 
   const fetchProducts = async (familyId, page = 1, query = '', category = '', brand = '') => {
-    const token = localStorage.getItem('token');
     let url = `/api/families/${familyId}/products?page=${page}&size=10`;
     
-    // For admin global view
     if (familyId === 'all') {
       url = `/api/admin/products/all?page=${page}&size=10`;
     }
@@ -83,7 +79,7 @@ function ProductManagement() {
     }
     
     try {
-      const response = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+      const response = await fetch(url);
       if (response.ok) {
         setProducts(await response.json());
       }
@@ -93,9 +89,8 @@ function ProductManagement() {
   };
 
   const fetchFilterOptions = async (familyId) => {
-    const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/families/${familyId}/filters`, { headers: { 'Authorization': `Bearer ${token}` } });
+      const response = await fetch(`/api/families/${familyId}/filters`);
       if (response.ok) {
         setFilterOptions(await response.json());
       }
@@ -143,11 +138,9 @@ function ProductManagement() {
 
   const handleDelete = async (productId) => {
     if (!window.confirm('¿Estás seguro de eliminar este producto?')) return;
-    const token = localStorage.getItem('token');
     try {
       const response = await fetch(`/api/products/${productId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
         fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
@@ -159,7 +152,6 @@ function ProductManagement() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
     
     let shared_image_id = currentProduct?.shared_image_id;
 
@@ -170,7 +162,6 @@ function ProductManagement() {
       try {
         const uploadRes = await fetch(`/api/images/upload`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
           body: imageData
         });
         if (uploadRes.ok) {
@@ -210,7 +201,6 @@ function ProductManagement() {
         method,
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
         },
         body: JSON.stringify(payload)
       });
@@ -224,14 +214,12 @@ function ProductManagement() {
   };
 
   const persistImageFromUrl = async (productId, imageUrl) => {
-    const token = localStorage.getItem('token');
     const url = productId ? `/api/products/${productId}/image-from-url` : `/api/images/from-url`;
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token 
         },
         body: JSON.stringify({ image_url: imageUrl }),
       });

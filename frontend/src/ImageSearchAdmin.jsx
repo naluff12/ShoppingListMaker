@@ -40,8 +40,7 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
       const response = await fetch(`${apiBaseUrl}/admin/image-search-configs/test`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           base_url: editForm.base_url,
@@ -146,11 +145,7 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
   const fetchConfigs = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${apiBaseUrl}/admin/image-search-configs`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await fetch(`${apiBaseUrl}/admin/image-search-configs`);
       if (!response.ok) throw new Error('Error al cargar configuraciones');
       const data = await response.json();
       setConfigs(data);
@@ -177,8 +172,7 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
       const response = await fetch(url, {
         method: isUpdate ? 'PUT' : 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(finalForm)
       });
@@ -200,10 +194,7 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
     
     try {
       const response = await fetch(`${apiBaseUrl}/admin/image-search-configs/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        method: 'DELETE'
       });
       if (!response.ok) throw new Error('Error al eliminar');
       fetchConfigs();

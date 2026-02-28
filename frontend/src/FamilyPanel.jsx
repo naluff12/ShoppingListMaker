@@ -25,12 +25,9 @@ function FamilyPanel() {
     const navigate = useNavigate();
 
     const fetchFamilies = useCallback(async () => {
-        const token = localStorage.getItem('token');
         try {
             setLoading(true);
-            const res = await fetch(`/api/families/my`, {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
+            const res = await fetch(`/api/families/my`);
             if (!res.ok) throw new Error('Could not fetch families');
             const data = await res.json();
             setFamilies(data);
@@ -56,11 +53,8 @@ function FamilyPanel() {
                 setCalendars([]);
                 return;
             }
-            const token = localStorage.getItem('token');
             try {
-                const res = await fetch(`/api/families/${selectedFamily.id}/calendars`, {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
+                const res = await fetch(`/api/families/${selectedFamily.id}/calendars`);
                 const data = await res.json();
                 setCalendars(Array.isArray(data) ? data : []);
             } catch (error) {
@@ -83,11 +77,10 @@ function FamilyPanel() {
 
     const handleCreateFamily = async (e) => {
         e.preventDefault();
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/families`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nombre: newFamilyName })
             });
             if (!res.ok) throw new Error('Failed to create family');
@@ -101,11 +94,10 @@ function FamilyPanel() {
 
     const handleJoinFamily = async (e) => {
         e.preventDefault();
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/families/join`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code: joinCode })
             });
             if (!res.ok) throw new Error('Failed to join family');
@@ -120,11 +112,10 @@ function FamilyPanel() {
     const handleCreateCalendar = async (e) => {
         e.preventDefault();
         if (!selectedFamily) return;
-        const token = localStorage.getItem('token');
         try {
             const res = await fetch(`/api/families/${selectedFamily.id}/calendars`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nombre: newCalendarName })
             });
             if (!res.ok) throw new Error('Error al crear calendario.');

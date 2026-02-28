@@ -38,10 +38,7 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
 
     const fetchEngines = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch('/api/images/engines', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await fetch('/api/images/engines');
             if (response.ok) {
                 const data = await response.json();
                 setEngines(data);
@@ -70,8 +67,6 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
         setLoading(true);
         setLoadingStage('searching');
         setError(null);
-        const token = localStorage.getItem('token');
-        
         const controller = new AbortController();
         abortControllerRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort(), 20000);
@@ -82,7 +77,6 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
                 url += `&engine_id=${selectedEngineId}`;
             }
             const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` },
                 signal: controller.signal
             });
             clearTimeout(timeoutId);
@@ -116,8 +110,6 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
         setLoading(true);
         setLoadingStage('downloading');
         setError(null);
-        const token = localStorage.getItem('token');
-        
         const controller = new AbortController();
         abortControllerRef.current = controller;
         const timeoutId = setTimeout(() => controller.abort(), 65000);
@@ -127,7 +119,6 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
                 },
                 body: JSON.stringify({ image_url: imageUrl }),
                 signal: controller.signal

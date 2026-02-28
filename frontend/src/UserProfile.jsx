@@ -11,13 +11,8 @@ function UserProfile() {
   const [loading, setLoading] = useState(true);
 
   const fetchUserProfile = async () => {
-    const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/users/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(`/api/users/me`);
       if (response.ok) {
         const data = await response.json();
         setUser(data);
@@ -40,13 +35,11 @@ function UserProfile() {
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    const token = localStorage.getItem('token');
     try {
       const response = await fetch(`/api/users/me`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify(formData),
       });
@@ -70,13 +63,11 @@ function UserProfile() {
       setTimeout(() => setMessage({ type: '', text: '' }), 5000);
       return;
     }
-    const token = localStorage.getItem('token');
     try {
       const response = await fetch(`/api/users/me/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ current_password: passwordData.current_password, new_password: passwordData.new_password }),
       });

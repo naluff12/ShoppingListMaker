@@ -7,7 +7,7 @@ from . import tz_util
 
 SECRET_KEY = "your-secret-key"  # Debería estar en una variable de entorno
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 20160 # 14 days
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
