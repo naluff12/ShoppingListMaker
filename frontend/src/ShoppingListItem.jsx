@@ -143,7 +143,26 @@ const ShoppingListItem = ({
                             />
                         </>
                     ) : (
-                        <ImageUploader itemId={item.id} imageUrl={''} onImageUpload={onImageUpload} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', height: '100%' }}>
+                            <ImageUploader itemId={item.id} imageUrl={''} onImageUpload={onImageUpload} />
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setShowWebSearchModal(true); }}
+                                className="btn-premium btn-secondary"
+                                style={{ padding: '4px', fontSize: '0.7rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%' }}
+                                title="Buscar en línea"
+                            >
+                                <Search size={12} /> Buscar
+                            </button>
+                            <WebImageSearchModal 
+                                show={showWebSearchModal}
+                                handleClose={() => setShowWebSearchModal(false)}
+                                productName={item.nombre}
+                                productId={item.product?.id}
+                                onImageSelected={(updatedProduct) => {
+                                    if (onProductUpdate) onProductUpdate();
+                                }}
+                            />
+                        </div>
                     )}
                 </div>
                 

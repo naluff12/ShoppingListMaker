@@ -148,7 +148,26 @@ const ShoppingItemCard = ({
                                 />
                             </>
                         ) : (
-                            <ImageUploader itemId={item.id} imageUrl={''} onImageUpload={onImageUpload} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', height: '100%', width: '100%' }}>
+                                <ImageUploader itemId={item.id} imageUrl={''} onImageUpload={onImageUpload} />
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setShowWebSearchModal(true); }}
+                                    className="btn-premium btn-secondary"
+                                    style={{ padding: '6px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                                    title="Buscar en línea"
+                                >
+                                    <Search size={14} /> Buscar Web
+                                </button>
+                                <WebImageSearchModal 
+                                    show={showWebSearchModal}
+                                    handleClose={() => setShowWebSearchModal(false)}
+                                    productName={item.nombre}
+                                    productId={item.product?.id}
+                                    onImageSelected={(updatedProduct) => {
+                                        if (onProductUpdate) onProductUpdate();
+                                    }}
+                                />
+                            </div>
                         )}
                     </div>
                     
