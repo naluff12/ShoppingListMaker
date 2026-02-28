@@ -11,6 +11,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 function ProductManagement() {
   const [products, setProducts] = useState({ items: [], total: 0, page: 1, size: 10 });
   const [families, setFamilies] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [currentProduct, setCurrentProduct] = useState(null);
@@ -36,9 +37,22 @@ function ProductManagement() {
   const fetchFamilies = async () => {
     const token = localStorage.getItem('token');
     try {
-      const response = await fetch(`/api/admin/families`, { headers: { 'Authorization': `Bearer ${token}` } });
+      // First figure out if the user is an admin
+      const meResponse = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+      let isSuperuser = false;
+      if (meResponse.ok) {
+        const meData = await meResponse.json();
+        isSuperuser = meData.is_admin;
+        setIsAdmin(isSuperuser);
+      }
+
+      const response = await fetch(`/api/families/my`, { headers: { 'Authorization': `Bearer ${token}` } });
       if (response.ok) {
-        setFamilies(await response.json());
+        let f = await response.json();
+        if (isSuperuser) {
+          f.unshift({ id: 'all', nombre: 'Todas las Familias (Global)' });
+        }
+        setFamilies(f);
       }
     } catch (error) {
       console.error('Error fetching families:', error);
@@ -48,9 +62,19 @@ function ProductManagement() {
   const fetchProducts = async (familyId, page = 1, query = '', category = '', brand = '') => {
     const token = localStorage.getItem('token');
     let url = `/api/families/${familyId}/products?page=${page}&size=10`;
+    
+    // For admin global view
+    if (familyId === 'all') {
+      url = `/api/admin/products/all?page=${page}&size=10`;
+    }
+
     const queryParams = new URLSearchParams();
     if (query) {
-      url = `/api/products/search?family_id=${familyId}&q=${encodeURIComponent(query)}&page=${page}&size=10`;
+      if (familyId === 'all') {
+         url = `/api/admin/products/all?q=${encodeURIComponent(query)}&page=${page}&size=10`;
+      } else {
+         url = `/api/products/search?family_id=${familyId}&q=${encodeURIComponent(query)}&page=${page}&size=10`;
+      }
     } else {
       if (category) queryParams.append('category', category);
       if (brand) queryParams.append('brand', brand);
@@ -251,7 +275,7 @@ function ProductManagement() {
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
               onClick={() => setShowFamilyDropdown(!showFamilyDropdown)}
             >
-              {selectedFamily ? selectedFamily.name : 'Seleccionar Familia'} <ChevronDown size={18} />
+              {selectedFamily ? selectedFamily.nombre : 'Seleccionar Familia'} <ChevronDown size={18} />
             </button>
             {showFamilyDropdown && (
               <div 
@@ -260,11 +284,13 @@ function ProductManagement() {
                   position: 'absolute', 
                   top: '100%', 
                   left: 0, 
-                  zIndex: 1000, 
-                  minWidth: '200px', 
+                  zIndex: 9999, 
+                  minWidth: '220px', 
                   marginTop: '8px', 
                   padding: '8px',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.8)',
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)'
                 }}
               >
                 {families.map(f => (
@@ -272,14 +298,23 @@ function ProductManagement() {
                     key={f.id} 
                     className="dropdown-item" 
                     style={{ 
-                      padding: '10px 16px', 
+                      padding: '12px 16px', 
                       cursor: 'pointer', 
-                      borderRadius: '4px',
-                      background: selectedFamily?.id === f.id ? 'rgba(139, 92, 246, 0.2)' : 'transparent'
+                      borderRadius: '8px',
+                      background: selectedFamily?.id === f.id ? 'var(--primary-glow)' : 'transparent',
+                      color: '#ffffff',
+                      fontWeight: selectedFamily?.id === f.id ? '600' : '400',
+                      transition: 'all 0.2s ease',
+                      borderBottom: 'none'
                     }}
-                    onClick={() => handleFamilyChange(f)}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = selectedFamily?.id === f.id ? 'var(--primary-glow)' : 'transparent'}
+                    onClick={() => {
+                        handleFamilyChange(f);
+                        setShowFamilyDropdown(false);
+                    }}
                   >
-                    {f.name}
+                    {f.nombre}
                   </div>
                 ))}
               </div>
@@ -295,101 +330,131 @@ function ProductManagement() {
         </div>
       </div>
 
-      <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
-            <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} size={18} />
-            <input 
-              type="text" 
-              className="premium-input" 
-              style={{ paddingLeft: '40px', width: '100%' }} 
-              placeholder="Buscar productos..." 
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                if (selectedFamily) fetchProducts(selectedFamily.id, 1, e.target.value, filters.category, filters.brand);
-              }}
-            />
+        <div className="glass-panel" style={{ padding: '0', marginBottom: '24px', overflow: 'hidden' }}>
+          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: '16px', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)' }}>
+            <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
+              <Search style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} size={18} />
+              <input 
+                type="text" 
+                className="premium-input" 
+                style={{ paddingLeft: '44px', width: '100%', borderRadius: '20px' }} 
+                placeholder="Buscar productos..." 
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  if (selectedFamily) fetchProducts(selectedFamily.id, 1, e.target.value, filters.category, filters.brand);
+                }}
+              />
+            </div>
+            <div style={{ minWidth: '150px' }}>
+              <select 
+                className="premium-input" 
+                style={{ width: '100%', borderRadius: '20px', paddingLeft: '16px' }}
+                value={filters.category}
+                onChange={(e) => {
+                  setFilters(prev => ({ ...prev, category: e.target.value }));
+                  if (selectedFamily) fetchProducts(selectedFamily.id, 1, searchTerm, e.target.value, filters.brand);
+                }}
+              >
+                <option value="">Todas las Categorías</option>
+                {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div style={{ minWidth: '150px' }}>
+              <select 
+                className="premium-input" 
+                style={{ width: '100%', borderRadius: '20px', paddingLeft: '16px' }}
+                value={filters.brand}
+                onChange={(e) => {
+                  setFilters(prev => ({ ...prev, brand: e.target.value }));
+                  if (selectedFamily) fetchProducts(selectedFamily.id, 1, searchTerm, filters.category, e.target.value);
+                }}
+              >
+                <option value="">Todas las Marcas</option>
+                {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
           </div>
-          <div style={{ minWidth: '150px' }}>
-            <select 
-              className="premium-input" 
-              style={{ width: '100%' }}
-              value={filters.category}
-              onChange={(e) => {
-                setFilters(prev => ({ ...prev, category: e.target.value }));
-                if (selectedFamily) fetchProducts(selectedFamily.id, 1, searchTerm, e.target.value, filters.brand);
-              }}
-            >
-              <option value="">Todas las Categorías</option>
-              {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div style={{ minWidth: '150px' }}>
-            <select 
-              className="premium-input" 
-              style={{ width: '100%' }}
-              value={filters.brand}
-              onChange={(e) => {
-                setFilters(prev => ({ ...prev, brand: e.target.value }));
-                if (selectedFamily) fetchProducts(selectedFamily.id, 1, searchTerm, filters.category, e.target.value);
-              }}
-            >
-              <option value="">Todas las Marcas</option>
-              {filterOptions.brands.map(b => <option key={b} value={b}>{b}</option>)}
-            </select>
-          </div>
-        </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table className="premium-table">
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Categoría</th>
-                <th>Marca</th>
-                <th>Último Precio</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.items.map(product => (
-                <tr key={product.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <img 
-                        src={product.shared_image ? `${API_BASE_URL}${product.shared_image.file_path}` : '/img_placeholder.png'} 
-                        alt={product.name} 
-                        style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px' }}
-                      />
-                      <span>{product.name}</span>
-                    </div>
-                  </td>
-                  <td>{product.category || '-'}</td>
-                  <td>{product.brand || '-'}</td>
-                  <td>${product.last_price?.toFixed(2) || '0.00'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button className="btn-icon" onClick={() => handleShowPriceHistory(product)} title="Historial de Precios"><History size={18} /></button>
-                      <button className="btn-icon" onClick={() => handleEdit(product)} title="Editar"><Edit2 size={18} /></button>
-                      <button className="btn-icon btn-icon-danger" onClick={() => handleDelete(product.id)} title="Eliminar"><Trash2 size={18} /></button>
-                    </div>
-                  </td>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="premium-table" style={{ margin: 0, width: '100%', borderCollapse: 'collapse' }}>
+              <thead style={{ background: 'rgba(0,0,0,0.2)' }}>
+                <tr>
+                  <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Producto</th>
+                  {selectedFamily?.id === 'all' && (
+                    <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Familia (ID)</th>
+                  )}
+                  <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Categoría</th>
+                  <th style={{ padding: '16px 24px', textAlign: 'left', fontWeight: '600', color: 'var(--text-secondary)' }}>Marca</th>
+                  <th style={{ padding: '16px 24px', textAlign: 'right', fontWeight: '600', color: 'var(--text-secondary)' }}>Último Precio</th>
+                  <th style={{ padding: '16px 24px', textAlign: 'center', fontWeight: '600', color: 'var(--text-secondary)' }}>Acciones</th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+              <tbody>
+                {products.items.map(product => (
+                  <tr key={product.id} className="table-row-hover" style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.2s' }}>
+                    <td style={{ padding: '16px 24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <img 
+                          src={product.image_url || '/img_placeholder.png'} 
+                          alt={product.name} 
+                          style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+                        />
+                        <span style={{ fontWeight: '500', fontSize: '1.05rem', color: 'var(--text-primary)' }}>{product.name}</span>
+                      </div>
+                    </td>
+                    {selectedFamily?.id === 'all' && (
+                       <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>
+                         {product.family ? product.family.nombre : `Family #${product.family_id}`}
+                       </td>
+                    )}
+                    <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>
+                      {product.category ? <span style={{ padding: '4px 10px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', fontSize: '0.85rem' }}>{product.category}</span> : '-'}
+                    </td>
+                    <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>{product.brand || '-'}</td>
+                    <td style={{ padding: '16px 24px', textAlign: 'right', fontWeight: '600', color: 'var(--primary-color)' }}>
+                      ${product.last_price?.toFixed(2) || '0.00'}
+                    </td>
+                    <td style={{ padding: '16px 24px' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        <button 
+                          style={{ cursor: 'pointer', border: 'none', background: 'rgba(59, 130, 246, 0.1)', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                          onClick={() => handleShowPriceHistory(product)} 
+                          title="Historial de Precios"
+                        >
+                          <History size={18} color="#60a5fa" />
+                        </button>
+                        <button 
+                          style={{ cursor: 'pointer', border: 'none', background: 'rgba(59, 130, 246, 0.1)', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                          onClick={() => handleEdit(product)} 
+                          title="Editar"
+                        >
+                          <Edit2 size={18} color="#3b82f6" />
+                        </button>
+                        <button 
+                          style={{ cursor: 'pointer', border: 'none', background: 'rgba(239, 68, 68, 0.1)', padding: '8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                          onClick={() => handleDelete(product.id)} 
+                          title="Eliminar"
+                        >
+                          <Trash2 size={18} color="#ef4444" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
           </table>
         </div>
 
         {products.total > products.size && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+          <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.1)' }}>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
               Mostrando {products.items.length} de {products.total} productos
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
               <button 
                 className="btn-premium btn-secondary" 
-                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '20px' }}
                 disabled={products.page === 1}
                 onClick={() => fetchProducts(selectedFamily.id, products.page - 1, searchTerm, filters.category, filters.brand)}
               >
@@ -397,7 +462,7 @@ function ProductManagement() {
               </button>
               <button 
                 className="btn-premium btn-secondary" 
-                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', borderRadius: '20px' }}
                 disabled={products.page >= Math.ceil(products.total / products.size)}
                 onClick={() => fetchProducts(selectedFamily.id, products.page + 1, searchTerm, filters.category, filters.brand)}
               >

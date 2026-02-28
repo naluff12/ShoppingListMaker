@@ -31,7 +31,7 @@ from sqlalchemy import func, or_
 
 def search_products(db: Session, name: str, family_id: int, skip: int = 0, limit: int = 10):
     lower_name = name.lower()
-    query = db.query(models.Product).filter(
+    query = db.query(models.Product).options(joinedload(models.Product.family), joinedload(models.Product.shared_image)).filter(
         models.Product.family_id == family_id,
         or_(
             func.lower(models.Product.name).like(f"%{lower_name}%"),
@@ -43,8 +43,31 @@ def search_products(db: Session, name: str, family_id: int, skip: int = 0, limit
     items = query.offset(skip).limit(limit).all()
     return {"items": items, "total": total}
 
+def search_all_products(db: Session, name: str, skip: int = 0, limit: int = 10):
+    lower_name = name.lower()
+    query = db.query(models.Product).options(joinedload(models.Product.family), joinedload(models.Product.shared_image)).filter(
+        or_(
+            func.lower(models.Product.name).like(f"%{lower_name}%"),
+            func.lower(models.Product.category).like(f"%{lower_name}%"),
+            func.lower(models.Product.brand).like(f"%{lower_name}%")
+        )
+    )
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
+
 def get_products_by_family(db: Session, family_id: int, skip: int = 0, limit: int = 100, category: str = None, brand: str = None):
-    query = db.query(models.Product).filter(models.Product.family_id == family_id)
+    query = db.query(models.Product).options(joinedload(models.Product.family), joinedload(models.Product.shared_image)).filter(models.Product.family_id == family_id)
+    if category:
+        query = query.filter(func.lower(models.Product.category).like(f"%{category.lower()}%"))
+    if brand:
+        query = query.filter(func.lower(models.Product.brand).like(f"%{brand.lower()}%"))
+    total = query.count()
+    items = query.offset(skip).limit(limit).all()
+    return {"items": items, "total": total}
+
+def get_all_products(db: Session, skip: int = 0, limit: int = 100, category: str = None, brand: str = None):
+    query = db.query(models.Product).options(joinedload(models.Product.family), joinedload(models.Product.shared_image))
     if category:
         query = query.filter(func.lower(models.Product.category).like(f"%{category.lower()}%"))
     if brand:

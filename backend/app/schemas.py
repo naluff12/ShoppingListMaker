@@ -61,6 +61,7 @@ class Product(ProductBase):
     id: int
     shared_image: Optional["SharedImage"] = None
     price_history: List[PriceHistory] = []
+    family: Optional["Family"] = None
 
     class Config:
         from_attributes = True

@@ -371,6 +371,22 @@ def admin_remove_family_member(family_id: int, user_id: int, db: Session = Depen
 def admin_get_all_families(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return crud.get_families(db, skip=skip, limit=limit)
 
+@app.get("/admin/products/all", response_model=schemas.Page[schemas.Product], dependencies=[Depends(get_current_admin_user)])
+def admin_get_all_products(
+    page: int = 1,
+    size: int = 10,
+    category: str = None,
+    brand: str = None,
+    q: str = None,
+    db: Session = Depends(get_db)
+):
+    skip = (page - 1) * size
+    if q:
+        result = crud.search_all_products(db=db, name=q, skip=skip, limit=size)
+    else:
+        result = crud.get_all_products(db=db, skip=skip, limit=size, category=category, brand=brand)
+    return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
+
 @app.post("/admin/families", response_model=schemas.Family, dependencies=[Depends(get_current_admin_user)])
 def admin_create_family(family: schemas.FamilyCreateByAdmin, db: Session = Depends(get_db)):
     return crud.create_family_by_admin(db, family=family)
@@ -408,6 +424,28 @@ def get_products_for_family(
     get_family_for_user(family_id, current_user)
     result = crud.get_products_by_family(db=db, family_id=family_id, skip=(page - 1) * size, limit=size, category=category, brand=brand)
     return schemas.Page(items=result["items"], total=result["total"], page=page, size=size)
+
+@app.get("/families/{family_id}/filters")
+def get_filters_for_family(
+    family_id: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    # This endpoint is accessed by both regular users and admins
+    # If family_id is "all", we only proceed if user is admin
+    if family_id == 'all':
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Not enough permissions")
+        products = db.query(models.Product).all()
+    else:
+        fam_id_int = int(family_id)
+        get_family_for_user(fam_id_int, current_user)
+        products = db.query(models.Product).filter(models.Product.family_id == fam_id_int).all()
+        
+    categories = list(set([p.category for p in products if p.category]))
+    brands = list(set([p.brand for p in products if p.brand]))
+    
+    return {"categories": categories, "brands": brands}
 
 @app.get("/products/search", response_model=schemas.Page[schemas.Product])
 def search_products_endpoint(q: str, family_id: int, page: int = 1, size: int = 10, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -483,7 +521,9 @@ def join_family(join_data: schemas.FamilyJoin, db: Session = Depends(get_db), cu
     return family
 
 @app.get("/families/my", response_model=List[schemas.Family])
-def get_my_families(current_user: models.User = Depends(get_current_user)):
+def get_my_families(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.is_admin:
+        return crud.get_families(db)
     return current_user.families
 
 @app.get("/families/{family_id}", response_model=schemas.FamilyWithDetails)
