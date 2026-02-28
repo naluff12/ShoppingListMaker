@@ -176,7 +176,7 @@ function CalendarView() {
                 </h2>
             </div>
             
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1.5fr) 1fr', gap: '32px', alignItems: 'flex-start' }}>
+            <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1.5fr) 1fr', gap: '32px', alignItems: 'flex-start' }}>
                 {/* Calendar Area */}
                 <div className="glass-panel" style={{ padding: '24px' }}>
                     <Calendar

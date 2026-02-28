@@ -631,15 +631,34 @@ input:focus + .slider {
   -webkit-overflow-scrolling: touch;
 }
 
+.grid-mobile-stack {
+  display: grid !important;
+}
+
+@media (max-width: 768px) {
+  .grid-mobile-stack {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+}
+
 /* Fix flex rows that should stack */
 @media (max-width: 768px) {
   .flex-mobile-stack {
     flex-direction: column !important;
     align-items: stretch !important;
+    gap: 16px !important;
   }
   
   .flex-mobile-stack > * {
     width: 100% !important;
+    margin-bottom: 0 !important;
+  }
+  
+  .flex-mobile-stack > .btn-premium,
+  .flex-mobile-stack > button {
+    width: 100% !important;
+    justify-content: center !important;
   }
 }
 

@@ -604,7 +604,7 @@ function ShoppingListView() {
             </button>
             
             <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
                     <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
                     {listDetails && (
                         <div 
@@ -645,7 +645,7 @@ function ShoppingListView() {
 
                 <div style={{ height: '1px', background: 'var(--border-color)', margin: '32px 0' }} />
 
-                <form onSubmit={handleAdd} style={{ display: 'flex', gap: '8px', position: 'relative', zIndex: 10 }}>
+                <form onSubmit={handleAdd} className="flex-mobile-stack" style={{ display: 'flex', gap: '12px', position: 'relative', zIndex: 10 }}>
                     <div style={{ flex: 1, position: 'relative' }}>
                         <input
                             type="text"
@@ -803,7 +803,7 @@ function ShoppingListView() {
                         )}
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '24px' }}>
+                    <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '24px' }}>
                         <TransitionGroup component={null}>
                             {items.map(item => (
                                 <CSSTransition key={item.id} timeout={400} classNames="fade">

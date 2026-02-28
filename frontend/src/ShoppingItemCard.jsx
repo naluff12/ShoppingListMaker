@@ -224,7 +224,7 @@ const ShoppingItemCard = ({
                             )}
                         </div>
 
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div className="flex-mobile-stack" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                             <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', padding: '6px 10px' }} onClick={() => onDelete(item.id)} disabled={loading}>
                                 <Trash size={16} />
                             </button>

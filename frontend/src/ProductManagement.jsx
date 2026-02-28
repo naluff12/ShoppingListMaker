@@ -276,7 +276,7 @@ function ProductManagement() {
 
   return (
     <div className="product-management">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
         <h2 style={{ margin: 0 }}>Gestión de Productos</h2>
         <div style={{ display: 'flex', gap: '12px' }}>
           <div style={{ position: 'relative' }}>
@@ -342,7 +342,7 @@ function ProductManagement() {
 
         <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', overflowX: 'auto' }}>
           <div style={{ minWidth: '800px' }}>
-          <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: '16px', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)' }}>
+          <div className="flex-mobile-stack" style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: '16px', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)' }}>
             <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
               <Search style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} size={18} />
               <input 
