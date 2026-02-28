@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon, Search } from 'lucide-react';
 import ImageUploader from './ImageUploader';
 import WebImageSearchModal from './WebImageSearchModal';
+import { API_BASE_URL } from './config';
 
 const ShoppingItemCard = ({
     item,
