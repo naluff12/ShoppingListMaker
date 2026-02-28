@@ -89,7 +89,7 @@ const ShoppingListItem = ({
                             <>
                                 <div style={{ width: '48px', height: '48px', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
                                     <img
-                                        src={`${API_BASE_URL}/api${item.product.shared_image.file_path}`}
+                                        src={`${API_BASE_URL}${item.product.shared_image.file_path}`}
                                         alt={item.nombre}
                                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                     />
@@ -126,7 +126,7 @@ const ShoppingListItem = ({
                                                 <button className="modal-close" onClick={() => setShowImageModal(false)} style={{ position: 'absolute', top: '-40px', right: '0', color: 'white' }}>
                                                     <X size={32} />
                                                 </button>
-                                                <img src={`${API_BASE_URL}/api${item.product?.shared_image.file_path}`} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
+                                                <img src={`${API_BASE_URL}${item.product?.shared_image.file_path}`} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
                                             </div>
                                         </div>
                                     </div>,
