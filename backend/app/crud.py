@@ -92,6 +92,29 @@ def delete_family_product(db: Session, product_id: int):
         db.commit()
     return db_product
 
+def safe_delete_product(db: Session, product_id: int):
+    """
+    Eliminación segura del producto.
+    Desvincula el producto de cualquier list_item anterior (dejando el product_id en NULL),
+    elimina el historial de precios y finalmente elimina el producto.
+    """
+    db_product = get_product(db, product_id)
+    if not db_product:
+        return None
+
+    # Step 1: Unlink from existing list items
+    db.query(models.ListItem).filter(models.ListItem.product_id == product_id).update({
+        models.ListItem.product_id: None
+    }, synchronize_session=False)
+
+    # Step 2: Delete price history
+    db.query(models.PriceHistory).filter(models.PriceHistory.product_id == product_id).delete(synchronize_session=False)
+
+    # Step 3: Delete product
+    db.delete(db_product)
+    db.commit()
+    return db_product
+
 def get_price_history_for_product(db: Session, product_id: int):
     return db.query(models.PriceHistory).filter(models.PriceHistory.product_id == product_id).order_by(models.PriceHistory.created_at.desc()).all()
 
