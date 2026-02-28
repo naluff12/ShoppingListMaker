@@ -1,5 +1,6 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { Eye, EyeOff, PlusCircle, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
