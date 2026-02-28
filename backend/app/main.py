@@ -1114,11 +1114,7 @@ async def search_images(
         
     if not config:
         # Fallback to mock search if no config exists
-        return [
-            {"id": 1, "previewURL": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=200", "largeImageURL": "https://images.unsplash.com/photo-1542838132-92c53300491e"},
-            {"id": 2, "previewURL": "https://images.unsplash.com/photo-1588964895597-cfccd6e2dbf9?w=200", "largeImageURL": "https://images.unsplash.com/photo-1588964895597-cfccd6e2dbf9"},
-            {"id": 3, "previewURL": "https://images.unsplash.com/photo-1550989460-0adf9ea622e2?w=200", "largeImageURL": "https://images.unsplash.com/photo-1550989460-0adf9ea622e2"}
-        ]
+        return []
 
     # Prepare parameters
     params = {}
