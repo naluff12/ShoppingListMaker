@@ -472,7 +472,7 @@ function ShoppingListView() {
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const res = await fetch(`${API_BASE_URL}/items/${itemId}/upload-image`, {
+            const res = await fetch(`${API_BASE_URL}/api/items/${itemId}/upload-image`, {
                 method: 'POST',
                 body: formData,
             });
@@ -538,7 +538,7 @@ function ShoppingListView() {
         if (!selectedItemForGallery) return;
 
         try {
-            const res = await fetch(`${API_BASE_URL}/items/${selectedItemForGallery.id}`, {
+            const res = await fetch(`${API_BASE_URL}/api/items/${selectedItemForGallery.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -20,7 +20,7 @@ const ImageGalleryModal = ({ show, handleClose, handleSelectImage }) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get(`${API_BASE_URL}/images/gallery`);
+            const response = await axios.get(`${API_BASE_URL}/api/images/gallery`);
             setImages(response.data);
         } catch (err) {
             setError('Error al cargar las imágenes de la galería.');
