@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Edit2, Trash2, Plus, X } from 'lucide-react';
-
-const API_URL = 'http://localhost:8000';
+import { API_BASE_URL } from './config';
 
 function UserManagement() {
   const [users, setUsers] = useState([]);

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Search, X, Loader } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from './config';
 
 const WebImageSearchModal = ({ show, handleClose, productName, productId, onImageSelected }) => {
     const [query, setQuery] = useState(productName || '');

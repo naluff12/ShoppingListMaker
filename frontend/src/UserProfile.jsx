@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, AlertCircle, CheckCircle, Save } from 'lucide-react';
-
-const API_URL = 'http://localhost:8000';
+import { API_BASE_URL } from './config';
 
 function UserProfile() {
   const [user, setUser] = useState(null);

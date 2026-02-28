@@ -11,8 +11,7 @@ import UserProfile from './UserProfile.jsx';
 import NavigationBar from './NavigationBar.jsx';
 import Setup from './Setup.jsx';
 import { Toaster } from 'react-hot-toast';
-
-const API_URL = 'http://localhost:8000';
+import { API_BASE_URL } from './config';
 
 function App() {
     const [user, setUser] = useState(null);

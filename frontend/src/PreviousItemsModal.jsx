@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { X, ChevronDown, ChevronUp, ShoppingBag, Check } from 'lucide-react';
+import { API_BASE_URL } from './config';
 
 const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItems }) => {
     const [previousLists, setPreviousLists] = useState([]);
@@ -165,7 +166,7 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
                                                                 >
                                                                     <div style={{ width: 50, height: 50, borderRadius: 'var(--border-radius-sm)', overflow: 'hidden', flexShrink: 0, background: 'rgba(255,255,255,0.05)' }}>
                                                                         <img
-                                                                            src={item.product?.shared_image ? `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}${item.product.shared_image.file_path}` : '/img_placeholder.png'}
+                                                                            src={item.product?.shared_image ? `${API_BASE_URL}${item.product.shared_image.file_path}` : '/img_placeholder.png'}
                                                                             alt={item.nombre}
                                                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                                         />

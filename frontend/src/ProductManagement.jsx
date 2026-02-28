@@ -5,8 +5,7 @@ import PriceHistoryModal from './PriceHistoryModal';
 import ImageGalleryModal from './ImageGalleryModal';
 import WebImageSearchModal from './WebImageSearchModal';
 import { useWebSocket } from './useWebSocket';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from './config';
 
 function ProductManagement() {
   const [products, setProducts] = useState({ items: [], total: 0, page: 1, size: 10 });

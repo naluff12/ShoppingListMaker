@@ -9,7 +9,7 @@ function ShoppingList({ user }) {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        fetch(`/lists/user/${user}`)
+        fetch(`/api/lists/user/${user}`)
             .then(res => res.json())
             .then(data => setLists(data))
             .catch(() => setLists([]));

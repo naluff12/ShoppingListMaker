@@ -4,8 +4,6 @@ import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, 
 import ImageUploader from './ImageUploader';
 import WebImageSearchModal from './WebImageSearchModal';
 
-const API_URL = 'http://localhost:8000';
-
 const ShoppingItemCard = ({
     item,
     onStatusChange,
@@ -92,11 +90,7 @@ const ShoppingItemCard = ({
                         {item.product?.shared_image ? (
                             <>
                                 <div style={{ width: '100px', height: '100px', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
-                                    <img
-                                        src={`${API_URL}${item.product.shared_image.file_path}`}
-                                        alt={item.nombre}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                    />
+                                <img src={`${API_BASE_URL}${item.product?.shared_image.file_path}`} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}
                                         style={{ position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', borderRadius: '50%', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', zIndex: 10 }}
@@ -130,7 +124,7 @@ const ShoppingItemCard = ({
                                                 <button className="modal-close" onClick={() => setShowImageModal(false)} style={{ position: 'absolute', top: '-40px', right: '0', color: 'white' }}>
                                                     <X size={32} />
                                                 </button>
-                                                <img src={`${API_URL}${item.product?.shared_image.file_path}`} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
+                                                <img src={`${API_BASE_URL}${item.product?.shared_image.file_path}`} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
                                             </div>
                                         </div>
                                     </div>,

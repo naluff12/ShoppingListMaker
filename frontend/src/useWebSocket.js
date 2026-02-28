@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { WS_BASE_URL } from './config';
 
 export const useWebSocket = (familyId) => {
     const [lastMessage, setLastMessage] = useState(null);
@@ -7,9 +8,7 @@ export const useWebSocket = (familyId) => {
     useEffect(() => {
         if (!familyId) return;
 
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // Use relative path for production if running on same host, or fallback to dev port
-        const wsUrl = import.meta.env.VITE_WS_URL || `ws://localhost:8000/ws/${familyId}`; 
+        const wsUrl = `${WS_BASE_URL}/${familyId}`; 
         
         let ws;
         let reconnectTimer;

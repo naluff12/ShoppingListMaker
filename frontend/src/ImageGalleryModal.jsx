@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import axios from 'axios';
 import { X, Loader } from 'lucide-react';
+import { API_BASE_URL } from './config';
 import './ImageGalleryModal.css';
 
 const ImageGalleryModal = ({ show, handleClose, handleSelectImage }) => {
@@ -19,7 +20,7 @@ const ImageGalleryModal = ({ show, handleClose, handleSelectImage }) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await axios.get('http://localhost:8000/images/gallery');
+            const response = await axios.get(`${API_BASE_URL}/images/gallery`);
             setImages(response.data);
         } catch (err) {
             setError('Error al cargar las imágenes de la galería.');
@@ -74,7 +75,7 @@ const ImageGalleryModal = ({ show, handleClose, handleSelectImage }) => {
                                         style={{ aspectRatio: '1/1', overflow: 'hidden', borderRadius: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.05)' }}
                                     >
                                         <img 
-                                            src={`http://localhost:8000${img.file_path}`} 
+                                            src={`${API_BASE_URL}${img.file_path}`} 
                                             alt="Gallery item"
                                             style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s' }}
                                             className="gallery-image-hover"

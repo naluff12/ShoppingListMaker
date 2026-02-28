@@ -13,8 +13,7 @@ import ShoppingItemCardSkeleton from './ShoppingItemCardSkeleton';
 import ShoppingListItemSkeleton from './ShoppingListItemSkeleton';
 import ImageGalleryModal from './ImageGalleryModal';
 import { useWebSocket } from './useWebSocket';
-
-const API_URL = 'http://localhost:8000';
+import { API_BASE_URL } from './config';
 
 function ProgressBar({ progress, variant, label }) {
     const bgColor = variant === 'danger' ? 'var(--danger-color)' : variant === 'success' ? 'var(--success-color)' : variant === 'warning' ? 'var(--warning-color)' : 'var(--info-color, #3b82f6)';
@@ -473,7 +472,7 @@ function ShoppingListView() {
         const formData = new FormData();
         formData.append('file', file);
         try {
-            const res = await fetch(`${API_URL}/items/${itemId}/upload-image`, {
+            const res = await fetch(`${API_BASE_URL}/items/${itemId}/upload-image`, {
                 method: 'POST',
                 body: formData,
             });
@@ -539,7 +538,7 @@ function ShoppingListView() {
         if (!selectedItemForGallery) return;
 
         try {
-            const res = await fetch(`${API_URL}/items/${selectedItemForGallery.id}`, {
+            const res = await fetch(`${API_BASE_URL}/items/${selectedItemForGallery.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -663,7 +662,7 @@ function ShoppingListView() {
                                             onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} 
                                             onMouseEnter={() => setHighlightedIndex(index)}
                                         >
-                                            <img src={p.shared_image ? `${API_URL}${p.shared_image.file_path}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
+                                            <img src={p.shared_image ? `${API_BASE_URL}${p.shared_image.file_path}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
                                             <div>
                                                 <div style={{ fontWeight: 500 }}>{p.name}</div>
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.brand} / {p.category}</div>
