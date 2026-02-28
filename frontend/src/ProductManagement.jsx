@@ -15,7 +15,7 @@ function ProductManagement() {
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [currentProduct, setCurrentProduct] = useState(null);
-  const [formData, setFormData] = useState({ name: '', description: '', category: '', brand: '', last_price: '', image_url: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', category: '', brand: '', last_price: '', image_url: '', family_id: null });
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({ category: '', brand: '' });
   const [imageFile, setImageFile] = useState(null);
@@ -133,7 +133,8 @@ function ProductManagement() {
       category: product.category || '',
       brand: product.brand || '',
       last_price: product.last_price || '',
-      image_url: product.shared_image ? product.shared_image.file_path : ''
+      image_url: product.shared_image ? product.shared_image.file_path : '',
+      family_id: product.family_id
     });
     setImageFile(null);
     setSelectedImageFromGallery(null);
@@ -197,7 +198,7 @@ function ProductManagement() {
       category: formData.category,
       brand: formData.brand,
       last_price: parseFloat(formData.last_price) || 0,
-      family_id: selectedFamily.id,
+      family_id: formData.family_id,
       shared_image_id: shared_image_id
     };
 
@@ -253,7 +254,15 @@ function ProductManagement() {
  
   const openAddProductModal = () => {
     setCurrentProduct(null);
-    setFormData({ name: '', description: '', category: '', brand: '', last_price: '', image_url: '' });
+    setFormData({ 
+      name: '', 
+      description: '', 
+      category: '', 
+      brand: '', 
+      last_price: '', 
+      image_url: '',
+      family_id: selectedFamily.id === 'all' ? (families.find(f => f.id !== 'all')?.id || '') : selectedFamily.id
+    });
     setImageFile(null);
     setSelectedImageFromGallery(null);
     setShowModal(true);
@@ -486,6 +495,24 @@ function ProductManagement() {
                   <label htmlFor="name" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Nombre</label>
                   <input type="text" id="name" className="premium-input" style={{ width: '100%' }} value={formData.name} onChange={handleFormChange} required />
                 </div>
+                {selectedFamily.id === 'all' && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label htmlFor="family_id" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Familia</label>
+                    <select 
+                      id="family_id" 
+                      className="premium-input" 
+                      style={{ width: '100%', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }} 
+                      value={formData.family_id || ''} 
+                      onChange={handleFormChange}
+                      required
+                    >
+                      <option value="" disabled>Seleccionar Familia</option>
+                      {families.filter(f => f.id !== 'all').map(f => (
+                        <option key={f.id} value={f.id}>{f.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div style={{ marginBottom: '16px' }}>
                   <label htmlFor="description" style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Descripción</label>
                   <textarea id="description" className="premium-input" style={{ width: '100%', minHeight: '80px' }} value={formData.description} onChange={handleFormChange} />
