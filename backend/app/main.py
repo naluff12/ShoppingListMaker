@@ -1124,47 +1124,56 @@ async def search_images(
     params = {}
     limit = config.results_per_page or 20
     start_val = (page - 1) * limit
+    parsed_base_url = config.base_url
     
+    import json
+    import re
+    
+    context = {
+        "page": page,
+        "limit": limit,
+        "start": start_val,
+        "offset": start_val,
+        "end": start_val + limit
+    }
+
+    def process_string_with_vars(input_str):
+        if not input_str:
+            return input_str
+            
+        # 1. Replace the search query (non-numeric)
+        result = input_str.replace('{{q}}', q)
+        
+        # 2. Find complex expressions like {{page * 24}}
+        def evaluate_expr(match):
+            expr = match.group(1).strip()
+            # Sanity check: allow only numbers, basic operators and context keys
+            safe_expr = expr
+            for key in context:
+                safe_expr = safe_expr.replace(key, str(context[key]))
+            
+            # Remove whitespace and check if only valid chars remain
+            clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
+            if clean_expr == '':
+                try:
+                    # Safe eval since it's just numbers and operators now
+                    return str(int(eval(safe_expr)))
+                except:
+                    return match.group(0)
+            return match.group(0)
+
+        return re.sub(r'\{\{(.*?)\}\}', evaluate_expr, result)
+
+    parsed_base_url = process_string_with_vars(parsed_base_url)
+
     if config.params_config:
-        import json
-        import re
         try:
             config_list = json.loads(config.params_config)
-            context = {
-                "page": page,
-                "limit": limit,
-                "start": start_val,
-                "offset": start_val,
-                "end": start_val + limit
-            }
-            
             for item in config_list:
                 k = item.get('key')
                 v = item.get('value', '')
                 if k:
-                    # 1. Replace the search query (non-numeric)
-                    v = v.replace('{{q}}', q)
-                    
-                    # 2. Find complex expressions like {{page * 24}}
-                    def evaluate_expr(match):
-                        expr = match.group(1).strip()
-                        # Sanity check: allow only numbers, basic operators and context keys
-                        safe_expr = expr
-                        for key in context:
-                            safe_expr = safe_expr.replace(key, str(context[key]))
-                        
-                        # Remove whitespace and check if only valid chars remain
-                        clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
-                        if clean_expr == '':
-                            try:
-                                # Safe eval since it's just numbers and operators now
-                                return str(int(eval(safe_expr)))
-                            except:
-                                return match.group(0)
-                        return match.group(0)
-
-                    v = re.sub(r'\{\{(.*?)\}\}', evaluate_expr, v)
-                    params[k] = v
+                    params[k] = process_string_with_vars(v)
         except Exception as e:
             print(f"Error parsing params_config: {e}")
             # Fallback to basic q if parsing fails and it's missing
@@ -1175,7 +1184,7 @@ async def search_images(
 
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
-            response = await client.get(config.base_url, params=params, timeout=15.0)
+            response = await client.get(parsed_base_url, params=params, timeout=15.0)
             response.raise_for_status()
             
             extraction_config = {
@@ -1211,36 +1220,44 @@ async def admin_test_image_search_config(
 
     # Prepare parameters (copied logic from search_images)
     params = {}
+    import json
+    import re
+
+    context = {
+        "page": page,
+        "limit": limit,
+        "start": start_val,
+        "offset": start_val,
+        "end": start_val + limit
+    }
+
+    def process_string_with_vars(input_str):
+        if not input_str:
+            return input_str
+        result = input_str.replace('{{q}}', q)
+        def evaluate_expr(match):
+            expr = match.group(1).strip()
+            safe_expr = expr
+            for key in context:
+                safe_expr = safe_expr.replace(key, str(context[key]))
+            clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
+            if clean_expr == '':
+                try:
+                    return str(int(eval(safe_expr)))
+                except: return match.group(0)
+            return match.group(0)
+        return re.sub(r'\{\{(.*?)\}\}', evaluate_expr, result)
+
+    parsed_base_url = process_string_with_vars(base_url)
+
     if params_config:
-        import json
-        import re
         try:
             config_list = json.loads(params_config)
-            context = {
-                "page": page,
-                "limit": limit,
-                "start": start_val,
-                "offset": start_val,
-                "end": start_val + limit
-            }
             for item in config_list:
                 k = item.get('key')
                 v = item.get('value', '')
                 if k:
-                    v = v.replace('{{q}}', q)
-                    def evaluate_expr(match):
-                        expr = match.group(1).strip()
-                        safe_expr = expr
-                        for key in context:
-                            safe_expr = safe_expr.replace(key, str(context[key]))
-                        clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
-                        if clean_expr == '':
-                            try:
-                                return str(int(eval(safe_expr)))
-                            except: return match.group(0)
-                        return match.group(0)
-                    v = re.sub(r'\{\{(.*?)\}\}', evaluate_expr, v)
-                    params[k] = v
+                    params[k] = process_string_with_vars(v)
         except Exception as e:
             print(f"Error parsing params_config: {e}")
             if not params: params = {"q": q}
@@ -1249,7 +1266,7 @@ async def admin_test_image_search_config(
 
     try:
         async with httpx.AsyncClient(follow_redirects=True) as client:
-            response = await client.get(base_url, params=params, timeout=10.0)
+            response = await client.get(parsed_base_url, params=params, timeout=10.0)
             
             # Extract visual results using the helper
             extraction_config = {

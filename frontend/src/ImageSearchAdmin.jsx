@@ -99,7 +99,7 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
   const getPreviewUrl = () => {
     if (!editForm) return '';
     try {
-      const baseUrl = editForm.base_url || 'https://api.example.com/search';
+      let baseUrl = editForm.base_url || 'https://api.example.com/search';
       const params = new URLSearchParams();
       const limit = editForm.results_per_page || 20;
       const context = {
@@ -110,35 +110,34 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
         end: limit
       };
 
-      dynamicParams.forEach(p => {
-        if (p.key) {
-          let val = p.value || '';
-          // 1. Replace search query
-          val = val.replace(/\{\{q\}\}/g, 'tomate');
-          
-          // 2. Evaluate expressions
-          val = val.replace(/\{\{(.*?)\}\}/g, (match, expr) => {
+      const processStringWithVars = (val) => {
+          if (!val) return '';
+          let replaced = val.replace(/\{\{q\}\}/g, 'tomate');
+          replaced = replaced.replace(/\{\{(.*?)\}\}/g, (match, expr) => {
             let replacedExpr = expr.trim();
             Object.keys(context).forEach(key => {
               replacedExpr = replacedExpr.replace(new RegExp(key, 'g'), context[key]);
             });
-            
-            // Basic sanity check to avoid arbitrary code execution in preview
             if (/^[\d\s\+\-\*\/\(\)]+$/.test(replacedExpr)) {
               try {
                 // eslint-disable-next-line no-eval
                 return eval(replacedExpr).toString();
-              } catch (e) {
-                return match;
-              }
+              } catch (e) { return match; }
             }
             return match;
           });
+          return replaced;
+      }
+      
+      baseUrl = processStringWithVars(baseUrl);
 
+      dynamicParams.forEach(p => {
+        if (p.key) {
+          const val = processStringWithVars(p.value);
           params.append(p.key, val);
         }
       });
-      return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${params.toString()}`;
+      return `${baseUrl}${params.toString() ? (baseUrl.includes('?') ? '&' : '?') + params.toString() : ''}`;
     } catch (e) {
       return 'Error en la URL';
     }
@@ -262,13 +261,13 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Base URL</label>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Base URL (Acepta variables)</label>
               <input 
                 value={editForm.base_url}
                 onChange={e => setEditForm({...editForm, base_url: e.target.value})}
                 required
                 className="premium-input"
-                placeholder="https://api.ejemplo.com/search"
+                placeholder="https://api.ejemplo.com/buscar/{{q}}"
               />
             </div>
           </div>
@@ -325,7 +324,7 @@ const ImageSearchAdmin = ({ apiBaseUrl }) => {
                 </h5>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                     <div>
-                        <p style={{ marginBottom: '4px' }}><b>Variables disponibles:</b></p>
+                        <p style={{ marginBottom: '4px' }}><b>Variables (En Base URL o Params):</b></p>
                         <ul style={{ paddingLeft: '15px', margin: 0 }}>
                             <li><code>{"{{q}}"}</code>: Término de búsqueda.</li>
                             <li><code>{"{{page}}"}</code>: Número de página (1, 2, ...).</li>
