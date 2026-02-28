@@ -75,7 +75,7 @@ const ImageGalleryModal = ({ show, handleClose, handleSelectImage }) => {
                                         style={{ aspectRatio: '1/1', overflow: 'hidden', borderRadius: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.05)' }}
                                     >
                                         <img 
-                                            src={`${API_BASE_URL}${img.file_path}`} 
+                                            src={`${API_BASE_URL}/api${img.file_path}`} 
                                             alt="Gallery item"
                                             style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.3s' }}
                                             className="gallery-image-hover"
