@@ -24,7 +24,7 @@ import httpx
 
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # CORS Middleware
 app.add_middleware(
@@ -1430,6 +1430,17 @@ def search_products_endpoint(
         "page": page,
         "size": size
     }
+
+@app.post("/api/images/from-url", response_model=schemas.SharedImage)
+async def upload_image_from_url(
+    image_data: dict, # {"image_url": "..."}
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    url = image_data.get("image_url")
+    if not url:
+        raise HTTPException(status_code=400, detail="image_url is required")
+    return await shared_images.save_image_from_url(db, url, current_user.id)
 
 @app.post("/products/{product_id}/image-from-url", response_model=schemas.Product)
 async def update_product_image_from_url(

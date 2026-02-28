@@ -185,8 +185,8 @@ function ProductManagement() {
     } else if (formData.image_from_url) {
       // If an image was selected from search for a NEW product
       try {
-        const imageRes = await persistImageFromUrl(formData.image_from_url);
-        if (imageRes) shared_image_id = imageRes.shared_image.id;
+        const imageRes = await persistImageFromUrl(null, formData.image_from_url);
+        if (imageRes) shared_image_id = imageRes.id || imageRes.shared_image?.id;
       } catch (err) {
         console.error('Error persisting searched image:', err);
       }
@@ -225,8 +225,9 @@ function ProductManagement() {
 
   const persistImageFromUrl = async (productId, imageUrl) => {
     const token = localStorage.getItem('token');
+    const url = productId ? `/api/products/${productId}/image-from-url` : `/api/images/from-url`;
     try {
-      const res = await fetch(`/api/products/${productId}/image-from-url`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -339,7 +340,8 @@ function ProductManagement() {
         </div>
       </div>
 
-        <div className="glass-panel" style={{ padding: '0', marginBottom: '24px', overflow: 'hidden' }}>
+        <div className="glass-panel" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', overflowX: 'auto' }}>
+          <div style={{ minWidth: '800px' }}>
           <div style={{ padding: '20px', borderBottom: '1px solid var(--border-color)', display: 'flex', gap: '16px', flexWrap: 'wrap', background: 'rgba(255,255,255,0.02)' }}>
             <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
               <Search style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} size={18} />
@@ -480,7 +482,9 @@ function ProductManagement() {
             </div>
           </div>
         )}
+        </div>
       </div>
+
 
       {showModal && ReactDOM.createPortal(
         <div className="modal-backdrop" onClick={() => setShowModal(false)}>

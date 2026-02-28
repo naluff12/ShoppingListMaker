@@ -10,7 +10,7 @@ from . import crud
 
 # Define the static directory for images
 # This should be configured appropriately for production
-STATIC_DIR = "backend/static"
+STATIC_DIR = "static"
 IMAGES_SUBDIR = os.path.join(STATIC_DIR, "images")
 
 # Ensure the static directories exist

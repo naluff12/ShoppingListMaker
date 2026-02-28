@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -32,6 +32,8 @@ services:
       DATABASE_URL: "mysql+pymysql://${MYSQL_USER}:${MYSQL_PASSWORD}@db/${MYSQL_DATABASE}"
     depends_on:
       - db
+    volumes:
+      - ./uploads:/code/static
 
   frontend:
     build:
