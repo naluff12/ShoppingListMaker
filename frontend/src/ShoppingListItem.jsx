@@ -70,6 +70,13 @@ const ShoppingListItem = ({
     const priceValue = (item.precio_confirmado || item.product?.last_price || 0).toFixed(2);
     const priceBadgeClass = item.precio_confirmado ? 'badge-success' : item.product?.last_price ? 'badge-warning' : 'badge-primary';
 
+    const getImageSrc = (url) => {
+        if (!url) return '/img_placeholder.png';
+        if (url.startsWith('http') || url.startsWith('blob') || url.startsWith('data:')) return url;
+        if (url.startsWith('/api')) return `${API_BASE_URL}${url}`;
+        return `${API_BASE_URL}/api${url}`;
+    };
+
     return (
         <div className={`glass-panel shopping-list-item-compact ${item.status === 'comprado' ? 'item-comprado' : ''}`} style={{ display: 'flex', flexDirection: 'column', padding: '8px', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -89,7 +96,7 @@ const ShoppingListItem = ({
                             <>
                                 <div style={{ width: '48px', height: '48px', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
                                     <img
-                                        src={`${API_BASE_URL}/api${item.product.shared_image.file_path}`}
+                                        src={getImageSrc(item.product.shared_image.file_path)}
                                         alt={item.nombre}
                                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                     />
@@ -126,7 +133,7 @@ const ShoppingListItem = ({
                                                 <button className="modal-close" onClick={() => setShowImageModal(false)} style={{ position: 'absolute', top: '-40px', right: '0', color: 'white' }}>
                                                     <X size={32} />
                                                 </button>
-                                                <img src={`${API_BASE_URL}/api${item.product?.shared_image.file_path}`} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
+                                                <img src={getImageSrc(item.product?.shared_image.file_path)} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
                                             </div>
                                         </div>
                                     </div>,

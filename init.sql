@@ -105,11 +105,12 @@ CREATE TABLE list_items (
     precio_estimado FLOAT,
     precio_confirmado FLOAT,
     creado_por_id INT,
-    image_url VARCHAR(255),
+    shared_image_id INT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (list_id) REFERENCES shopping_lists (id),
     FOREIGN KEY (creado_por_id) REFERENCES users (id),
-    FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
+    FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL,
+    FOREIGN KEY (shared_image_id) REFERENCES shared_images (id) ON DELETE SET NULL
 );
 
 CREATE TABLE blames (

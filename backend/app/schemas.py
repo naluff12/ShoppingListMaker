@@ -108,6 +108,7 @@ class ListItemUpdate(BaseModel):
     status: Optional[str] = None
     precio_estimado: Optional[float] = None
     precio_confirmado: Optional[float] = None
+    shared_image_id: Optional[int] = None
 
 
 class ListItemStatusUpdate(BaseModel):

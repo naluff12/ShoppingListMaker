@@ -234,9 +234,16 @@ function ProductManagement() {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
+  const getImageSrc = (url) => {
+    if (!url) return '/img_placeholder.png';
+    if (url.startsWith('http') || url.startsWith('blob') || url.startsWith('data:')) return url;
+    if (url.startsWith('/api')) return `${API_BASE_URL}${url}`;
+    return `${API_BASE_URL}/api${url}`;
+  };
+
   const handleSelectImageFromGallery = (image) => {
     setSelectedImageFromGallery(image);
-    setFormData(prev => ({ ...prev, image_url: `${API_BASE_URL}/api${image.file_path}` }));
+    setFormData(prev => ({ ...prev, image_url: image.file_path }));
     setShowImageGalleryModal(false);
   };
  
@@ -394,7 +401,7 @@ function ProductManagement() {
                     <td style={{ padding: '16px 24px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <img 
-                          src={product.shared_image ? `${API_BASE_URL}/api${product.shared_image.file_path}` : '/img_placeholder.png'} 
+                          src={getImageSrc(product.shared_image?.file_path)} 
                           alt={product.name} 
                           style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
                         />
@@ -526,7 +533,7 @@ function ProductManagement() {
                   <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Imagen</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                     <img 
-                      src={formData.image_url ? (formData.image_url.startsWith('http') || formData.image_url.startsWith('blob') || formData.image_url.startsWith('data:') ? formData.image_url : `${API_BASE_URL}/api${formData.image_url}`) : '/img_placeholder.png'} 
+                      src={getImageSrc(formData.image_url)} 
                       alt="Product" 
                       style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }} 
                     />
@@ -608,7 +615,7 @@ function ProductManagement() {
           if (updatedProduct.isPreview) {
             setFormData(prev => ({ ...prev, image_url: updatedProduct.shared_image.file_path, image_from_url: updatedProduct.shared_image.file_path }));
           } else {
-            setFormData(prev => ({ ...prev, image_url: `${API_BASE_URL}/api${updatedProduct.shared_image.file_path}` }));
+            setFormData(prev => ({ ...prev, image_url: updatedProduct.shared_image?.file_path }));
             fetchProducts(selectedFamily.id, products.page, searchTerm, filters.category, filters.brand);
           }
         }}

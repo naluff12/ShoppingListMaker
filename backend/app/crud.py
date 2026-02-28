@@ -481,10 +481,10 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
     if not db_item:
         return None
 
-    update_data = item_update.model_dump(exclude_unset=True, exclude={'shared_image_id'})
+    update_data = item_update.model_dump(exclude_unset=True)
     blame_details = []
 
-    # shared_image_id removed from ListItemUpdate schema to enforce global product images
+    # shared_image_id handling to enforce global product images
 
     if 'precio_confirmado' in update_data and update_data['precio_confirmado'] is not None:
         if db_item.product:
@@ -496,6 +496,16 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
             db.add(price_history_entry)
 
     for key, value in update_data.items():
+        if key == 'shared_image_id':
+            blame_details.append(f"imagen cambiada")
+            # Update product shared_image_id if item has a product
+            if db_item.product:
+                db_item.product.shared_image_id = value
+                db.add(db_item.product)
+            # Also update item itself if it has the attribute (which it will after models.py fix)
+            setattr(db_item, key, value)
+            continue
+
         original_value = getattr(db_item, key)
         if original_value != value:
             if key == 'product_id':

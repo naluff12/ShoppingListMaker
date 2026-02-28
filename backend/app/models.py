@@ -124,6 +124,7 @@ class ListItem(Base):
     status = Column(Enum('pendiente', 'comprado', 'ya no se necesita', name='item_status'), default='pendiente')
     precio_estimado = Column(Float)
     precio_confirmado = Column(Float)
+    shared_image_id = Column(Integer, ForeignKey('shared_images.id'), nullable=True)
     creado_por_id = Column(Integer, ForeignKey('users.id'))
     created_at = Column(DateTime, default=tz_util.now)
 

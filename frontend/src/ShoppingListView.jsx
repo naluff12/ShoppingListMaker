@@ -547,11 +547,24 @@ function ShoppingListView() {
             });
             if (!res.ok) throw new Error('Error al actualizar la imagen del item');
             const updatedItem = await res.json();
+            
+            // Immediately update local state
             setItems(items.map(i => i.id === selectedItemForGallery.id ? updatedItem : i));
+            
+            // Also trigger a full refresh to be safe and ensure everything is synced
+            fetchListAndBlame(itemsPage);
+            
             setShowGalleryModal(false);
         } catch (err) {
             alert(err.message);
         }
+    };
+
+    const getImageSrc = (url) => {
+        if (!url) return '/img_placeholder.png';
+        if (url.startsWith('http') || url.startsWith('blob') || url.startsWith('data:')) return url;
+        if (url.startsWith('/api')) return `${API_BASE_URL}${url}`;
+        return `${API_BASE_URL}/api${url}`;
     };
 
     const budget = listDetails?.budget || 0;
@@ -662,7 +675,7 @@ function ShoppingListView() {
                                             onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} 
                                             onMouseEnter={() => setHighlightedIndex(index)}
                                         >
-                                            <img src={p.shared_image ? `${API_BASE_URL}/api${p.shared_image.file_path}` : '/img_placeholder.png'} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
+                                            <img src={getImageSrc(p.shared_image?.file_path)} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
                                             <div>
                                                 <div style={{ fontWeight: 500 }}>{p.name}</div>
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.brand} / {p.category}</div>

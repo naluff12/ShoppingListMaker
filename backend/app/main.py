@@ -1465,7 +1465,22 @@ def search_products_endpoint(
         "size": size
     }
 
-@app.post("/api/images/from-url", response_model=schemas.SharedImage)
+@app.post("/images/upload", response_model=schemas.SharedImage)
+async def upload_generic_image(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Generic image upload endpoint for new products or miscellaneous items.
+    """
+    try:
+        shared_image = await shared_images.save_image(db, file, current_user.id)
+        return shared_image
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+
+@app.post("/images/from-url", response_model=schemas.SharedImage)
 async def upload_image_from_url(
     image_data: dict, # {"image_url": "..."}
     db: Session = Depends(get_db),

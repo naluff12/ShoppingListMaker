@@ -92,6 +92,13 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
         handleClose();
     };
 
+    const getImageSrc = (url) => {
+        if (!url) return '/img_placeholder.png';
+        if (url.startsWith('http') || url.startsWith('blob') || url.startsWith('data:')) return url;
+        if (url.startsWith('/api')) return `${API_BASE_URL}${url}`;
+        return `${API_BASE_URL}/api${url}`;
+    };
+
     if (!show) return null;
 
     const totalSelected = selectedItems.size;
@@ -166,7 +173,7 @@ const PreviousItemsModal = ({ show, handleClose, familyId, listId, handleAddItem
                                                                 >
                                                                     <div style={{ width: 50, height: 50, borderRadius: 'var(--border-radius-sm)', overflow: 'hidden', flexShrink: 0, background: 'rgba(255,255,255,0.05)' }}>
                                                                         <img
-                                                                            src={item.product?.shared_image ? `${API_BASE_URL}/api${item.product.shared_image.file_path}` : '/img_placeholder.png'}
+                                                                            src={getImageSrc(item.product?.shared_image?.file_path)}
                                                                             alt={item.nombre}
                                                                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                                         />
