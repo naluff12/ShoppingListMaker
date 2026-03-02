@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
 import { Plus, Minus, Check, ShoppingCart, Info } from 'lucide-react';
-
-const API_URL = 'http://localhost:8000';
+import { API_BASE_URL } from './config';
 
 const ShoppingModeItem = ({ 
     item, 
@@ -46,7 +44,7 @@ const ShoppingModeItem = ({
             <div className="item-main-info">
                 <div className="item-image-mini">
                     <img 
-                        src={item.product?.shared_image ? `${API_URL}${item.product.shared_image.file_path}` : '/img_placeholder.png'} 
+                        src={item.product?.shared_image ? `${API_BASE_URL}/api${item.product.shared_image.file_path}` : '/img_placeholder.png'} 
                         alt={item.nombre} 
                     />
                 </div>
