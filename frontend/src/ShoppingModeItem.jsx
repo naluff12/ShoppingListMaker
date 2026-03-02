@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Plus, Minus, Check, ShoppingCart, Info } from 'lucide-react';
 import { API_BASE_URL } from './config';
 
