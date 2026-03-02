@@ -14,6 +14,8 @@ import ShoppingListItemSkeleton from './ShoppingListItemSkeleton';
 import ImageGalleryModal from './ImageGalleryModal';
 import { useWebSocket } from './useWebSocket';
 import { API_BASE_URL } from './config';
+import ShoppingModeItem from './ShoppingModeItem';
+import { ShoppingBag } from 'lucide-react';
 
 function ProgressBar({ progress, variant, label }) {
     const bgColor = variant === 'danger' ? 'var(--danger-color)' : variant === 'success' ? 'var(--success-color)' : variant === 'warning' ? 'var(--warning-color)' : 'var(--info-color, #3b82f6)';
@@ -67,6 +69,7 @@ function ShoppingListView() {
     const [itemsTotalCount, setItemsTotalCount] = useState(0);
     const [purchasedItemsCount, setPurchasedItemsCount] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isShoppingMode, setIsShoppingMode] = useState(false);
     
     // Filters
     const [showFilters, setShowFilters] = useState(false);
@@ -567,6 +570,15 @@ function ShoppingListView() {
         return `${API_BASE_URL}/api${url}`;
     };
 
+    useEffect(() => {
+        if (isShoppingMode) {
+            document.body.classList.add('is-shopping-mode-active');
+        } else {
+            document.body.classList.remove('is-shopping-mode-active');
+        }
+        return () => document.body.classList.remove('is-shopping-mode-active');
+    }, [isShoppingMode]);
+
     const budget = listDetails?.budget || 0;
     const budgetProgress = budget > 0 ? (budgetDetails.total_estimado / budget) * 100 : 0;
     const budgetVariant = budgetProgress > 100 ? 'danger' : budgetProgress > 75 ? 'warning' : 'success';
@@ -576,143 +588,183 @@ function ShoppingListView() {
     return (
         <div className="app-container animate-fade-in" style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
             
-            <button className="btn-premium btn-secondary mb-4" onClick={() => navigate('/calendar', { state: { calendar: listDetails?.calendar } })} style={{ display: 'inline-flex', padding: '8px 16px' }}>
-                <ArrowLeft size={18} /> Volver
-            </button>
-            
-            <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px' }}>
-                <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
-                    <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
-                    {listDetails && (
-                        <div 
-                            onClick={handleListStatusChange} 
-                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: 'var(--border-radius-md)', background: listDetails.status === 'revisada' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: listDetails.status === 'revisada' ? 'var(--success-color)' : 'var(--danger-color)', transition: 'all 0.3s ease' }} 
-                            title={listDetails.status === 'revisada' ? 'Marcar como Pendiente' : 'Marcar como Revisada'}
-                        >
-                            {listDetails.status === 'revisada' ? <><Eye size={20} /> <span style={{ fontWeight: 600 }}>Revisada</span></> : <><EyeOff size={20} /> <span style={{ fontWeight: 600 }}>No Revisada</span></>}
-                        </div>
+            <div className={`shopping-header-wrapper ${isShoppingMode ? 'is-sticky' : ''}`}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                    <button className="btn-premium btn-secondary" onClick={() => navigate('/calendar', { state: { calendar: listDetails?.calendar } })} style={{ display: 'inline-flex', padding: '8px 16px', flexShrink: 0 }}>
+                        <ArrowLeft size={18} /> <span className="hide-mobile">Volver</span>
+                    </button>
+                    
+                    {isShoppingMode && (
+                        <h1 className="sticky-list-name text-gradient" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, textAlign: 'center', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {listDetails?.name || ''}
+                        </h1>
                     )}
+                    
+                    <button 
+                        className={`btn-premium ${isShoppingMode ? 'btn-success' : 'btn-primary'}`} 
+                        onClick={() => setIsShoppingMode(!isShoppingMode)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', flexShrink: 0 }}
+                    >
+                        <ShoppingBag size={18} />
+                        <span className="hide-mobile">{isShoppingMode ? 'Salir' : 'Modo Comprando'}</span>
+                        {!isShoppingMode && <span className="show-mobile">Modo</span>}
+                    </button>
                 </div>
-
-                {/* Budget Section */}
-                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '24px', borderRadius: 'var(--border-radius-lg)', marginTop: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.4rem' }}>Presupuesto: ${budget.toFixed(2)}</h4>
-                        <button className="btn-premium btn-secondary" style={{ padding: '6px 12px' }} onClick={() => setShowBudgetModal(true)}>
-                            <Pencil size={16} /> Editar
-                        </button>
+                
+                {isShoppingMode && (
+                    <div className="sticky-progress-container animate-slide-down">
+                        <div className="sticky-progress-item">
+                            <span className="sticky-progress-label">Artículos</span>
+                            <div className="sticky-progress-bar-bg">
+                                <div className="sticky-progress-bar-fill success" style={{ width: `${itemsProgress}%` }}></div>
+                            </div>
+                            <span className="sticky-progress-value">{purchasedItemsCount}/{itemsTotalCount}</span>
+                        </div>
+                        <div className="sticky-progress-item">
+                            <span className="sticky-progress-label">Compra</span>
+                            <div className="sticky-progress-bar-bg">
+                                <div className="sticky-progress-bar-fill info" style={{ width: `${purchasedProgress}%` }}></div>
+                            </div>
+                            <span className="sticky-progress-value">${budgetDetails.total_comprado.toFixed(0)}</span>
+                        </div>
                     </div>
-                    
-                    <ProgressBar progress={budgetProgress} variant={budgetVariant} label={`Estimado ${budgetProgress.toFixed(0)}%`} />
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                        <span style={{ fontWeight: 500 }}>Total Estimado: ${budgetDetails.total_estimado.toFixed(2)}</span>
-                        <span>Restante: <span style={{ fontWeight: 600, color: budgetDetails.total_estimado > budget ? 'var(--danger-color)' : 'var(--success-color)' }}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
-                    </div>
-                    
-                    <div style={{ marginTop: '24px' }}>
-                        <ProgressBar progress={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
-                    </div>
-                    
-                    <div style={{ marginTop: '24px' }}>
-                        <h5 style={{ fontSize: '1.1rem', marginBottom: '8px', color: 'var(--text-primary)' }}>Progreso de Artículos</h5>
-                        <ProgressBar progress={itemsProgress} variant="success" label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
-                    </div>
-                </div>
-
-                <div style={{ height: '1px', background: 'var(--border-color)', margin: '32px 0' }} />
-
-                <form onSubmit={handleAdd} className="flex-mobile-stack" style={{ display: 'flex', gap: '12px', position: 'relative', zIndex: 10 }}>
-                    <div style={{ flex: 1, position: 'relative' }}>
-                        <input
-                            type="text"
-                            className="premium-input"
-                            placeholder="Nuevo producto (con detalles)"
-                            value={newItem}
-                            onChange={async (e) => {
-                                const value = e.target.value;
-                                setNewItem(value);
-                                setHighlightedIndex(-1);
-                                setProductsPage(1);
-                                if (!value.trim() || !listDetails?.calendar?.family_id) {
-                                    setProducts([]);
-                                    return;
-                                }
-                                fetchProducts(value, 1);
-                            }}
-                            onKeyDown={(e) => {
-                                if (products.length === 0) return;
-                                if (e.key === "ArrowDown") {
-                                    e.preventDefault();
-                                    setHighlightedIndex((prev) => (prev + 1) % products.length);
-                                } else if (e.key === "ArrowUp") {
-                                    e.preventDefault();
-                                    setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
-                                } else if (e.key === "Enter" && highlightedIndex >= 0) {
-                                    e.preventDefault();
-                                    const selected = products[highlightedIndex];
-                                    if (selected) {
-                                        setNewItem(selected.name);
-                                        if (selected.last_price) {
-                                            setNewPrice(selected.last_price);
-                                        }
-                                        setNewBrand(selected.brand);
-                                        setNewCategory(selected.category);
-                                        setProducts([]);
-                                    }
-                                }
-                            }}
-                            onBlur={() => { setTimeout(() => { setProducts([]); }, 200); }}
-                        />
-                        {products.length > 0 && newItem.trim() !== "" && (
-                            <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', marginTop: '4px', maxHeight: "350px", overflowY: "auto", padding: '8px' }} onMouseDown={(e) => e.preventDefault()}>
-                                {products.map((p, index) => {
-                                    return (
-                                        <div 
-                                            key={p.id} 
-                                            className="dropdown-item" 
-                                            style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: index === highlightedIndex ? 'rgba(255,255,255,0.1)' : 'transparent', borderRadius: '4px', cursor: 'pointer', marginBottom: '4px' }}
-                                            onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} 
-                                            onMouseEnter={() => setHighlightedIndex(index)}
-                                        >
-                                            <img src={getImageSrc(p.shared_image?.file_path)} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
-                                            <div>
-                                                <div style={{ fontWeight: 500 }}>{p.name}</div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.brand} / {p.category}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderTop: '1px solid var(--border-color)', marginTop: '8px' }}>
-                                    <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage <= 1} onClick={() => fetchProducts(newItem, productsPage - 1)}>Anterior</button>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Página {productsPage} de {productsTotalPages}</span>
-                                    <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage >= productsTotalPages} onClick={() => fetchProducts(newItem, productsPage + 1)}>Siguiente</button>
-                                </div>
+                )}
+            </div>
+            
+            {!isShoppingMode && (
+                <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px' }}>
+                    <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
+                        <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
+                        {listDetails && (
+                            <div 
+                                onClick={handleListStatusChange} 
+                                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: 'var(--border-radius-md)', background: listDetails.status === 'revisada' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: listDetails.status === 'revisada' ? 'var(--success-color)' : 'var(--danger-color)', transition: 'all 0.3s ease' }} 
+                                title={listDetails.status === 'revisada' ? 'Marcar como Pendiente' : 'Marcar como Revisada'}
+                            >
+                                {listDetails.status === 'revisada' ? <><Eye size={20} /> <span style={{ fontWeight: 600 }}>Revisada</span></> : <><EyeOff size={20} /> <span style={{ fontWeight: 600 }}>No Revisada</span></>}
                             </div>
                         )}
                     </div>
-                    
-                    <input type="number" className="premium-input" value={newQuantity} onChange={(e) => setNewQuantity(parseFloat(e.target.value))} style={{ width: '80px', flex: 'none' }} min="1" step="any" />
-                    
-                    <select className="premium-input" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} style={{ width: '120px', flex: 'none' }}>
-                        <option value="piezas">piezas</option>
-                        <option value="kg">kg</option>
-                        <option value="g">g</option>
-                        <option value="L">L</option>
-                        <option value="ml">ml</option>
-                    </select>
-                    
-                    <button type="submit" className="btn-premium btn-primary" disabled={loading} style={{ padding: '8px 24px' }}>Agregar</button>
-                    
-                    <button type="button" className="btn-premium" style={{ background: 'var(--info-color)', padding: '8px 16px' }} title="Agregar productos no comprados de otra lista" onClick={() => setShowPreviousItemsModal(true)}>
-                        <PlusCircle size={20} color="white" />
-                    </button>
-                </form>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px' }}>
-                    <h5 style={{ margin: 0, fontWeight: 600 }}>Total Comprado: <span className="badge" style={{ background: 'var(--success-color)', fontSize: '1.2rem', padding: '6px 12px' }}>${budgetDetails.total_comprado.toFixed(2)}</span></h5>
+                    <div style={{ background: 'rgba(0,0,0,0.15)', padding: '24px', borderRadius: 'var(--border-radius-lg)', marginTop: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.4rem' }}>Presupuesto: ${budget.toFixed(2)}</h4>
+                            <button className="btn-premium btn-secondary" style={{ padding: '6px 12px' }} onClick={() => setShowBudgetModal(true)}>
+                                <Pencil size={16} /> Editar
+                            </button>
+                        </div>
+                        
+                        <ProgressBar progress={budgetProgress} variant={budgetVariant} label={`Estimado ${budgetProgress.toFixed(0)}%`} />
+                        
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontWeight: 500 }}>Total Estimado: ${budgetDetails.total_estimado.toFixed(2)}</span>
+                            <span>Restante: <span style={{ fontWeight: 600, color: budgetDetails.total_estimado > budget ? 'var(--danger-color)' : 'var(--success-color)' }}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
+                        </div>
+                        
+                        <div style={{ marginTop: '24px' }}>
+                            <ProgressBar progress={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
+                        </div>
+                        
+                        <div style={{ marginTop: '24px' }}>
+                            <h5 style={{ fontSize: '1.1rem', marginBottom: '8px', color: 'var(--text-primary)' }}>Progreso de Artículos</h5>
+                            <ProgressBar progress={itemsProgress} variant="success" label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
+                        </div>
+                    </div>
+
+                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '32px 0' }} />
+
+                    <form onSubmit={handleAdd} className="flex-mobile-stack" style={{ display: 'flex', gap: '12px', position: 'relative', zIndex: 10 }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <input
+                                type="text"
+                                className="premium-input"
+                                placeholder="Nuevo producto (con detalles)"
+                                value={newItem}
+                                onChange={async (e) => {
+                                    const value = e.target.value;
+                                    setNewItem(value);
+                                    setHighlightedIndex(-1);
+                                    setProductsPage(1);
+                                    if (!value.trim() || !listDetails?.calendar?.family_id) {
+                                        setProducts([]);
+                                        return;
+                                    }
+                                    fetchProducts(value, 1);
+                                }}
+                                onKeyDown={(e) => {
+                                    if (products.length === 0) return;
+                                    if (e.key === "ArrowDown") {
+                                        e.preventDefault();
+                                        setHighlightedIndex((prev) => (prev + 1) % products.length);
+                                    } else if (e.key === "ArrowUp") {
+                                        e.preventDefault();
+                                        setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
+                                    } else if (e.key === "Enter" && highlightedIndex >= 0) {
+                                        e.preventDefault();
+                                        const selected = products[highlightedIndex];
+                                        if (selected) {
+                                            setNewItem(selected.name);
+                                            if (selected.last_price) {
+                                                setNewPrice(selected.last_price);
+                                            }
+                                            setNewBrand(selected.brand);
+                                            setNewCategory(selected.category);
+                                            setProducts([]);
+                                        }
+                                    }
+                                }}
+                                onBlur={() => { setTimeout(() => { setProducts([]); }, 200); }}
+                            />
+                            {products.length > 0 && newItem.trim() !== "" && (
+                                <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', marginTop: '4px', maxHeight: "350px", overflowY: "auto", padding: '8px' }} onMouseDown={(e) => e.preventDefault()}>
+                                    {products.map((p, index) => {
+                                        return (
+                                            <div 
+                                                key={p.id} 
+                                                className="dropdown-item" 
+                                                style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: index === highlightedIndex ? 'rgba(255,255,255,0.1)' : 'transparent', borderRadius: '4px', cursor: 'pointer', marginBottom: '4px' }}
+                                                onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} 
+                                                onMouseEnter={() => setHighlightedIndex(index)}
+                                            >
+                                                <img src={getImageSrc(p.shared_image?.file_path)} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
+                                                <div>
+                                                    <div style={{ fontWeight: 500 }}>{p.name}</div>
+                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.brand} / {p.category}</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderTop: '1px solid var(--border-color)', marginTop: '8px' }}>
+                                        <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage <= 1} onClick={() => fetchProducts(newItem, productsPage - 1)}>Anterior</button>
+                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Página {productsPage} de {productsTotalPages}</span>
+                                        <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage >= productsTotalPages} onClick={() => fetchProducts(newItem, productsPage + 1)}>Siguiente</button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        
+                        <input type="number" className="premium-input" value={newQuantity} onChange={(e) => setNewQuantity(parseFloat(e.target.value))} style={{ width: '80px', flex: 'none' }} min="0.001" step="any" />
+                        
+                        <select className="premium-input" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} style={{ width: '120px', flex: 'none' }}>
+                            <option value="piezas">piezas</option>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                            <option value="L">L</option>
+                            <option value="ml">ml</option>
+                        </select>
+                        
+                        <button type="submit" className="btn-premium btn-primary" disabled={loading} style={{ padding: '8px 24px' }}>Agregar</button>
+                        
+                        <button type="button" className="btn-premium" style={{ background: 'var(--info-color)', padding: '8px 16px' }} title="Agregar productos no comprados de otra lista" onClick={() => setShowPreviousItemsModal(true)}>
+                            <PlusCircle size={20} color="white" />
+                        </button>
+                    </form>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px' }}>
+                        <h5 style={{ margin: 0, fontWeight: 600 }}>Total Comprado: <span className="badge" style={{ background: 'var(--success-color)', fontSize: '1.2rem', padding: '6px 12px' }}>${budgetDetails.total_comprado.toFixed(2)}</span></h5>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Filtering and View Options */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
@@ -757,6 +809,7 @@ function ShoppingListView() {
                     )}
                 </div>
 
+            {!isShoppingMode && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <button className={`btn-premium ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('list')} style={{ padding: '6px 16px' }}>
                         Lista
@@ -765,73 +818,87 @@ function ShoppingListView() {
                         Tarjetas
                     </button>
                 </div>
+            )}
             </div>
 
             {/* Items List */}
             <div>
                 {loading ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr'), gap: '16px' }}>
                         {Array.from({ length: 5 }).map((_, index) =>
-                            viewMode === 'card' ? (
-                                <ShoppingItemCardSkeleton key={index} />
+                            isShoppingMode ? (
+                                <div key={index} className="glass-panel skeleton-box" style={{ height: '100px' }}></div>
                             ) : (
-                                <ShoppingListItemSkeleton key={index} />
+                                viewMode === 'card' ? (
+                                    <ShoppingItemCardSkeleton key={index} />
+                                ) : (
+                                    <ShoppingListItemSkeleton key={index} />
+                                )
                             )
                         )}
                     </div>
                 ) : (
-                    <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '24px' }}>
+                    <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr'), gap: isShoppingMode ? '12px' : '24px' }}>
                         <TransitionGroup component={null}>
                             {items.map(item => (
                                 <CSSTransition key={item.id} timeout={400} classNames="fade">
-                                    {viewMode === 'card' ? (
-                                        <ShoppingItemCard
+                                    {isShoppingMode ? (
+                                        <ShoppingModeItem 
                                             item={item}
-                                            onStatusChange={handleStatus}
-                                            onDelete={handleDelete}
-                                            onImageUpload={handleImageUpload}
                                             onItemUpdate={handleItemUpdate}
-                                            onPriceChange={handlePriceChange}
-                                            onShowItemBlame={handleShowItemBlame}
-                                            onItemCommentSubmit={handleItemCommentSubmit}
-                                            onShowPriceHistory={handleShowPriceHistory}
-                                            onShowGallery={handleShowGallery}
-                                            editingItem={editingItem}
-                                            setEditingItem={setEditingItem}
-                                            editingPrice={editingPrice}
-                                            setEditingPrice={setEditingPrice}
-                                            showItemBlame={showItemBlame}
-                                            itemBlames={itemBlames}
-                                            newItemComment={newItemComment}
-                                            setNewItemComment={setNewItemComment}
-                                            loadingItemBlame={loadingItemBlame}
+                                            onStatusChange={handleStatus}
                                             loading={loading}
-                                            onProductUpdate={() => fetchListAndBlame(itemsPage)}
                                         />
                                     ) : (
-                                        <ShoppingListItem
-                                            item={item}
-                                            onStatusChange={handleStatus}
-                                            onDelete={handleDelete}
-                                            onImageUpload={handleImageUpload}
-                                            onItemUpdate={handleItemUpdate}
-                                            onPriceChange={handlePriceChange}
-                                            onShowItemBlame={handleShowItemBlame}
-                                            onItemCommentSubmit={handleItemCommentSubmit}
-                                            onShowPriceHistory={handleShowPriceHistory}
-                                            onShowGallery={handleShowGallery}
-                                            editingItem={editingItem}
-                                            setEditingItem={setEditingItem}
-                                            editingPrice={editingPrice}
-                                            setEditingPrice={setEditingPrice}
-                                            showItemBlame={showItemBlame}
-                                            itemBlames={itemBlames}
-                                            newItemComment={newItemComment}
-                                            setNewItemComment={setNewItemComment}
-                                            loadingItemBlame={loadingItemBlame}
-                                            loading={loading}
-                                            onProductUpdate={() => fetchListAndBlame(itemsPage)}
-                                        />
+                                        viewMode === 'card' ? (
+                                            <ShoppingItemCard
+                                                item={item}
+                                                onStatusChange={handleStatus}
+                                                onDelete={handleDelete}
+                                                onImageUpload={handleImageUpload}
+                                                onItemUpdate={handleItemUpdate}
+                                                onPriceChange={handlePriceChange}
+                                                onShowItemBlame={handleShowItemBlame}
+                                                onItemCommentSubmit={handleItemCommentSubmit}
+                                                onShowPriceHistory={handleShowPriceHistory}
+                                                onShowGallery={handleShowGallery}
+                                                editingItem={editingItem}
+                                                setEditingItem={setEditingItem}
+                                                editingPrice={editingPrice}
+                                                setEditingPrice={setEditingPrice}
+                                                showItemBlame={showItemBlame}
+                                                itemBlames={itemBlames}
+                                                newItemComment={newItemComment}
+                                                setNewItemComment={setNewItemComment}
+                                                loadingItemBlame={loadingItemBlame}
+                                                loading={loading}
+                                                onProductUpdate={() => fetchListAndBlame(itemsPage)}
+                                            />
+                                        ) : (
+                                            <ShoppingListItem
+                                                item={item}
+                                                onStatusChange={handleStatus}
+                                                onDelete={handleDelete}
+                                                onImageUpload={handleImageUpload}
+                                                onItemUpdate={handleItemUpdate}
+                                                onPriceChange={handlePriceChange}
+                                                onShowItemBlame={handleShowItemBlame}
+                                                onItemCommentSubmit={handleItemCommentSubmit}
+                                                onShowPriceHistory={handleShowPriceHistory}
+                                                onShowGallery={handleShowGallery}
+                                                editingItem={editingItem}
+                                                setEditingItem={setEditingItem}
+                                                editingPrice={editingPrice}
+                                                setEditingPrice={setEditingPrice}
+                                                showItemBlame={showItemBlame}
+                                                itemBlames={itemBlames}
+                                                newItemComment={newItemComment}
+                                                setNewItemComment={setNewItemComment}
+                                                loadingItemBlame={loadingItemBlame}
+                                                loading={loading}
+                                                onProductUpdate={() => fetchListAndBlame(itemsPage)}
+                                            />
+                                        )
                                     )}
                                 </CSSTransition>
                             ))}
