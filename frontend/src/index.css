@@ -344,10 +344,16 @@ a:hover {
   animation: fadeIn 0.2s ease forwards;
 }
 
-.dropdown-container:focus-within .dropdown-menu,
-.dropdown-container:hover .dropdown-menu {
-  display: flex;
-  animation: fadeIn 0.2s ease forwards;
+/* On mobile, avoid absolute positioning that gets cut off by overflow-x containers */
+@media (max-width: 768px) {
+  .dropdown-menu {
+    position: fixed;
+    top: 70px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 70vh;
+  }
 }
 
 .dropdown-item {
@@ -371,6 +377,19 @@ a:hover {
 
 .dropdown-item:hover {
   background: rgba(240, 246, 252, 0.05);
+}
+
+.dropdown-item-content {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  padding: 0;
+  cursor: pointer;
+  display: block;
+  width: 100%;
 }
 
 .badge {
@@ -605,7 +624,6 @@ input:focus + .slider {
   text-decoration-color: var(--text-muted);
 }
 
-
 .item-comprado:hover {
   opacity: 0.75;
 }
@@ -614,11 +632,11 @@ input:focus + .slider {
   .glass-panel {
     padding: 16px;
   }
-  
+
   h2 {
     font-size: 1.8rem !important;
   }
-  
+
   .btn-premium {
     padding: 10px 16px;
     font-size: 0.9rem;
@@ -649,16 +667,15 @@ input:focus + .slider {
     align-items: stretch !important;
     gap: 16px !important;
   }
-  
+
   .flex-mobile-stack > * {
     width: 100% !important;
     margin-bottom: 0 !important;
   }
-  
+
   .flex-mobile-stack > .btn-premium,
   .flex-mobile-stack > button {
     width: 100% !important;
     justify-content: center !important;
   }
 }
-

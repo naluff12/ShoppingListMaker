@@ -150,41 +150,54 @@ function NavigationBar({ user, onLogout }) {
               </button>
 
               {showDropdown && (
-                <div className="dropdown-menu" style={{ display: 'flex' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', fontWeight: 600 }}>
-                    {unreadCount > 0 ? `${unreadCount} notificaciones nuevas` : 'Notificaciones'}
+                <div className={`dropdown-menu ${showDropdown ? 'show' : ''}`} style={{ display: 'flex' }}>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{unreadCount > 0 ? `${unreadCount} nuevas` : 'Notificaciones'}</span>
+                    <button 
+                      className="modal-close" 
+                      onClick={() => setShowDropdown(false)}
+                      style={{ padding: '4px' }}
+                    >
+                      <XCircle size={18} />
+                    </button>
                   </div>
                   
                   {notifications.items?.length > 0 ? (
                     <>
-                      <button className="dropdown-item" style={{ color: 'var(--primary-color)', justifyContent: 'center' }} onClick={handleMarkAllRead}>
+                      <button className="dropdown-item" style={{ color: 'var(--primary-color)', justifyContent: 'center', width: '100%' }} onClick={handleMarkAllRead}>
                         Marcar todas como leídas
                       </button>
                       
-                      {notifications.items.map(notification => (
-                        <div key={notification.id} className="dropdown-item" style={{ fontWeight: !notification.is_read ? 600 : 400 }}>
-                          <div onClick={() => handleNotificationClick(notification)} style={{ flex: 1 }}>
-                            <small style={{ color: 'var(--text-muted)' }}>{new Date(notification.created_at).toLocaleString()}</small><br />
-                            {notification.message}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--danger-color)', cursor: 'pointer' }}>
-                              <XCircle size={16} />
+                      <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                        {notifications.items.map(notification => (
+                          <div key={notification.id} className="dropdown-item" style={{ fontWeight: !notification.is_read ? 600 : 400 }}>
+                            <button 
+                              className="dropdown-item-content"
+                              onClick={() => handleNotificationClick(notification)}
+                            >
+                              <small style={{ color: 'var(--text-muted)' }}>{new Date(notification.created_at).toLocaleString()}</small><br />
+                              <span style={{ fontSize: '0.95rem' }}>{notification.message}</span>
                             </button>
-                            {!notification.is_read &&
-                              <button onClick={(e) => { e.stopPropagation(); handleMarkOneRead(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--success-color)', cursor: 'pointer' }}>
-                                <CheckCircle size={16} />
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '8px' }}>
+                              <button onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--danger-color)', cursor: 'pointer', padding: '4px' }}>
+                                <XCircle size={16} />
                               </button>
-                            }
+                              {!notification.is_read &&
+                                <button onClick={(e) => { e.stopPropagation(); handleMarkOneRead(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--success-color)', cursor: 'pointer', padding: '4px' }}>
+                                  <CheckCircle size={16} />
+                                </button>
+                              }
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </>
                   ) : (
                     <div className="dropdown-item" style={{ justifyContent: 'center', color: 'var(--text-muted)', cursor: 'default' }}>No hay notificaciones</div>
                   )}
                 </div>
               )}
+
             </div>
 
             <Link to="/profile" className="nav-link">Perfil</Link>
