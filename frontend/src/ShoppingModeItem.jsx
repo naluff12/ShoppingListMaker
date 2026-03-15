@@ -122,7 +122,25 @@ const ShoppingModeItem = ({
                         step="0.01"
                     />
                     {item.product?.last_price != null && (
-                        <div style={{ position: 'absolute', top: '-22px', right: '0', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'rgba(0,0,0,0.4)', padding: '4px 8px', borderRadius: '999px', boxShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+                        <div style={{
+                            position: 'absolute',
+                            top: '-22px',
+                            right: '0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.75rem',
+                            color: 'var(--text-secondary)',
+                            background: 'rgba(0,0,0,0.4)',
+                            padding: '4px 8px',
+                            borderRadius: '999px',
+                            boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+                            whiteSpace: 'nowrap',
+                            maxWidth: '220px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            pointerEvents: 'none'
+                        }}>
                             <Clock size={14} />
                             <span>Últ. precio: ${item.product.last_price}</span>
                         </div>
