@@ -10,13 +10,15 @@ const ShoppingModeItem = ({
     isSelected = false,
     onSelect = () => {}
 }) => {
-    const [price, setPrice] = useState(item.precio_confirmado || item.product?.last_price || '');
+    const [price, setPrice] = useState(item.precio_confirmado ?? '');
     const [quantity, setQuantity] = useState(item.cantidad || 1);
+    const [unit, setUnit] = useState(item.unit || 'piezas');
     const [localLoading, setLocalLoading] = useState(false);
 
     useEffect(() => {
-        setPrice(item.precio_confirmado || item.product?.last_price || '');
+        setPrice(item.precio_confirmado ?? '');
         setQuantity(item.cantidad || 1);
+        setUnit(item.unit || 'piezas');
     }, [item]);
 
     const handleQuantityChange = (delta) => {
@@ -27,10 +29,11 @@ const ShoppingModeItem = ({
     const handleFinishPurchase = async () => {
         setLocalLoading(true);
         try {
-            // Actualizamos precio y cantidad, y marcamos como comprado
+            // Actualizamos precio, cantidad, unidad y marcamos como comprado
             await onItemUpdate(item.id, {
                 precio_confirmado: parseFloat(price) || 0,
                 cantidad: quantity,
+                unit,
                 status: 'comprado'
             });
         } catch (error) {
@@ -86,8 +89,8 @@ const ShoppingModeItem = ({
                         />
                         <select
                             className="premium-input"
-                            value={item.unit}
-                            onChange={(e) => onItemUpdate(item.id, { unit: e.target.value })}
+                            value={unit}
+                            onChange={(e) => setUnit(e.target.value)}
                             disabled={isPurchased || localLoading}
                             style={{ width: '90px', padding: '6px', fontSize: '0.85rem' }}
                         >
@@ -107,17 +110,22 @@ const ShoppingModeItem = ({
                     </button>
                 </div>
 
-                <div className="price-input-group">
+                <div className="price-input-group" style={{ position: 'relative' }}>
                     <span className="currency-symbol">$</span>
                     <input 
                         type="number" 
                         className="shopping-price-input" 
-                        placeholder="Precio"
+                        placeholder={item.product?.last_price ? `Últ. $${item.product.last_price}` : 'Precio'}
                         value={price}
                         onChange={(e) => setPrice(e.target.value)}
                         disabled={isPurchased || localLoading}
                         step="0.01"
                     />
+                    {item.product?.last_price != null && (
+                        <span style={{ position: 'absolute', bottom: '-18px', right: '0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            Últ. precio: ${item.product.last_price}
+                        </span>
+                    )}
                 </div>
 
                 <button 

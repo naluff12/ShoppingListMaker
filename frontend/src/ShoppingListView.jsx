@@ -1,7 +1,7 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { Eye, EyeOff, PlusCircle, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Eye, EyeOff, PlusCircle, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, X, ShoppingBag } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css';
@@ -15,7 +15,6 @@ import ImageGalleryModal from './ImageGalleryModal';
 import { useWebSocket } from './useWebSocket';
 import { API_BASE_URL } from './config';
 import ShoppingModeItem from './ShoppingModeItem';
-import { ShoppingBag } from 'lucide-react';
 
 function ProgressBar({ progress, variant, label }) {
     const bgColor = variant === 'danger' ? 'var(--danger-color)' : variant === 'success' ? 'var(--success-color)' : variant === 'warning' ? 'var(--warning-color)' : 'var(--info-color, #3b82f6)';
@@ -74,6 +73,13 @@ function ShoppingListView() {
     const [hidePurchased, setHidePurchased] = useState(false);
     const [sortOption, setSortOption] = useState('default');
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
+    const [toast, setToast] = useState(null); // { message, type }
+
+    const showToast = (message, type = 'info') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3000);
+    };
+
     const visibleItems = hidePurchased ? items.filter(i => i.status !== 'comprado') : items;
     
     // Filters
@@ -170,16 +176,15 @@ function ShoppingListView() {
             fetchListAndBlame(itemsPage); 
             fetchBudgetDetails();
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         } finally {
             setIsQuickAdding(false);
         }
     };
-
     const handleBudgetUpdate = async () => {
         const budgetValue = parseFloat(newBudget);
         if (isNaN(budgetValue) || budgetValue < 0) {
-            alert("Por favor, introduce un número válido para el presupuesto.");
+            showToast("Por favor, introduce un número válido para el presupuesto.", 'error');
             return;
         }
 
@@ -195,17 +200,18 @@ function ShoppingListView() {
             setShowBudgetModal(false);
             setNewBudget('');
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         }
     };
 
     const fetchListAndBlame = (page = 1) => {
         if (!listId) return;
+        const effectiveStatus = isShoppingMode && hidePurchased ? 'pendiente' : statusFilter;
         const queryParams = new URLSearchParams({
             page: page,
             size: 10,
             search: searchTerm,
-            status: statusFilter,
+            status: effectiveStatus,
             category: categoryFilter,
             brand: brandFilter
         });
@@ -242,7 +248,7 @@ function ShoppingListView() {
             })
             .catch(err => {
                 console.error("Error fetching list data:", err);
-                alert("No se pudo cargar la información de la lista.");
+                showToast("No se pudo cargar la información de la lista.", 'error');
             })
             .finally(() => setLoading(false));
     };
@@ -255,7 +261,7 @@ function ShoppingListView() {
         setItemBlames({});
         setShowItemBlame(null);
         return () => clearTimeout(handler);
-    }, [listId, searchTerm, statusFilter, categoryFilter, brandFilter]);
+    }, [listId, searchTerm, statusFilter, categoryFilter, brandFilter, hidePurchased]);
 
     // WebSocket Integration
     const familyId = listDetails?.calendar?.family_id || null;
@@ -297,7 +303,7 @@ function ShoppingListView() {
             setItemBlames(prev => ({ ...prev, [itemId]: Array.isArray(data) ? data : [] }));
             setShowItemBlame(itemId);
         } catch (err) {
-            alert('Error al cargar el historial del ítem');
+            showToast('Error al cargar el historial del ítem', 'error');
         } finally {
             setLoadingItemBlame(false);
         }
@@ -338,7 +344,7 @@ function ShoppingListView() {
             fetchListAndBlame();
             fetchBudgetDetails();
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -368,12 +374,13 @@ function ShoppingListView() {
             await fetch(`/api/listas/${listId}/items/bulk`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items })
+                body: JSON.stringify({ items: itemsToAdd })
             });
             fetchListAndBlame(); 
             fetchBudgetDetails();
+            showToast('Items agregados a la lista', 'success');
         } catch (err) {
-            alert('Error adding items to the list.');
+            showToast('Error al agregar items a la lista', 'error');
         }
     };
 
@@ -400,7 +407,7 @@ function ShoppingListView() {
                 setItemBlames(prev => ({ ...prev, [id]: Array.isArray(dataHist) ? dataHist : [] }));
             }
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
             fetchListAndBlame();
         }
     };
@@ -416,7 +423,7 @@ function ShoppingListView() {
             fetchListAndBlame(); 
             fetchBudgetDetails();
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         }
     };
 
@@ -429,14 +436,53 @@ function ShoppingListView() {
         });
     };
 
+    const selectAllVisible = () => {
+        const allIds = visibleItems.map(i => i.id);
+        setSelectedItems(new Set(allIds));
+    };
+
     const clearSelection = () => setSelectedItems(new Set());
 
-    const handleBulkDelete = async () => {
-        if (selectedItems.size === 0) return;
-        if (!window.confirm(`¿Eliminar ${selectedItems.size} artículos seleccionados?`)) return;
+    const bulkUpdateStatus = async (ids, status, confirmMessage, successMessage) => {
+        if (!ids || ids.length === 0) return;
+        if (!window.confirm(confirmMessage)) return;
         setBulkActionLoading(true);
         try {
-            await Promise.all(Array.from(selectedItems).map(id =>
+            await Promise.all(ids.map(id =>
+                fetch(`/api/items/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                })
+            ));
+            clearSelection();
+            fetchListAndBlame(itemsPage);
+            fetchBudgetDetails();
+            if (successMessage) showToast(successMessage, 'success');
+        } catch (err) {
+            showToast('Error al actualizar algunos ítems', 'error');
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
+    const handleBulkMarkPurchased = () => {
+        const ids = Array.from(selectedItems);
+        bulkUpdateStatus(ids, 'comprado', `¿Marcar ${ids.length} artículos como comprados?`, 'Se marcaron los artículos como comprados');
+    };
+
+    const handleBulkResetPending = () => {
+        const ids = Array.from(selectedItems);
+        bulkUpdateStatus(ids, 'pendiente', `¿Restablecer ${ids.length} artículos a pendiente?`, 'Se restablecieron los artículos a pendiente');
+    };
+
+    const handleBulkDelete = async () => {
+        const ids = Array.from(selectedItems);
+        if (!ids.length) return;
+        if (!window.confirm(`¿Eliminar ${ids.length} artículos seleccionados?`)) return;
+        setBulkActionLoading(true);
+        try {
+            await Promise.all(ids.map(id =>
                 fetch(`/api/items/${id}`, {
                     method: 'DELETE'
                 })
@@ -444,54 +490,22 @@ function ShoppingListView() {
             clearSelection();
             fetchListAndBlame(itemsPage);
             fetchBudgetDetails();
+            showToast('Se eliminaron los artículos seleccionados', 'success');
         } catch (err) {
-            alert('Error al eliminar algunos ítems: ' + err.message);
+            showToast('Error al eliminar algunos ítems', 'error');
         } finally {
             setBulkActionLoading(false);
         }
     };
 
-    const handleBulkMarkPurchased = async () => {
-        if (selectedItems.size === 0) return;
-        if (!window.confirm(`¿Marcar ${selectedItems.size} articulos como comprados?`)) return;
-        setBulkActionLoading(true);
-        try {
-            await Promise.all(Array.from(selectedItems).map(id =>
-                fetch(`/api/items/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 'comprado' })
-                })
-            ));
-            clearSelection();
-            fetchListAndBlame(itemsPage);
-            fetchBudgetDetails();
-        } catch (err) {
-            alert('Error al actualizar algunos ítems: ' + err.message);
-        } finally {
-            setBulkActionLoading(false);
-        }
+    const handleBulkMarkAllPurchased = () => {
+        const ids = visibleItems.map(i => i.id);
+        bulkUpdateStatus(ids, 'comprado', `¿Marcar todos los artículos visibles (${ids.length}) como comprados?`, 'Se marcaron todos los artículos visibles como comprados');
     };
 
-    const handleBulkResetPending = async () => {
-        if (selectedItems.size === 0) return;
-        if (!window.confirm(`¿Restablecer ${selectedItems.size} artículos a pendiente?`)) return;
-        setBulkActionLoading(true);
-        try {
-            await Promise.all(Array.from(selectedItems).map(id =>
-                fetch(`/api/items/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: 'pendiente' })
-                })
-            ));
-            clearSelection();
-            fetchListAndBlame(itemsPage);
-        } catch (err) {
-            alert('Error al actualizar algunos ítems: ' + err.message);
-        } finally {
-            setBulkActionLoading(false);
-        }
+    const handleBulkResetAllPending = () => {
+        const ids = visibleItems.map(i => i.id);
+        bulkUpdateStatus(ids, 'pendiente', `¿Restablecer todos los artículos visibles (${ids.length}) a pendiente?`, 'Se restablecieron todos los artículos visibles a pendiente');
     };
 
     const handleItemCommentSubmit = async (itemId) => {
@@ -511,7 +525,7 @@ function ShoppingListView() {
             }));
             setNewItemComment('');
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         }
     };
 
@@ -530,7 +544,7 @@ function ShoppingListView() {
             setBlame(prev => [...prev, nuevo]);
             setNewListComment('');
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         }
     };
 
@@ -551,7 +565,7 @@ function ShoppingListView() {
                 fetchBudgetDetails();
             }
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
             fetchListAndBlame(); 
         } finally {
             setEditingPrice(null);
@@ -570,7 +584,7 @@ function ShoppingListView() {
             const updatedList = await res.json();
             setListDetails(updatedList);
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         }
     };
 
@@ -587,7 +601,7 @@ function ShoppingListView() {
             const updatedItem = await res.json();
             setItems(items.map(i => i.id === itemId ? updatedItem : i));
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         }
     }
 
@@ -607,7 +621,7 @@ function ShoppingListView() {
             setEditingItem(null);
             fetchBudgetDetails();
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
             fetchListAndBlame();
         }
     };
@@ -666,7 +680,7 @@ function ShoppingListView() {
             
             setShowGalleryModal(false);
         } catch (err) {
-            alert(err.message);
+            showToast(err.message, 'error');
         }
     };
 
@@ -694,6 +708,11 @@ function ShoppingListView() {
 
     return (
         <div className="app-container animate-fade-in" style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
+            {toast && (
+                <div className={`toast toast-${toast.type}`}>
+                    {toast.message}
+                </div>
+            )}
             
             <div className={`shopping-header-wrapper ${isShoppingMode ? 'is-sticky' : ''}`}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
@@ -736,9 +755,15 @@ function ShoppingListView() {
                                 <span className="sticky-progress-value">${budgetDetails.total_comprado.toFixed(0)}</span>
                             </div>
                         </div>
-                        <div className="shopping-mode-actions">
-                            <button className={`btn-premium ${hidePurchased ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setHidePurchased(!hidePurchased)} disabled={bulkActionLoading}>
-                                {hidePurchased ? 'Mostrar comprados' : 'Ocultar comprados'}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <button
+                                className="btn-premium btn-compact"
+                                title={hidePurchased ? 'Mostrar comprados' : 'Ocultar comprados'}
+                                onClick={() => setHidePurchased(prev => !prev)}
+                                disabled={bulkActionLoading}
+                                style={{ padding: '8px', minWidth: '40px' }}
+                            >
+                                {hidePurchased ? <Eye size={18} /> : <EyeOff size={18} />}
                             </button>
                         </div>
                     </>
