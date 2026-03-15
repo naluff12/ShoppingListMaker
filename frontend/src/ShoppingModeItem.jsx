@@ -6,7 +6,9 @@ const ShoppingModeItem = ({
     item, 
     onItemUpdate, 
     onStatusChange,
-    loading 
+    loading,
+    isSelected = false,
+    onSelect = () => {}
 }) => {
     const [price, setPrice] = useState(item.precio_confirmado || item.product?.last_price || '');
     const [quantity, setQuantity] = useState(item.cantidad || 1);
@@ -42,7 +44,15 @@ const ShoppingModeItem = ({
 
     return (
         <div className={`glass-panel shopping-mode-item ${isPurchased ? 'purchased' : ''}`}>
-            <div className="item-main-info">
+            <div className="item-main-info" style={{ alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input 
+                        type="checkbox" 
+                        checked={isSelected} 
+                        onChange={onSelect} 
+                        style={{ width: '18px', height: '18px' }}
+                    />
+                </div>
                 <div className="item-image-mini">
                     <img 
                         src={item.product?.shared_image ? `${API_BASE_URL}/api${item.product.shared_image.file_path}` : '/img_placeholder.png'} 
@@ -64,7 +74,7 @@ const ShoppingModeItem = ({
                     >
                         <Minus size={20} />
                     </button>
-                    <div className="qty-display">
+                    <div className="qty-display" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <input 
                             type="number" 
                             className="qty-input-manual"
@@ -72,8 +82,21 @@ const ShoppingModeItem = ({
                             onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
                             disabled={isPurchased || localLoading}
                             step="any"
+                            style={{ width: '70px' }}
                         />
-                        <span className="qty-unit">{item.unit}</span>
+                        <select
+                            className="premium-input"
+                            value={item.unit}
+                            onChange={(e) => onItemUpdate(item.id, { unit: e.target.value })}
+                            disabled={isPurchased || localLoading}
+                            style={{ width: '90px', padding: '6px', fontSize: '0.85rem' }}
+                        >
+                            <option value="piezas">piezas</option>
+                            <option value="kg">kg</option>
+                            <option value="g">g</option>
+                            <option value="L">L</option>
+                            <option value="ml">ml</option>
+                        </select>
                     </div>
                     <button 
                         className="qty-btn" 

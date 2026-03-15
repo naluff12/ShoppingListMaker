@@ -33,6 +33,7 @@ function ShoppingListView() {
     const { listId } = useParams();
 
     const [items, setItems] = useState([]);
+    const [selectedItems, setSelectedItems] = useState(new Set());
     const [listDetails, setListDetails] = useState(null);
     const [blame, setBlame] = useState([]);
     const [newItem, setNewItem] = useState('');
@@ -70,6 +71,10 @@ function ShoppingListView() {
     const [purchasedItemsCount, setPurchasedItemsCount] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
     const [isShoppingMode, setIsShoppingMode] = useState(false);
+    const [hidePurchased, setHidePurchased] = useState(false);
+    const [sortOption, setSortOption] = useState('default');
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
+    const visibleItems = hidePurchased ? items.filter(i => i.status !== 'comprado') : items;
     
     // Filters
     const [showFilters, setShowFilters] = useState(false);
@@ -85,6 +90,30 @@ function ShoppingListView() {
     const [modalCategory, setModalCategory] = useState('');
     const [showGalleryModal, setShowGalleryModal] = useState(false);
     const [selectedItemForGallery, setSelectedItemForGallery] = useState(null);
+
+    const sortedItems = React.useMemo(() => {
+        const base = visibleItems.slice();
+        const getPrice = (item) => {
+            return item.precio_confirmado ?? item.product?.last_price ?? 0;
+        };
+
+        switch (sortOption) {
+            case 'name_asc':
+                return base.sort((a, b) => a.nombre.localeCompare(b.nombre));
+            case 'name_desc':
+                return base.sort((a, b) => b.nombre.localeCompare(a.nombre));
+            case 'qty_asc':
+                return base.sort((a, b) => (a.cantidad ?? 0) - (b.cantidad ?? 0));
+            case 'qty_desc':
+                return base.sort((a, b) => (b.cantidad ?? 0) - (a.cantidad ?? 0));
+            case 'price_asc':
+                return base.sort((a, b) => getPrice(a) - getPrice(b));
+            case 'price_desc':
+                return base.sort((a, b) => getPrice(b) - getPrice(a));
+            default:
+                return base;
+        }
+    }, [visibleItems, sortOption]);
     
     // WebSocket setup moved down
 
@@ -198,6 +227,7 @@ function ShoppingListView() {
             .then(([listData, itemsData, blameData, purchasedCountData, totalItemsCountData]) => {
                 setListDetails(listData);
                 setItems(Array.isArray(itemsData.items) ? itemsData.items : []);
+                setSelectedItems(new Set());
                 setItemsPage(itemsData.page);
                 setItemsTotalPages(Math.ceil(itemsData.total / itemsData.size));
                 setItemsTotalCount(totalItemsCountData.total);
@@ -390,6 +420,80 @@ function ShoppingListView() {
         }
     };
 
+    const toggleItemSelection = (id) => {
+        setSelectedItems(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const clearSelection = () => setSelectedItems(new Set());
+
+    const handleBulkDelete = async () => {
+        if (selectedItems.size === 0) return;
+        if (!window.confirm(`¿Eliminar ${selectedItems.size} artículos seleccionados?`)) return;
+        setBulkActionLoading(true);
+        try {
+            await Promise.all(Array.from(selectedItems).map(id =>
+                fetch(`/api/items/${id}`, {
+                    method: 'DELETE'
+                })
+            ));
+            clearSelection();
+            fetchListAndBlame(itemsPage);
+            fetchBudgetDetails();
+        } catch (err) {
+            alert('Error al eliminar algunos ítems: ' + err.message);
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
+    const handleBulkMarkPurchased = async () => {
+        if (selectedItems.size === 0) return;
+        if (!window.confirm(`¿Marcar ${selectedItems.size} articulos como comprados?`)) return;
+        setBulkActionLoading(true);
+        try {
+            await Promise.all(Array.from(selectedItems).map(id =>
+                fetch(`/api/items/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'comprado' })
+                })
+            ));
+            clearSelection();
+            fetchListAndBlame(itemsPage);
+            fetchBudgetDetails();
+        } catch (err) {
+            alert('Error al actualizar algunos ítems: ' + err.message);
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
+    const handleBulkResetPending = async () => {
+        if (selectedItems.size === 0) return;
+        if (!window.confirm(`¿Restablecer ${selectedItems.size} artículos a pendiente?`)) return;
+        setBulkActionLoading(true);
+        try {
+            await Promise.all(Array.from(selectedItems).map(id =>
+                fetch(`/api/items/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'pendiente' })
+                })
+            ));
+            clearSelection();
+            fetchListAndBlame(itemsPage);
+        } catch (err) {
+            alert('Error al actualizar algunos ítems: ' + err.message);
+        } finally {
+            setBulkActionLoading(false);
+        }
+    };
+
     const handleItemCommentSubmit = async (itemId) => {
         if (!newItemComment) return;
         try {
@@ -486,6 +590,9 @@ function ShoppingListView() {
             alert(err.message);
         }
     }
+
+    // Legacy compatibility: some render paths might still refer to `onImageUpload`.
+    const onImageUpload = handleImageUpload;
 
     const handleItemUpdate = async (itemId, data) => {
         try {
@@ -612,25 +719,52 @@ function ShoppingListView() {
                 </div>
                 
                 {isShoppingMode && (
-                    <div className="sticky-progress-container animate-slide-down">
-                        <div className="sticky-progress-item">
-                            <span className="sticky-progress-label">Artículos</span>
-                            <div className="sticky-progress-bar-bg">
-                                <div className="sticky-progress-bar-fill success" style={{ width: `${itemsProgress}%` }}></div>
+                    <>
+                        <div className="sticky-progress-container animate-slide-down">
+                            <div className="sticky-progress-item">
+                                <span className="sticky-progress-label">Artículos</span>
+                                <div className="sticky-progress-bar-bg">
+                                    <div className="sticky-progress-bar-fill success" style={{ width: `${itemsProgress}%` }}></div>
+                                </div>
+                                <span className="sticky-progress-value">{purchasedItemsCount}/{itemsTotalCount}</span>
                             </div>
-                            <span className="sticky-progress-value">{purchasedItemsCount}/{itemsTotalCount}</span>
-                        </div>
-                        <div className="sticky-progress-item">
-                            <span className="sticky-progress-label">Compra</span>
-                            <div className="sticky-progress-bar-bg">
-                                <div className="sticky-progress-bar-fill info" style={{ width: `${purchasedProgress}%` }}></div>
+                            <div className="sticky-progress-item">
+                                <span className="sticky-progress-label">Compra</span>
+                                <div className="sticky-progress-bar-bg">
+                                    <div className="sticky-progress-bar-fill info" style={{ width: `${purchasedProgress}%` }}></div>
+                                </div>
+                                <span className="sticky-progress-value">${budgetDetails.total_comprado.toFixed(0)}</span>
                             </div>
-                            <span className="sticky-progress-value">${budgetDetails.total_comprado.toFixed(0)}</span>
                         </div>
-                    </div>
+                        <div className="shopping-mode-actions">
+                            <button className={`btn-premium ${hidePurchased ? 'btn-secondary' : 'btn-primary'}`} onClick={() => setHidePurchased(!hidePurchased)} disabled={bulkActionLoading}>
+                                {hidePurchased ? 'Mostrar comprados' : 'Ocultar comprados'}
+                            </button>
+                        </div>
+                    </>
                 )}
             </div>
-            
+
+            {isShoppingMode && selectedItems.size > 0 && (
+                <div className="shopping-selection-toolbar">
+                    <span style={{ fontWeight: 600 }}>{selectedItems.size} seleccionado{selectedItems.size === 1 ? '' : 's'}</span>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        <button className="btn-premium btn-success" onClick={handleBulkMarkPurchased} disabled={bulkActionLoading}>
+                            Marcar comprados
+                        </button>
+                        <button className="btn-premium btn-secondary" onClick={handleBulkResetPending} disabled={bulkActionLoading}>
+                            Restablecer pendientes
+                        </button>
+                        <button className="btn-premium btn-danger" onClick={handleBulkDelete} disabled={bulkActionLoading}>
+                            Eliminar seleccionados
+                        </button>
+                        <button className="btn-premium btn-secondary" onClick={clearSelection} disabled={bulkActionLoading}>
+                            Limpiar selección
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {!isShoppingMode && (
                 <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px' }}>
                     <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
@@ -780,7 +914,20 @@ function ShoppingListView() {
                     <button className="btn-premium btn-secondary" onClick={() => setShowFilters(!showFilters)}>
                         <Filter size={20} />
                     </button>
-                    
+                    <select
+                        className="premium-input"
+                        style={{ width: '220px' }}
+                        value={sortOption}
+                        onChange={(e) => setSortOption(e.target.value)}
+                    >
+                        <option value="default">Orden predeterminado</option>
+                        <option value="name_asc">Nombre A→Z</option>
+                        <option value="name_desc">Nombre Z→A</option>
+                        <option value="qty_asc">Cantidad ↑</option>
+                        <option value="qty_desc">Cantidad ↓</option>
+                        <option value="price_asc">Precio ↑</option>
+                        <option value="price_desc">Precio ↓</option>
+                    </select>
                     {showFilters && (
                         <div className="glass-panel" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 100, width: '300px', padding: '16px' }}>
                             <div style={{ marginBottom: '16px' }}>
@@ -821,6 +968,24 @@ function ShoppingListView() {
             )}
             </div>
 
+            {selectedItems.size > 0 && (
+                <div className="glass-panel" style={{ marginBottom: '16px', padding: '12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontWeight: 600 }}>{selectedItems.size} seleccionado{selectedItems.size === 1 ? '' : 's'}</span>
+                    <button className="btn-premium btn-success" onClick={handleBulkMarkPurchased} disabled={bulkActionLoading}>
+                        Marcar comprados
+                    </button>
+                    <button className="btn-premium btn-secondary" onClick={handleBulkResetPending} disabled={bulkActionLoading}>
+                        Restablecer pendientes
+                    </button>
+                    <button className="btn-premium btn-danger" onClick={handleBulkDelete} disabled={bulkActionLoading}>
+                        Eliminar seleccionados
+                    </button>
+                    <button className="btn-premium btn-secondary" onClick={clearSelection} disabled={bulkActionLoading}>
+                        Limpiar selección
+                    </button>
+                </div>
+            )}
+
             {/* Items List */}
             <div>
                 {loading ? (
@@ -840,7 +1005,7 @@ function ShoppingListView() {
                 ) : (
                     <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr'), gap: isShoppingMode ? '12px' : '24px' }}>
                         <TransitionGroup component={null}>
-                            {items.map(item => (
+                            {(isShoppingMode ? items : sortedItems).map(item => (
                                 <CSSTransition key={item.id} timeout={400} classNames="fade">
                                     {isShoppingMode ? (
                                         <ShoppingModeItem 
@@ -848,6 +1013,8 @@ function ShoppingListView() {
                                             onItemUpdate={handleItemUpdate}
                                             onStatusChange={handleStatus}
                                             loading={loading}
+                                            isSelected={selectedItems.has(item.id)}
+                                            onSelect={() => toggleItemSelection(item.id)}
                                         />
                                     ) : (
                                         viewMode === 'card' ? (
@@ -873,6 +1040,8 @@ function ShoppingListView() {
                                                 loadingItemBlame={loadingItemBlame}
                                                 loading={loading}
                                                 onProductUpdate={() => fetchListAndBlame(itemsPage)}
+                                                isSelected={selectedItems.has(item.id)}
+                                                onSelect={() => toggleItemSelection(item.id)}
                                             />
                                         ) : (
                                             <ShoppingListItem
@@ -897,6 +1066,8 @@ function ShoppingListView() {
                                                 loadingItemBlame={loadingItemBlame}
                                                 loading={loading}
                                                 onProductUpdate={() => fetchListAndBlame(itemsPage)}
+                                                isSelected={selectedItems.has(item.id)}
+                                                onSelect={() => toggleItemSelection(item.id)}
                                             />
                                         )
                                     )}

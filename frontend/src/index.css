@@ -514,9 +514,38 @@ body:has(.modal-backdrop) {
   flex-direction: column;
 }
 
+/* Selection toolbar (shopping mode) */
+.shopping-selection-toolbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  backdrop-filter: blur(10px);
+  background: rgba(13, 17, 23, 0.9);
+  border-top: 1px solid rgba(240, 246, 252, 0.08);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 1200;
+}
+
+@media (max-width: 768px) {
+  .shopping-selection-toolbar {
+    flex-wrap: wrap;
+  }
+}
+
 .list-item:hover {
   background: rgba(240, 246, 252, 0.05);
   border-color: var(--primary-glow);
+}
+
+/* Selected Item Highlight (bulk selection) */
+.item-selected {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 
 /* ========== Badge Variants ========== */
@@ -643,6 +672,26 @@ input:focus + .slider {
   }
 }
 
+.shopping-mode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.shopping-mode-actions .btn-premium {
+  flex: 1;
+  min-width: 150px;
+}
+
+@media (max-width: 600px) {
+  .shopping-mode-actions {
+    flex-direction: column;
+  }
+}
+
 /* Table responsiveness utility */
 .table-responsive-container {
   overflow-x: auto;
@@ -651,6 +700,18 @@ input:focus + .slider {
 
 .grid-mobile-stack {
   display: grid !important;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: minmax(350px, 1.5fr) 1fr;
+  gap: 32px;
+}
+
+@media (max-width: 768px) {
+  .calendar-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon, Search } from 'lucide-react';
+import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon, Search, Edit2 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
 import WebImageSearchModal from './WebImageSearchModal';
 import { API_BASE_URL } from './config';
@@ -26,7 +26,9 @@ const ShoppingItemCard = ({
     setNewItemComment,
     loadingItemBlame,
     loading,
-    onProductUpdate
+    onProductUpdate,
+    isSelected = false,
+    onSelect = () => {}
 }) => {
 
     const isEditing = editingItem && editingItem.id === item.id;
@@ -79,9 +81,12 @@ const ShoppingItemCard = ({
     };
 
     return (
-        <div className={`glass-panel item-card ${item.status === 'comprado' ? 'item-comprado' : ''}`}>
+        <div className={`glass-panel item-card ${item.status === 'comprado' ? 'item-comprado' : ''} ${isSelected ? 'item-selected' : ''}`}>
             <div className="item-card-header d-flex justify-content-between align-items-center">
-                <span style={{ fontWeight: 600, fontSize: '1.1rem', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit' }}>{item.nombre}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input type="checkbox" checked={isSelected} onChange={onSelect} style={{ width: '16px', height: '16px' }} />
+                    <span style={{ fontWeight: 600, fontSize: '1.1rem', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit' }}>{item.nombre}</span>
+                </div>
                 <label className="switch" title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'}>
                     <input 
                         type="checkbox" 
@@ -122,7 +127,8 @@ const ShoppingItemCard = ({
                                     ref={fileInputRef}
                                     onChange={handleFileChange}
                                     style={{ display: 'none' }}
-                                    accept="image/jpeg,image/png"
+                                    accept="image/*"
+                                    capture="environment"
                                 />
                                 
                                 {showImageModal && ReactDOM.createPortal(
@@ -227,6 +233,9 @@ const ShoppingItemCard = ({
                         </div>
 
                         <div className="flex-mobile-stack" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setEditingItem(item)}>
+                                <Edit2 size={16} /> <span>Editar</span>
+                            </button>
                             <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', padding: '6px 10px' }} onClick={() => onDelete(item.id)} disabled={loading}>
                                 <Trash size={16} />
                             </button>

@@ -23,7 +23,8 @@ const ImageUploader = ({ itemId, imageUrl, onImageUpload }) => {
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
-                accept="image/jpeg,image/png"
+                accept="image/*"
+                capture="environment"
             />
             {imageUrl ? (
                 <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

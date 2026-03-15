@@ -14,6 +14,14 @@ function CalendarView() {
     const [activeStartDate, setActiveStartDate] = useState(new Date());
     const [listas, setListas] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    const handlePrevMonth = () => {
+        setActiveStartDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    };
+
+    const handleNextMonth = () => {
+        setActiveStartDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    };
     
     // form state
     const [nuevaListaNombre, setNuevaListaNombre] = useState('');
@@ -158,7 +166,7 @@ function CalendarView() {
 
     return (
         <div className="app-container animate-fade-in" style={{ maxWidth: '1200px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
                 <button className="btn-premium btn-secondary" onClick={() => navigate('/family-panel')} style={{ padding: '8px 16px' }}>
                     <ArrowLeft size={18} /> Volver
                 </button>
@@ -166,13 +174,27 @@ function CalendarView() {
                     Calendario: {calendar?.nombre || ''}
                 </h2>
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                    {activeStartDate.toLocaleString(undefined, { month: 'long', year: 'numeric' })}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="btn-premium btn-secondary" onClick={handlePrevMonth} style={{ padding: '8px 12px' }}>
+                        ← Mes anterior
+                    </button>
+                    <button className="btn-premium btn-secondary" onClick={handleNextMonth} style={{ padding: '8px 12px' }}>
+                        Mes siguiente →
+                    </button>
+                </div>
+            </div>
             
-            <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: 'minmax(350px, 1.5fr) 1fr', gap: '32px', alignItems: 'flex-start' }}>
+            <div className="grid-mobile-stack calendar-grid" style={{ alignItems: 'flex-start' }}>
                 {/* Calendar Area */}
                 <div className="glass-panel" style={{ padding: '24px' }}>
                     <Calendar
                         onChange={setSelectedDate}
                         value={selectedDate}
+                        activeStartDate={activeStartDate}
                         tileClassName={getTileClassName}
                         calendarType="iso8601"
                         onActiveStartDateChange={({ activeStartDate }) => setActiveStartDate(activeStartDate)}

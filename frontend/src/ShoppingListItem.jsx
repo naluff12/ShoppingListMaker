@@ -26,7 +26,9 @@ const ShoppingListItem = ({
     setNewItemComment,
     loadingItemBlame,
     loading,
-    onProductUpdate
+    onProductUpdate,
+    isSelected = false,
+    onSelect = () => {}
 }) => {
     const isEditing = editingItem && editingItem.id === item.id;
     const [showImageModal, setShowImageModal] = useState(false);
@@ -78,10 +80,16 @@ const ShoppingListItem = ({
     };
 
     return (
-        <div className={`glass-panel shopping-list-item-compact ${item.status === 'comprado' ? 'item-comprado' : ''}`} style={{ display: 'flex', flexDirection: 'column', padding: '8px', marginBottom: '8px' }}>
+        <div className={`glass-panel shopping-list-item-compact ${item.status === 'comprado' ? 'item-comprado' : ''} ${isSelected ? 'item-selected' : ''}`} style={{ display: 'flex', flexDirection: 'column', padding: '8px', marginBottom: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {/* Grupo Izquierdo: Checkbox, Imagen, Nombre/Detalles */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                    <input 
+                        type="checkbox" 
+                        checked={isSelected} 
+                        onChange={onSelect} 
+                        style={{ width: '16px', height: '16px' }}
+                    />
                     <label className="switch" title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'} style={{ flexShrink: 0, width: '34px', height: '18px' }}>
                         <input 
                             type="checkbox" 
@@ -123,7 +131,8 @@ const ShoppingListItem = ({
                                     ref={fileInputRef}
                                     onChange={handleFileChange}
                                     style={{ display: 'none' }}
-                                    accept="image/jpeg,image/png"
+                                    accept="image/*"
+                                    capture="environment"
                                 />
                                 
                                 {showImageModal && ReactDOM.createPortal(
