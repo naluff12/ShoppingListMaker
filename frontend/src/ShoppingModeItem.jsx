@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Check, ShoppingCart, Info, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Minus, Check, ShoppingCart, Info, Clock, Save } from 'lucide-react';
 import { API_BASE_URL } from './config';
 
 const ShoppingModeItem = ({ 
@@ -14,16 +14,59 @@ const ShoppingModeItem = ({
     const [quantity, setQuantity] = useState(item.cantidad || 1);
     const [unit, setUnit] = useState(item.unit || 'piezas');
     const [localLoading, setLocalLoading] = useState(false);
+    const [saveMessage, setSaveMessage] = useState(null); // 'Guardado' / 'Guardando...'
+    const saveTimeout = useRef(null);
+    const saveMessageTimeout = useRef(null);
 
     useEffect(() => {
         setPrice(item.precio_confirmado ?? '');
         setQuantity(item.cantidad || 1);
         setUnit(item.unit || 'piezas');
+
+        return () => {
+            if (saveTimeout.current) clearTimeout(saveTimeout.current);
+            if (saveMessageTimeout.current) clearTimeout(saveMessageTimeout.current);
+        };
     }, [item]);
 
+    const scheduleAutoSave = () => {
+        if (isPurchased || localLoading) return;
+        if (saveTimeout.current) clearTimeout(saveTimeout.current);
+        if (saveMessageTimeout.current) clearTimeout(saveMessageTimeout.current);
+
+        setSaveMessage('Guardando...');
+
+        saveTimeout.current = setTimeout(async () => {
+            await performSave();
+        }, 800);
+    };
+
+    const performSave = async () => {
+        if (isPurchased || localLoading) return;
+        setSaveMessage('Guardando...');
+        try {
+            await onItemUpdate(item.id, {
+                precio_confirmado: parseFloat(price) || 0,
+                cantidad: quantity,
+                unit
+            });
+            setSaveMessage('Guardado');
+        } catch (error) {
+            setSaveMessage('Error');
+        }
+
+        saveMessageTimeout.current = setTimeout(() => setSaveMessage(null), 1200);
+    };
+
+    const handleManualSave = () => {
+        if (saveTimeout.current) clearTimeout(saveTimeout.current);
+        performSave();
+    };
     const handleQuantityChange = (delta) => {
         const newQty = Math.max(0.1, quantity + delta);
-        setQuantity(Number(newQty.toFixed(2)));
+        const rounded = Number(newQty.toFixed(2));
+        setQuantity(rounded);
+        scheduleAutoSave();
     };
 
     const handleFinishPurchase = async () => {
@@ -90,7 +133,7 @@ const ShoppingModeItem = ({
                         <select
                             className="premium-input"
                             value={unit}
-                            onChange={(e) => setUnit(e.target.value)}
+                            onChange={(e) => { setUnit(e.target.value); scheduleAutoSave(); }}
                             disabled={isPurchased || localLoading}
                             style={{ width: '90px', padding: '6px', fontSize: '0.85rem' }}
                         >
@@ -117,10 +160,16 @@ const ShoppingModeItem = ({
                         className="shopping-price-input" 
                         placeholder={item.product?.last_price ? `Últ. $${item.product.last_price}` : 'Precio'}
                         value={price}
-                        onChange={(e) => setPrice(e.target.value)}
+                        onChange={(e) => { setPrice(e.target.value); scheduleAutoSave(); }}
                         disabled={isPurchased || localLoading}
                         step="0.01"
                     />
+                    {saveMessage && (
+                        <div style={{ position: 'absolute', bottom: '-26px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.6)', color: 'white', padding: '4px 10px', borderRadius: '999px', fontSize: '0.7rem', pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {saveMessage === 'Guardado' ? <Check size={12} /> : saveMessage === 'Error' ? <Info size={12} /> : <Save size={12} />}
+                            <span>{saveMessage}</span>
+                        </div>
+                    )}
                     {item.product?.last_price != null && (
                         <div style={{
                             position: 'absolute',
@@ -147,14 +196,27 @@ const ShoppingModeItem = ({
                     )}
                 </div>
 
-                <button 
-                    className={`finish-btn ${isPurchased ? 'btn-success' : 'btn-primary'}`}
-                    onClick={handleFinishPurchase}
-                    disabled={localLoading || isPurchased}
-                >
-                    {isPurchased ? <Check size={24} /> : <ShoppingCart size={24} />}
-                    <span className="btn-text">{isPurchased ? 'Comprado' : 'Comprar'}</span>
-                </button>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <button 
+                        className={`finish-btn ${isPurchased ? 'btn-success' : 'btn-primary'}`}
+                        onClick={handleFinishPurchase}
+                        disabled={localLoading || isPurchased}
+                    >
+                        {isPurchased ? <Check size={24} /> : <ShoppingCart size={24} />}
+                        <span className="btn-text">{isPurchased ? 'Comprado' : 'Comprar'}</span>
+                    </button>
+
+                    <button 
+                        className="btn-premium btn-secondary"
+                        onClick={handleManualSave}
+                        disabled={isPurchased || localLoading}
+                        style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        title="Guardar cambios"
+                    >
+                        <Save size={18} />
+                        <span style={{ fontSize: '0.85rem' }}>Guardar</span>
+                    </button>
+                </div>
             </div>
             
             {!isPurchased && item.comentario && (
