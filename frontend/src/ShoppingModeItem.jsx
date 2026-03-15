@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Minus, Check, ShoppingCart, Info } from 'lucide-react';
+import { Plus, Minus, Check, ShoppingCart, Info, Clock } from 'lucide-react';
 import { API_BASE_URL } from './config';
 
 const ShoppingModeItem = ({ 
@@ -122,9 +122,10 @@ const ShoppingModeItem = ({
                         step="0.01"
                     />
                     {item.product?.last_price != null && (
-                        <span style={{ position: 'absolute', bottom: '-18px', right: '0', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            Últ. precio: ${item.product.last_price}
-                        </span>
+                        <div style={{ position: 'absolute', top: '-22px', right: '0', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'rgba(0,0,0,0.4)', padding: '4px 8px', borderRadius: '999px', boxShadow: '0 2px 10px rgba(0,0,0,0.2)' }}>
+                            <Clock size={14} />
+                            <span>Últ. precio: ${item.product.last_price}</span>
+                        </div>
                     )}
                 </div>
 
