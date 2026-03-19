@@ -17,17 +17,32 @@ const ShoppingModeItem = ({
     const [saveMessage, setSaveMessage] = useState(null); // 'Guardado' / 'Guardando...'
     const saveTimeout = useRef(null);
     const saveMessageTimeout = useRef(null);
+    const pendingSaveRef = useRef({
+        price: item.precio_confirmado ?? '',
+        quantity: item.cantidad || 1,
+        unit: item.unit || 'piezas'
+    });
+
+    const itemIdRef = useRef(item.id);
 
     useEffect(() => {
-        setPrice(item.precio_confirmado ?? '');
-        setQuantity(item.cantidad || 1);
-        setUnit(item.unit || 'piezas');
+        if (item.id !== itemIdRef.current) {
+            itemIdRef.current = item.id;
+            setPrice(item.precio_confirmado ?? '');
+            setQuantity(item.cantidad || 1);
+            setUnit(item.unit || 'piezas');
+            pendingSaveRef.current = {
+                price: item.precio_confirmado ?? '',
+                quantity: item.cantidad || 1,
+                unit: item.unit || 'piezas'
+            };
+        }
 
         return () => {
             if (saveTimeout.current) clearTimeout(saveTimeout.current);
             if (saveMessageTimeout.current) clearTimeout(saveMessageTimeout.current);
         };
-    }, [item]);
+    }, [item.id]);
 
     const scheduleAutoSave = () => {
         if (isPurchased || localLoading) return;
@@ -45,11 +60,12 @@ const ShoppingModeItem = ({
         if (isPurchased || localLoading) return;
         setSaveMessage('Guardando...');
         try {
-            await onItemUpdate(item.id, {
-                precio_confirmado: parseFloat(price) || 0,
-                cantidad: quantity,
-                unit
-            });
+            const payload = {
+                precio_confirmado: parseFloat(pendingSaveRef.current.price) || 0,
+                cantidad: pendingSaveRef.current.quantity,
+                unit: pendingSaveRef.current.unit
+            };
+            await onItemUpdate(item.id, payload);
             setSaveMessage('Guardado');
         } catch (error) {
             setSaveMessage('Error');
@@ -66,6 +82,7 @@ const ShoppingModeItem = ({
         const newQty = Math.max(0.1, quantity + delta);
         const rounded = Number(newQty.toFixed(2));
         setQuantity(rounded);
+        pendingSaveRef.current.quantity = rounded;
         scheduleAutoSave();
     };
 
@@ -133,7 +150,7 @@ const ShoppingModeItem = ({
                         <select
                             className="premium-input"
                             value={unit}
-                            onChange={(e) => { setUnit(e.target.value); scheduleAutoSave(); }}
+                            onChange={(e) => { const val = e.target.value; setUnit(val); pendingSaveRef.current.unit = val; scheduleAutoSave(); }}
                             disabled={isPurchased || localLoading}
                             style={{ width: '90px', padding: '6px', fontSize: '0.85rem' }}
                         >
@@ -160,7 +177,7 @@ const ShoppingModeItem = ({
                         className="shopping-price-input" 
                         placeholder={item.product?.last_price ? `Últ. $${item.product.last_price}` : 'Precio'}
                         value={price}
-                        onChange={(e) => { setPrice(e.target.value); scheduleAutoSave(); }}
+                        onChange={(e) => { const val = e.target.value; setPrice(val); pendingSaveRef.current.price = val; scheduleAutoSave(); }}
                         disabled={isPurchased || localLoading}
                         step="0.01"
                     />
