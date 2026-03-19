@@ -194,9 +194,7 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
 
                     {loading && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px', gap: '16px' }}>
-                            <div className="animate-spin" style={{ color: 'var(--primary-color)' }}>
-                                <Loader size={48} />
-                            </div>
+                            <div style={{ width: 48, height: 48, border: '4px solid rgba(255,255,255,0.35)', borderTopColor: 'var(--primary-color)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                             <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '1.1rem' }}>
                                 {loadingStage === 'searching' && 'Buscando imágenes...'}
                                 {loadingStage === 'downloading' && 'Procesando y guardando imagen...'}
