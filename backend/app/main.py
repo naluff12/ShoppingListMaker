@@ -1,7 +1,9 @@
+from contextlib import asynccontextmanager
 from datetime import date, timedelta, datetime
 from typing import List, Optional
 import time
 import os
+import logging
 import random
 import string
 
@@ -10,7 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import OperationalError
 from .schemas import ListItem as ListItemSchema
 
-from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect, Response, Request
+from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect, Response, Request, Query
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,37 +24,77 @@ from .database import SessionLocal, engine
 from .websockets import manager
 import httpx
 
-app = FastAPI()
+logger = logging.getLogger(__name__)
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
 
-# CORS Middleware
-frontend_url = os.getenv("FRONTEND_URL", "*")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[frontend_url] if frontend_url != "*" else ["*"],  # Allows specified origin or all
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
 
-@app.on_event("startup")
-def on_startup():
+def _safe_eval_arithmetic(expr: str) -> int:
+    """Evaluate simple arithmetic expressions without using eval().
+    Only supports integers, +, -, *, /, parentheses."""
+    import ast
+    import operator
+    allowed_ops = {
+        ast.Add: operator.add, ast.Sub: operator.sub,
+        ast.Mult: operator.mul, ast.Div: operator.floordiv,
+        ast.USub: operator.neg,
+    }
+    try:
+        tree = ast.parse(expr, mode='eval')
+    except SyntaxError:
+        raise ValueError(f"Invalid expression: {expr}")
+
+    def _eval(node):
+        if isinstance(node, ast.Expression):
+            return _eval(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return int(node.value)
+        if isinstance(node, ast.BinOp) and type(node.op) in allowed_ops:
+            return allowed_ops[type(node.op)](_eval(node.left), _eval(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in allowed_ops:
+            return allowed_ops[type(node.op)](_eval(node.operand))
+        raise ValueError(f"Unsupported expression node: {type(node).__name__}")
+
+    return _eval(tree)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     max_retries = 10
     retries = 0
     while retries < max_retries:
         try:
             models.Base.metadata.create_all(bind=engine)
-            print("Database tables created.")
+            logger.info("Database tables created.")
             break
         except OperationalError as e:
-            print(f"Database connection failed: {e}")
+            logger.warning(f"Database connection failed: {e}")
             retries += 1
-            print(f"Retrying connection ({retries}/{max_retries})...")
+            logger.info(f"Retrying connection ({retries}/{max_retries})...")
             time.sleep(5)
     if retries == max_retries:
-        print("Could not connect to the database. Exiting.")
-        exit(1)
+        logger.error("Could not connect to the database. Exiting.")
+        raise RuntimeError("Could not connect to the database.")
+    yield
+    # Shutdown (cleanup if needed)
+
+
+app = FastAPI(lifespan=lifespan)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# CORS Middleware
+frontend_url = os.getenv("FRONTEND_URL", "*")
+allowed_origins = [o.strip() for o in frontend_url.split(",")] if frontend_url != "*" else ["*"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 def get_db():
     db = SessionLocal()
@@ -276,7 +318,7 @@ def login_for_access_token(response: Response, form_data: OAuth2PasswordRequestF
         max_age=security.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         expires=security.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         samesite="lax",
-        secure=False  # Set to True in production with HTTPS
+        secure=security.COOKIE_SECURE,
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
@@ -591,6 +633,14 @@ def create_calendar_for_family(family_id: int, calendar_data: schemas.CalendarCr
 def get_calendars_for_family(family_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     get_family_for_user(family_id, current_user)
     return db.query(models.Calendar).filter(models.Calendar.family_id == family_id).all()
+
+@app.get("/calendars/{calendar_id}", response_model=schemas.Calendar)
+def get_calendar_by_id(calendar_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    cal = db.query(models.Calendar).filter(models.Calendar.id == calendar_id).first()
+    if not cal:
+        raise HTTPException(status_code=404, detail="Calendar not found")
+    get_family_for_user(cal.family_id, current_user)
+    return cal
 
 @app.get("/families/{family_id}/previous_lists", response_model=schemas.Page[schemas.ShoppingListResponse])
 def get_previous_lists_for_family(
@@ -1251,7 +1301,6 @@ async def search_images(
         # 2. Find complex expressions like {{page * 24}}
         def evaluate_expr(match):
             expr = match.group(1).strip()
-            # Sanity check: allow only numbers, basic operators and context keys
             safe_expr = expr
             for key in context:
                 safe_expr = safe_expr.replace(key, str(context[key]))
@@ -1260,9 +1309,8 @@ async def search_images(
             clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
             if clean_expr == '':
                 try:
-                    # Safe eval since it's just numbers and operators now
-                    return str(int(eval(safe_expr)))
-                except:
+                    return str(_safe_eval_arithmetic(safe_expr))
+                except (ValueError, ZeroDivisionError):
                     return match.group(0)
             return match.group(0)
 
@@ -1347,8 +1395,9 @@ async def admin_test_image_search_config(
             clean_expr = re.sub(r'[\s\d\+\-\*\/\(\)]', '', safe_expr)
             if clean_expr == '':
                 try:
-                    return str(int(eval(safe_expr)))
-                except: return match.group(0)
+                    return str(_safe_eval_arithmetic(safe_expr))
+                except (ValueError, ZeroDivisionError):
+                    return match.group(0)
             return match.group(0)
         return re.sub(r'\{\{(.*?)\}\}', evaluate_expr, result)
 
@@ -1438,33 +1487,6 @@ def admin_delete_image_search_config(config_id: int, db: Session = Depends(get_d
 def get_available_engines(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return crud.get_image_search_configs(db, active_only=True)
 
-@app.get("/products/search", response_model=schemas.Page[schemas.Product])
-def search_products_endpoint(
-    family_id: int,
-    q: str,
-    page: int = 1,
-    size: int = 10,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user)
-):
-    # Authorization check
-    get_family_for_user(family_id, current_user)
-    
-    products_list = crud.search_products(db, name=q, family_id=family_id, skip=(page-1)*size, limit=size)
-    # We need total count for pagination
-    # For now, let's just use a simple query
-    total = db.query(models.Product).filter(
-        models.Product.family_id == family_id,
-        models.Product.name.ilike(f"%{q}%")
-    ).count()
-    
-    return {
-        "items": products_list,
-        "total": total,
-        "page": page,
-        "size": size
-    }
-
 @app.post("/images/upload", response_model=schemas.SharedImage)
 async def upload_generic_image(
     file: UploadFile = File(...),
@@ -1528,12 +1550,31 @@ async def update_product_image_from_url(
 
 @app.websocket("/ws/{family_id}")
 async def websocket_endpoint(websocket: WebSocket, family_id: int):
-    # Depending on auth, wait, how to auth a websocket?
-    # For now, just accept
+    # Authenticate via cookie token
+    token = websocket.cookies.get("access_token")
+    if not token:
+        await websocket.close(code=4001, reason="Missing authentication")
+        return
+    try:
+        payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
+        user_id = int(payload.get("sub"))
+    except (JWTError, ValueError, TypeError):
+        await websocket.close(code=4001, reason="Invalid authentication")
+        return
+    
+    # Verify user belongs to the family
+    db = SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if not user or family_id not in [f.id for f in user.families]:
+            await websocket.close(code=4003, reason="Not authorized for this family")
+            return
+    finally:
+        db.close()
+    
     await manager.connect(websocket, family_id)
     try:
         while True:
             data = await websocket.receive_text()
-            # We don't really expect clients to send messages right now, but we keep the connection open
     except WebSocketDisconnect:
         manager.disconnect(websocket, family_id)

@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle, XCircle, ShoppingCart } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Bell, CheckCircle, XCircle, ShoppingCart, Menu, X, Home, Users, Calendar, User, Shield, LogOut } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 function NavigationBar({ user, onLogout }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [notifications, setNotifications] = useState({ items: [], total: 0, page: 1, size: 10 });
   const [showDropdown, setShowDropdown] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   const fetchNotifications = async () => {
@@ -42,9 +44,15 @@ function NavigationBar({ user, onLogout }) {
   }, []);
 
   const handleLogout = () => {
+    setMobileMenuOpen(false);
     onLogout();
     navigate('/login');
   };
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   const handleMarkOneRead = async (notificationId) => {
     try {
@@ -126,22 +134,98 @@ function NavigationBar({ user, onLogout }) {
   }, [notifications]);
 
   return (
-    <nav className="navbar">
-      <Link to="/" className="nav-brand">
-        <ShoppingCart className="text-gradient" size={28} />
-        <span>Shopping<span style={{color: 'var(--primary-color)'}}>Maker</span></span>
-      </Link>
-      
-      <div className="nav-links">
-        {user ? (
-          <>
-            <Link to="/" className="nav-link">Inicio</Link>
-            <Link to="/family-panel" className="nav-link">Familias</Link>
-            {user.is_admin && <Link to="/admin" className="nav-link">Administrar</Link>}
-            
+    <>
+      <nav className="navbar">
+        <Link to="/" className="nav-brand">
+          <ShoppingCart className="text-gradient" size={28} />
+          <span>Shopping<span style={{ color: 'var(--primary-color)' }}>Maker</span></span>
+        </Link>
+
+        {/* Desktop nav links */}
+        <div className="nav-links nav-desktop">
+          {user ? (
+            <>
+              <Link to="/" className="nav-link">Inicio</Link>
+              <Link to="/family-panel" className="nav-link">Familias</Link>
+              {user.is_admin && <Link to="/admin" className="nav-link">Administrar</Link>}
+
+              <div className="dropdown-container" ref={dropdownRef}>
+                <button
+                  className="btn-premium btn-secondary"
+                  style={{ padding: '8px 12px', border: 'none', position: 'relative' }}
+                  onClick={() => setShowDropdown(!showDropdown)}
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && <span className="badge" style={{ position: 'absolute', top: '-4px', right: '-4px' }}>{unreadCount}</span>}
+                </button>
+
+                {showDropdown && (
+                  <div className={`dropdown-menu ${showDropdown ? 'show' : ''}`} style={{ display: 'flex' }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{unreadCount > 0 ? `${unreadCount} nuevas` : 'Notificaciones'}</span>
+                      <button
+                        className="modal-close"
+                        onClick={() => setShowDropdown(false)}
+                        style={{ padding: '4px' }}
+                      >
+                        <XCircle size={18} />
+                      </button>
+                    </div>
+
+                    {notifications.items?.length > 0 ? (
+                      <>
+                        <button className="dropdown-item" style={{ color: 'var(--primary-color)', justifyContent: 'center', width: '100%' }} onClick={handleMarkAllRead}>
+                          Marcar todas como leídas
+                        </button>
+
+                        <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                          {notifications.items.map(notification => (
+                            <div key={notification.id} className="dropdown-item" style={{ fontWeight: !notification.is_read ? 600 : 400 }}>
+                              <button
+                                className="dropdown-item-content"
+                                onClick={() => handleNotificationClick(notification)}
+                              >
+                                <small style={{ color: 'var(--text-muted)' }}>{new Date(notification.created_at).toLocaleString()}</small><br />
+                                <span style={{ fontSize: '0.95rem' }}>{notification.message}</span>
+                              </button>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '8px' }}>
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--danger-color)', cursor: 'pointer', padding: '4px' }}>
+                                  <XCircle size={16} />
+                                </button>
+                                {!notification.is_read &&
+                                  <button onClick={(e) => { e.stopPropagation(); handleMarkOneRead(notification.id); }} style={{ background: 'none', border: 'none', color: 'var(--success-color)', cursor: 'pointer', padding: '4px' }}>
+                                    <CheckCircle size={16} />
+                                  </button>
+                                }
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="dropdown-item" style={{ justifyContent: 'center', color: 'var(--text-muted)', cursor: 'default' }}>No hay notificaciones</div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <Link to="/profile" className="nav-link">Perfil</Link>
+              <button className="btn-premium btn-secondary" onClick={handleLogout}>Salir</button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="btn-premium btn-secondary">Ingresar</Link>
+              <Link to="/register" className="btn-premium btn-primary">Registrarse</Link>
+            </>
+          )}
+        </div>
+
+        {/* Mobile: notification bell + hamburger */}
+        {user && (
+          <div className="nav-mobile-actions">
             <div className="dropdown-container" ref={dropdownRef}>
-              <button 
-                className="btn-premium btn-secondary" 
+              <button
+                className="btn-premium btn-secondary"
                 style={{ padding: '8px 12px', border: 'none', position: 'relative' }}
                 onClick={() => setShowDropdown(!showDropdown)}
               >
@@ -150,31 +234,22 @@ function NavigationBar({ user, onLogout }) {
               </button>
 
               {showDropdown && (
-                <div className={`dropdown-menu ${showDropdown ? 'show' : ''}`} style={{ display: 'flex' }}>
+                <div className={`dropdown-menu show`} style={{ display: 'flex' }}>
                   <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>{unreadCount > 0 ? `${unreadCount} nuevas` : 'Notificaciones'}</span>
-                    <button 
-                      className="modal-close" 
-                      onClick={() => setShowDropdown(false)}
-                      style={{ padding: '4px' }}
-                    >
+                    <button className="modal-close" onClick={() => setShowDropdown(false)} style={{ padding: '4px' }}>
                       <XCircle size={18} />
                     </button>
                   </div>
-                  
                   {notifications.items?.length > 0 ? (
                     <>
                       <button className="dropdown-item" style={{ color: 'var(--primary-color)', justifyContent: 'center', width: '100%' }} onClick={handleMarkAllRead}>
                         Marcar todas como leídas
                       </button>
-                      
                       <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
                         {notifications.items.map(notification => (
                           <div key={notification.id} className="dropdown-item" style={{ fontWeight: !notification.is_read ? 600 : 400 }}>
-                            <button 
-                              className="dropdown-item-content"
-                              onClick={() => handleNotificationClick(notification)}
-                            >
+                            <button className="dropdown-item-content" onClick={() => handleNotificationClick(notification)}>
                               <small style={{ color: 'var(--text-muted)' }}>{new Date(notification.created_at).toLocaleString()}</small><br />
                               <span style={{ fontSize: '0.95rem' }}>{notification.message}</span>
                             </button>
@@ -197,20 +272,87 @@ function NavigationBar({ user, onLogout }) {
                   )}
                 </div>
               )}
-
             </div>
 
-            <Link to="/profile" className="nav-link">Perfil</Link>
-            <button className="btn-premium btn-secondary" onClick={handleLogout}>Salir</button>
-          </>
-        ) : (
-          <>
-            <Link to="/login" className="btn-premium btn-secondary">Ingresar</Link>
-            <Link to="/register" className="btn-premium btn-primary">Registrarse</Link>
-          </>
+            <button
+              className="hamburger-btn"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+          </div>
         )}
-      </div>
-    </nav>
+
+        {!user && (
+          <div className="nav-mobile-actions">
+            <Link to="/login" className="btn-premium btn-secondary" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>Ingresar</Link>
+          </div>
+        )}
+      </nav>
+
+      {/* Mobile drawer overlay */}
+      {mobileMenuOpen && (
+        <div className="mobile-drawer-overlay" onClick={() => setMobileMenuOpen(false)}>
+          <div className="mobile-drawer" onClick={e => e.stopPropagation()}>
+            <div className="mobile-drawer-header">
+              <span style={{ fontWeight: 600, fontSize: '1.1rem' }}>{user?.username || 'Menu'}</span>
+              <button className="modal-close" onClick={() => setMobileMenuOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mobile-drawer-links">
+              <Link to="/" className={`mobile-drawer-link ${location.pathname === '/' ? 'active' : ''}`}>
+                <Home size={20} /> Inicio
+              </Link>
+              <Link to="/family-panel" className={`mobile-drawer-link ${location.pathname === '/family-panel' ? 'active' : ''}`}>
+                <Users size={20} /> Familias
+              </Link>
+              {user?.is_admin && (
+                <Link to="/admin" className={`mobile-drawer-link ${location.pathname === '/admin' ? 'active' : ''}`}>
+                  <Shield size={20} /> Administrar
+                </Link>
+              )}
+              <Link to="/profile" className={`mobile-drawer-link ${location.pathname === '/profile' ? 'active' : ''}`}>
+                <User size={20} /> Perfil
+              </Link>
+              <button className="mobile-drawer-link" onClick={handleLogout} style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}>
+                <LogOut size={20} /> Salir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Navigation Bar for mobile */}
+      {user && (
+        <nav className="bottom-nav">
+          <Link to="/" className={`bottom-nav-item ${location.pathname === '/' ? 'active' : ''}`}>
+            <Home size={22} />
+            <span>Inicio</span>
+          </Link>
+          <Link to="/family-panel" className={`bottom-nav-item ${location.pathname === '/family-panel' || location.pathname === '/calendar' ? 'active' : ''}`}>
+            <Calendar size={22} />
+            <span>Familias</span>
+          </Link>
+          <div className="dropdown-container bottom-nav-item-bell" ref={dropdownRef}>
+            <button
+              className={`bottom-nav-item`}
+              onClick={() => setShowDropdown(!showDropdown)}
+              style={{ position: 'relative', background: 'none', border: 'none' }}
+            >
+              <Bell size={22} />
+              <span>Avisos</span>
+              {unreadCount > 0 && <span className="badge bottom-nav-badge">{unreadCount}</span>}
+            </button>
+          </div>
+          <Link to="/profile" className={`bottom-nav-item ${location.pathname === '/profile' ? 'active' : ''}`}>
+            <User size={22} />
+            <span>Perfil</span>
+          </Link>
+        </nav>
+      )}
+    </>
   );
 }
 

@@ -30,6 +30,7 @@
     padding: 12px 0;
     text-decoration: none;
 }
+
 .react-calendar__month-view__weekdays__weekday abbr {
     text-decoration: none;
 }
@@ -115,9 +116,31 @@
 .calendar-day-pending::after {
     background: var(--warning-color);
 }
+
 .calendar-day-reviewed::after {
     background: var(--success-color);
 }
+
 .calendar-day-not-reviewed::after {
     background: var(--danger-color);
+}
+
+/* Mobile: larger touch targets for calendar tiles */
+@media (max-width: 600px) {
+    .react-calendar__tile {
+        height: 48px;
+        font-size: 0.95rem;
+        padding: 4px;
+    }
+
+    .react-calendar__navigation button {
+        min-width: 40px;
+        font-size: 1rem;
+        padding: 8px;
+    }
+
+    .react-calendar__month-view__weekdays {
+        font-size: 0.7rem;
+        padding: 8px 0;
+    }
 }

@@ -129,7 +129,7 @@ function FamilyPanel() {
     };
 
     const handleSelectCalendar = (calendar) => {
-        navigate('/calendar', { state: { calendar } });
+        navigate(`/calendar?id=${calendar.id}`, { state: { calendar } });
     };
 
     if (loading) {
@@ -155,8 +155,8 @@ function FamilyPanel() {
 
             {families.length > 0 ? (
                 <div className="dropdown-container" ref={dropdownRef} style={{ marginBottom: '24px' }}>
-                    <button 
-                        className="premium-input" 
+                    <button
+                        className="premium-input"
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', textAlign: 'left' }}
                         onClick={() => setShowDropdown(!showDropdown)}
                     >
@@ -166,9 +166,9 @@ function FamilyPanel() {
                     {showDropdown && (
                         <div className="dropdown-menu" style={{ display: 'flex', width: '100%' }}>
                             {families.map(fam => (
-                                <button 
-                                    key={fam.id} 
-                                    className="dropdown-item" 
+                                <button
+                                    key={fam.id}
+                                    className="dropdown-item"
                                     onClick={() => { setSelectedFamily(fam); setShowDropdown(false); }}
                                 >
                                     {fam.nombre}
@@ -231,13 +231,13 @@ function FamilyPanel() {
                         </div>
                         <form onSubmit={handleCreateFamily}>
                             <div className="modal-body">
-                                <input 
-                                    type="text" 
-                                    className="premium-input" 
-                                    placeholder="Nombre de la familia" 
-                                    value={newFamilyName} 
-                                    onChange={e => setNewFamilyName(e.target.value)} 
-                                    required 
+                                <input
+                                    type="text"
+                                    className="premium-input"
+                                    placeholder="Nombre de la familia"
+                                    value={newFamilyName}
+                                    onChange={e => setNewFamilyName(e.target.value)}
+                                    required
                                 />
                             </div>
                             <div className="modal-footer">
@@ -260,13 +260,13 @@ function FamilyPanel() {
                         </div>
                         <form onSubmit={handleJoinFamily}>
                             <div className="modal-body">
-                                <input 
-                                    type="text" 
-                                    className="premium-input" 
-                                    placeholder="Código de la familia" 
-                                    value={joinCode} 
-                                    onChange={e => setJoinCode(e.target.value)} 
-                                    required 
+                                <input
+                                    type="text"
+                                    className="premium-input"
+                                    placeholder="Código de la familia"
+                                    value={joinCode}
+                                    onChange={e => setJoinCode(e.target.value)}
+                                    required
                                 />
                             </div>
                             <div className="modal-footer">
@@ -289,13 +289,13 @@ function FamilyPanel() {
                         </div>
                         <form onSubmit={handleCreateCalendar}>
                             <div className="modal-body">
-                                <input 
-                                    type="text" 
-                                    className="premium-input" 
-                                    placeholder="Nombre del calendario" 
-                                    value={newCalendarName} 
-                                    onChange={e => setNewCalendarName(e.target.value)} 
-                                    required 
+                                <input
+                                    type="text"
+                                    className="premium-input"
+                                    placeholder="Nombre del calendario"
+                                    value={newCalendarName}
+                                    onChange={e => setNewCalendarName(e.target.value)}
+                                    required
                                 />
                             </div>
                             <div className="modal-footer">

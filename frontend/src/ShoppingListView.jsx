@@ -58,7 +58,7 @@ function ShoppingListView() {
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [quickAddItemName, setQuickAddItemName] = useState('');
     const [isQuickAdding, setIsQuickAdding] = useState(false);
-    
+
     // Modals & Popovers
     const [showBudgetModal, setShowBudgetModal] = useState(false);
     const [newBudget, setNewBudget] = useState('');
@@ -81,15 +81,15 @@ function ShoppingListView() {
     };
 
     const visibleItems = hidePurchased ? items.filter(i => i.status !== 'comprado') : items;
-    
+
     // Filters
     const [showFilters, setShowFilters] = useState(false);
     const filtersRef = useRef(null);
-    const [statusFilter, setStatusFilter] = useState(''); 
+    const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
     const [brandFilter, setBrandFilter] = useState('');
     const [filterOptions, setFilterOptions] = useState({ categories: [], brands: [] });
-    
+
     // App Modals
     const [showNewProductModal, setShowNewProductModal] = useState(false);
     const [modalBrand, setModalBrand] = useState('');
@@ -120,7 +120,7 @@ function ShoppingListView() {
                 return base;
         }
     }, [visibleItems, sortOption]);
-    
+
     // WebSocket setup moved down
 
     useEffect(() => {
@@ -166,14 +166,14 @@ function ShoppingListView() {
                 body: JSON.stringify({
                     list_id: listId,
                     nombre: quickAddItemName,
-                    cantidad: 1, 
-                    unit: 'piezas' 
+                    cantidad: 1,
+                    unit: 'piezas'
                 })
             });
             if (!res.ok) throw new Error('Error al agregar el producto');
             await res.json();
             setQuickAddItemName('');
-            fetchListAndBlame(itemsPage); 
+            fetchListAndBlame(itemsPage);
             fetchBudgetDetails();
         } catch (err) {
             showToast(err.message, 'error');
@@ -315,11 +315,11 @@ function ShoppingListView() {
             const res = await fetch(`/api/items/`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    list_id: listId, 
-                    nombre: newItem, 
-                    cantidad: newQuantity, 
-                    unit: newUnit, 
+                body: JSON.stringify({
+                    list_id: listId,
+                    nombre: newItem,
+                    cantidad: newQuantity,
+                    unit: newUnit,
                     precio_estimado: newPrice || null,
                     brand: brand,
                     category: category
@@ -356,7 +356,7 @@ function ShoppingListView() {
 
         const searchRes = await fetch(`/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(newItem)}`);
         const searchData = await searchRes.json();
-        
+
         const existingProduct = searchData.items.find(p => p.name.toLowerCase() === newItem.toLowerCase());
 
         if (!existingProduct) {
@@ -376,7 +376,7 @@ function ShoppingListView() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ items: itemsToAdd })
             });
-            fetchListAndBlame(); 
+            fetchListAndBlame();
             fetchBudgetDetails();
             showToast('Items agregados a la lista', 'success');
         } catch (err) {
@@ -420,7 +420,7 @@ function ShoppingListView() {
                     method: 'DELETE',
                 });
             if (!res.ok) throw new Error('Error al eliminar item');
-            fetchListAndBlame(); 
+            fetchListAndBlame();
             fetchBudgetDetails();
         } catch (err) {
             showToast(err.message, 'error');
@@ -566,7 +566,7 @@ function ShoppingListView() {
             }
         } catch (err) {
             showToast(err.message, 'error');
-            fetchListAndBlame(); 
+            fetchListAndBlame();
         } finally {
             setEditingPrice(null);
         }
@@ -610,6 +610,7 @@ function ShoppingListView() {
 
     const handleItemUpdate = async (itemId, data) => {
         try {
+            const currentItem = items.find(i => i.id === itemId);
             const res = await fetch(`/api/items/${itemId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -620,6 +621,12 @@ function ShoppingListView() {
             setItems(items.map(i => i.id === itemId ? updatedItem : i));
             setEditingItem(null);
             fetchBudgetDetails();
+            if (data.status && currentItem) {
+                const wasComprado = currentItem.status === 'comprado';
+                const isComprado = data.status === 'comprado';
+                if (!wasComprado && isComprado) setPurchasedItemsCount(prev => prev + 1);
+                else if (wasComprado && !isComprado) setPurchasedItemsCount(prev => prev - 1);
+            }
         } catch (err) {
             showToast(err.message, 'error');
             fetchListAndBlame();
@@ -671,13 +678,13 @@ function ShoppingListView() {
             });
             if (!res.ok) throw new Error('Error al actualizar la imagen del item');
             const updatedItem = await res.json();
-            
+
             // Immediately update local state
             setItems(items.map(i => i.id === selectedItemForGallery.id ? updatedItem : i));
-            
+
             // Also trigger a full refresh to be safe and ensure everything is synced
             fetchListAndBlame(itemsPage);
-            
+
             setShowGalleryModal(false);
         } catch (err) {
             showToast(err.message, 'error');
@@ -713,21 +720,21 @@ function ShoppingListView() {
                     {toast.message}
                 </div>
             )}
-            
+
             <div className={`shopping-header-wrapper ${isShoppingMode ? 'is-sticky' : ''}`}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-                    <button className="btn-premium btn-secondary" onClick={() => navigate('/calendar', { state: { calendar: listDetails?.calendar } })} style={{ display: 'inline-flex', padding: '8px 16px', flexShrink: 0 }}>
+                    <button className="btn-premium btn-secondary" onClick={() => navigate(`/calendar?id=${listDetails?.calendar?.id}`, { state: { calendar: listDetails?.calendar } })} style={{ display: 'inline-flex', padding: '8px 16px', flexShrink: 0 }}>
                         <ArrowLeft size={18} /> <span className="hide-mobile">Volver</span>
                     </button>
-                    
+
                     {isShoppingMode && (
                         <h1 className="sticky-list-name text-gradient" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, textAlign: 'center', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {listDetails?.name || ''}
                         </h1>
                     )}
-                    
-                    <button 
-                        className={`btn-premium ${isShoppingMode ? 'btn-success' : 'btn-primary'}`} 
+
+                    <button
+                        className={`btn-premium ${isShoppingMode ? 'btn-success' : 'btn-primary'}`}
                         onClick={() => setIsShoppingMode(!isShoppingMode)}
                         style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', flexShrink: 0 }}
                     >
@@ -736,7 +743,7 @@ function ShoppingListView() {
                         {!isShoppingMode && <span className="show-mobile">Modo</span>}
                     </button>
                 </div>
-                
+
                 {isShoppingMode && (
                     <>
                         <div className="sticky-progress-container animate-slide-down">
@@ -795,9 +802,9 @@ function ShoppingListView() {
                     <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
                         <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
                         {listDetails && (
-                            <div 
-                                onClick={handleListStatusChange} 
-                                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: 'var(--border-radius-md)', background: listDetails.status === 'revisada' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: listDetails.status === 'revisada' ? 'var(--success-color)' : 'var(--danger-color)', transition: 'all 0.3s ease' }} 
+                            <div
+                                onClick={handleListStatusChange}
+                                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: 'var(--border-radius-md)', background: listDetails.status === 'revisada' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: listDetails.status === 'revisada' ? 'var(--success-color)' : 'var(--danger-color)', transition: 'all 0.3s ease' }}
                                 title={listDetails.status === 'revisada' ? 'Marcar como Pendiente' : 'Marcar como Revisada'}
                             >
                                 {listDetails.status === 'revisada' ? <><Eye size={20} /> <span style={{ fontWeight: 600 }}>Revisada</span></> : <><EyeOff size={20} /> <span style={{ fontWeight: 600 }}>No Revisada</span></>}
@@ -812,18 +819,18 @@ function ShoppingListView() {
                                 <Pencil size={16} /> Editar
                             </button>
                         </div>
-                        
+
                         <ProgressBar progress={budgetProgress} variant={budgetVariant} label={`Estimado ${budgetProgress.toFixed(0)}%`} />
-                        
+
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                             <span style={{ fontWeight: 500 }}>Total Estimado: ${budgetDetails.total_estimado.toFixed(2)}</span>
                             <span>Restante: <span style={{ fontWeight: 600, color: budgetDetails.total_estimado > budget ? 'var(--danger-color)' : 'var(--success-color)' }}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
                         </div>
-                        
+
                         <div style={{ marginTop: '24px' }}>
                             <ProgressBar progress={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
                         </div>
-                        
+
                         <div style={{ marginTop: '24px' }}>
                             <h5 style={{ fontSize: '1.1rem', marginBottom: '8px', color: 'var(--text-primary)' }}>Progreso de Artículos</h5>
                             <ProgressBar progress={itemsProgress} variant="success" label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
@@ -832,7 +839,7 @@ function ShoppingListView() {
 
                     <div style={{ height: '1px', background: 'var(--border-color)', margin: '32px 0' }} />
 
-                    <form onSubmit={handleAdd} className="flex-mobile-stack" style={{ display: 'flex', gap: '12px', position: 'relative', zIndex: 10 }}>
+                    <form onSubmit={handleAdd} className="add-item-form" style={{ display: 'flex', gap: '12px', position: 'relative', zIndex: 10, flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, position: 'relative' }}>
                             <input
                                 type="text"
@@ -878,11 +885,11 @@ function ShoppingListView() {
                                 <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', marginTop: '4px', maxHeight: "350px", overflowY: "auto", padding: '8px' }} onMouseDown={(e) => e.preventDefault()}>
                                     {products.map((p, index) => {
                                         return (
-                                            <div 
-                                                key={p.id} 
-                                                className="dropdown-item" 
+                                            <div
+                                                key={p.id}
+                                                className="dropdown-item"
                                                 style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: index === highlightedIndex ? 'rgba(255,255,255,0.1)' : 'transparent', borderRadius: '4px', cursor: 'pointer', marginBottom: '4px' }}
-                                                onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }} 
+                                                onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }}
                                                 onMouseEnter={() => setHighlightedIndex(index)}
                                             >
                                                 <img src={getImageSrc(p.shared_image?.file_path)} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
@@ -901,9 +908,9 @@ function ShoppingListView() {
                                 </div>
                             )}
                         </div>
-                        
+
                         <input type="number" className="premium-input" value={newQuantity} onChange={(e) => setNewQuantity(parseFloat(e.target.value))} style={{ width: '80px', flex: 'none' }} min="0.001" step="any" />
-                        
+
                         <select className="premium-input" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} style={{ width: '120px', flex: 'none' }}>
                             <option value="piezas">piezas</option>
                             <option value="kg">kg</option>
@@ -911,9 +918,9 @@ function ShoppingListView() {
                             <option value="L">L</option>
                             <option value="ml">ml</option>
                         </select>
-                        
+
                         <button type="submit" className="btn-premium btn-primary" disabled={loading} style={{ padding: '8px 24px' }}>Agregar</button>
-                        
+
                         <button type="button" className="btn-premium" style={{ background: 'var(--info-color)', padding: '8px 16px' }} title="Agregar productos no comprados de otra lista" onClick={() => setShowPreviousItemsModal(true)}>
                             <PlusCircle size={20} color="white" />
                         </button>
@@ -981,16 +988,16 @@ function ShoppingListView() {
                     )}
                 </div>
 
-            {!isShoppingMode && (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className={`btn-premium ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('list')} style={{ padding: '6px 16px' }}>
-                        Lista
-                    </button>
-                    <button className={`btn-premium ${viewMode === 'card' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('card')} style={{ padding: '6px 16px' }}>
-                        Tarjetas
-                    </button>
-                </div>
-            )}
+                {!isShoppingMode && (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className={`btn-premium ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('list')} style={{ padding: '6px 16px' }}>
+                            Lista
+                        </button>
+                        <button className={`btn-premium ${viewMode === 'card' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('card')} style={{ padding: '6px 16px' }}>
+                            Tarjetas
+                        </button>
+                    </div>
+                )}
             </div>
 
             {selectedItems.size > 0 && (
@@ -1033,7 +1040,7 @@ function ShoppingListView() {
                             {(isShoppingMode ? items : sortedItems).map(item => (
                                 <CSSTransition key={item.id} timeout={400} classNames="fade">
                                     {isShoppingMode ? (
-                                        <ShoppingModeItem 
+                                        <ShoppingModeItem
                                             item={item}
                                             onItemUpdate={handleItemUpdate}
                                             onStatusChange={handleStatus}
@@ -1102,7 +1109,7 @@ function ShoppingListView() {
                     </div>
                 )}
             </div>
-            
+
             {itemsTotalPages > 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginTop: '32px', gap: '16px' }}>
                     <button className="btn-premium btn-secondary" disabled={itemsPage <= 1} onClick={() => fetchListAndBlame(itemsPage - 1)} style={{ padding: '8px' }}>
@@ -1118,7 +1125,7 @@ function ShoppingListView() {
             {/* List Comments */}
             <div className="glass-panel" style={{ marginTop: '48px', padding: '24px' }}>
                 <h3 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>Comentarios de la lista</h3>
-                
+
                 {blame.length === 0 ? (
                     <div className="alert-info" style={{ marginBottom: '24px' }}>Sin historial de comentarios</div>
                 ) : (
@@ -1134,7 +1141,7 @@ function ShoppingListView() {
                         ))}
                     </div>
                 )}
-                
+
                 <form onSubmit={handleListCommentSubmit} style={{ display: 'flex', gap: '12px' }}>
                     <input type="text" className="premium-input" placeholder="Nuevo comentario para la lista" value={newListComment} onChange={e => setNewListComment(e.target.value)} />
                     <button type="submit" className="btn-premium btn-primary" style={{ padding: '8px 24px' }}>Comentar</button>
@@ -1182,10 +1189,10 @@ function ShoppingListView() {
                 document.body
             )}
 
-            <PriceHistoryModal 
-                show={showPriceHistoryModal} 
-                handleClose={() => setShowPriceHistoryModal(false)} 
-                item={selectedItemForPriceHistory} 
+            <PriceHistoryModal
+                show={showPriceHistoryModal}
+                handleClose={() => setShowPriceHistoryModal(false)}
+                item={selectedItemForPriceHistory}
             />
 
             {/* New Product Modal - Vanilla Implementation */}
@@ -1200,12 +1207,12 @@ function ShoppingListView() {
                             <div className="alert-info" style={{ marginBottom: '24px' }}>
                                 '{newItem}' parece ser un producto nuevo. Si lo deseas, puedes agregar una marca y categoría para ayudar a organizarlo.
                             </div>
-                            
+
                             <div style={{ marginBottom: '16px' }}>
                                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Marca</label>
                                 <input type="text" className="premium-input" value={modalBrand} onChange={(e) => setModalBrand(e.target.value)} placeholder="Ej. Nestlé, Coca-Cola..." />
                             </div>
-                            
+
                             <div>
                                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Categoría</label>
                                 <input type="text" className="premium-input" value={modalCategory} onChange={(e) => setModalCategory(e.target.value)} placeholder="Ej. Lácteos, Bebidas..." />

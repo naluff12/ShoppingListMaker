@@ -1,3 +1,5 @@
+import os
+import secrets
 from datetime import timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -5,9 +7,10 @@ from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
 from . import tz_util
 
-SECRET_KEY = "your-secret-key"  # Debería estar en una variable de entorno
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 20160 # 14 days
+SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_urlsafe(64))
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "20160"))  # 14 days
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

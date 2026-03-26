@@ -1,19 +1,58 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import './custom-calendar.css';
 import PreviousItemsModal from './PreviousItemsModal';
-import { ArrowLeft, Plus, Trash2, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function CalendarView() {
     const location = useLocation();
     const navigate = useNavigate();
-    const calendar = location.state?.calendar;
+    const calendarFromState = location.state?.calendar;
+
+    // Try to get calendar from state or fetch by URL param
+    const [calendar, setCalendar] = useState(calendarFromState || null);
+    const [calendarId] = useState(() => {
+        const params = new URLSearchParams(location.search);
+        return calendarFromState?.id || params.get('id');
+    });
 
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [activeStartDate, setActiveStartDate] = useState(new Date());
     const [listas, setListas] = useState([]);
     const [loading, setLoading] = useState(false);
+    const calendarContainerRef = useRef(null);
+    const touchStartRef = useRef(null);
+
+    // Fetch calendar data if only ID is available (e.g. page refresh)
+    useEffect(() => {
+        if (!calendar && calendarId) {
+            fetch(`/api/calendars/${calendarId}`)
+                .then(res => res.ok ? res.json() : null)
+                .then(data => { if (data) setCalendar(data); })
+                .catch(() => { });
+        }
+    }, [calendar, calendarId]);
+
+    // Swipe gesture handlers for month navigation
+    const handleTouchStart = useCallback((e) => {
+        touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, []);
+
+    const handleTouchEnd = useCallback((e) => {
+        if (!touchStartRef.current) return;
+        const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+        const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+        // Only register horizontal swipes (min 60px, predominantly horizontal)
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            if (dx > 0) {
+                handlePrevMonth();
+            } else {
+                handleNextMonth();
+            }
+        }
+        touchStartRef.current = null;
+    }, []);
 
     const handlePrevMonth = () => {
         setActiveStartDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -22,13 +61,13 @@ function CalendarView() {
     const handleNextMonth = () => {
         setActiveStartDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
     };
-    
+
     // form state
     const [nuevaListaNombre, setNuevaListaNombre] = useState('');
     const [nuevaListaNotas, setNuevaListaNotas] = useState('');
     const [nuevaListaComentarios, setNuevaListaComentarios] = useState('');
     const [showForm, setShowForm] = useState(false);
-    
+
     // modals
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [newlyCreatedList, setNewlyCreatedList] = useState(null);
@@ -71,7 +110,7 @@ function CalendarView() {
 
     const dateKey = selectedDate.toISOString().slice(0, 10);
     const listsForSelectedDate = listasPorFecha[dateKey] || [];
-    
+
     function getTileClassName({ date, view }) {
         if (view !== 'month') return '';
         const key = date.toISOString().slice(0, 10);
@@ -152,7 +191,7 @@ function CalendarView() {
             if (!res.ok) throw new Error('Error al eliminar la lista');
             const startDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth(), 1);
             const endDate = new Date(activeStartDate.getFullYear(), activeStartDate.getMonth() + 1, 0);
-            fetchLists(startDate, endDate); 
+            fetchLists(startDate, endDate);
         } catch (err) {
             alert(err.message);
         } finally {
@@ -166,31 +205,37 @@ function CalendarView() {
 
     return (
         <div className="app-container animate-fade-in" style={{ maxWidth: '1200px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 <button className="btn-premium btn-secondary" onClick={() => navigate('/family-panel')} style={{ padding: '8px 16px' }}>
                     <ArrowLeft size={18} /> Volver
                 </button>
-                <h2 className="text-gradient" style={{ margin: 0, fontSize: '2rem' }}>
+                <h2 className="text-gradient" style={{ margin: 0, fontSize: 'clamp(1.3rem, 4vw, 2rem)' }}>
                     Calendario: {calendar?.nombre || ''}
                 </h2>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-                <div style={{ fontSize: '1rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+
+            {/* Month navigation - larger touch targets */}
+            <div className="calendar-month-nav">
+                <button className="btn-premium btn-secondary calendar-month-btn" onClick={handlePrevMonth}>
+                    <ChevronLeft size={20} /> <span className="month-btn-text">Anterior</span>
+                </button>
+                <div className="calendar-month-label">
                     {activeStartDate.toLocaleString(undefined, { month: 'long', year: 'numeric' })}
                 </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button className="btn-premium btn-secondary" onClick={handlePrevMonth} style={{ padding: '8px 12px' }}>
-                        ← Mes anterior
-                    </button>
-                    <button className="btn-premium btn-secondary" onClick={handleNextMonth} style={{ padding: '8px 12px' }}>
-                        Mes siguiente →
-                    </button>
-                </div>
+                <button className="btn-premium btn-secondary calendar-month-btn" onClick={handleNextMonth}>
+                    <span className="month-btn-text">Siguiente</span> <ChevronRight size={20} />
+                </button>
             </div>
-            
+
             <div className="grid-mobile-stack calendar-grid" style={{ alignItems: 'flex-start' }}>
-                {/* Calendar Area */}
-                <div className="glass-panel" style={{ padding: '24px' }}>
+                {/* Calendar Area - with swipe support */}
+                <div
+                    className="glass-panel"
+                    style={{ padding: '24px' }}
+                    ref={calendarContainerRef}
+                    onTouchStart={handleTouchStart}
+                    onTouchEnd={handleTouchEnd}
+                >
                     <Calendar
                         onChange={setSelectedDate}
                         value={selectedDate}
@@ -227,7 +272,7 @@ function CalendarView() {
                     <h3 style={{ fontSize: '1.5rem', marginBottom: '16px', color: 'var(--text-primary)' }}>
                         {selectedDate.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                     </h3>
-                    
+
                     <button className="btn-premium btn-primary" onClick={() => setShowForm(true)} style={{ width: '100%', marginBottom: '24px', display: 'flex', justifyContent: 'center' }}>
                         <Plus size={18} /> Crear lista para este día
                     </button>
@@ -249,7 +294,7 @@ function CalendarView() {
                             </form>
                         </div>
                     )}
-                    
+
                     <div>
                         <h4 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>Listas programadas</h4>
                         {listsForSelectedDate.length > 0 ? (
