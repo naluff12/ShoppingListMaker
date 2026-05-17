@@ -335,6 +335,26 @@ class NotificationUpdate(BaseModel):
     is_read: bool
 
 
+class ChatMessageBase(BaseModel):
+    message: str
+    list_id: Optional[int] = None
+    is_private: Optional[bool] = False
+    recipient_id: Optional[int] = None
+
+class ChatMessageCreate(ChatMessageBase):
+    pass
+
+class ChatMessage(ChatMessageBase):
+    id: int
+    family_id: int
+    user_id: int
+    created_at: datetime
+    user: "UserInDBBase"
+    recipient: Optional["UserInDBBase"] = None
+
+    class Config:
+        from_attributes = True
+
 class ShoppingListInfo(BaseModel):
     id: int
     name: str

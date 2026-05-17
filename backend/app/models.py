@@ -217,6 +217,21 @@ class Notification(Base):
     family = relationship("Family", back_populates="notifications")
     created_by = relationship("User", foreign_keys=[created_by_id])
 
+class ChatMessage(Base):
+    __tablename__ = 'chat_messages'
+    id = Column(Integer, primary_key=True, index=True)
+    family_id = Column(Integer, ForeignKey('families.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    recipient_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    list_id = Column(Integer, ForeignKey('shopping_lists.id'), nullable=True)
+    message = Column(Text, nullable=False)
+    is_private = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=tz_util.now)
+
+    user = relationship("User", foreign_keys=[user_id])
+    recipient = relationship("User", foreign_keys=[recipient_id])
+    family = relationship("Family")
+
 class SharedImage(Base):
     __tablename__ = 'shared_images'
     id = Column(Integer, primary_key=True, index=True)

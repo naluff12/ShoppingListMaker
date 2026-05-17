@@ -12,6 +12,9 @@ import PriceHistoryModal from './PriceHistoryModal';
 import ShoppingItemCardSkeleton from './ShoppingItemCardSkeleton';
 import ShoppingListItemSkeleton from './ShoppingListItemSkeleton';
 import ImageGalleryModal from './ImageGalleryModal';
+import ChatPanel from './ChatPanel';
+import MemberPresencePanel from './MemberPresencePanel';
+import ActivityFeedPanel from './ActivityFeedPanel';
 import { useWebSocket } from './useWebSocket';
 import { API_BASE_URL } from './config';
 import ShoppingModeItem from './ShoppingModeItem';
@@ -101,6 +104,74 @@ function ShoppingListView() {
         setTimeout(() => setToast(null), 3000);
     };
 
+    const sendActivityUpdate = (action, listName) => {
+        if (!sendJson || !familyId) return;
+        sendJson({
+            type: 'activity_update',
+            action,
+            list_id: listId,
+            list_name: listName || listDetails?.name || '',
+        });
+    };
+
+    const handleToggleShoppingMode = () => {
+        const nextMode = !isShoppingMode;
+        setIsShoppingMode(nextMode);
+        sendActivityUpdate(nextMode ? 'started_shopping' : 'stopped_shopping', listDetails?.name);
+    };
+
+    const handleJoinActivity = (activity) => {
+        if (!activity || !activity.list_id) {
+            showToast('No hay una actividad disponible para unirse.', 'warning');
+            return;
+        }
+        if (activity.list_id !== parseInt(listId)) {
+            navigate(`/shopping-list/${activity.list_id}`);
+            return;
+        }
+        if (!isShoppingMode) {
+            setIsShoppingMode(true);
+            sendActivityUpdate('joined_shopping', listDetails?.name);
+            showToast(`Te uniste a la actividad en "${listDetails?.name}"`, 'success');
+        }
+    };
+
+    const addActivityEvent = (event) => {
+        setRecentEvents((prev) => {
+            const next = [event, ...prev];
+            return next.slice(0, 10);
+        });
+    };
+
+    const buildActivityEvent = (message) => {
+        if (!message) return null;
+        if (message.type === 'chat_message' && message.chat_message) {
+            const chat = message.chat_message;
+            const author = chat.user?.nombre || chat.user?.username || 'Alguien';
+            const preview = chat.message.length > 80 ? `${chat.message.slice(0, 77)}...` : chat.message;
+            return { id: `activity-chat-${chat.id}`, text: `${author} escribió: "${preview}"`, ts: chat.created_at };
+        }
+        if (message.type === 'presence_update') {
+            const actor = message.user?.nombre || message.user?.username || 'Alguien';
+            const action = message.action === 'connected' ? 'se conectó' : 'se desconectó';
+            return { id: `activity-presence-${Date.now()}`, text: `${actor} ${action}`, ts: new Date().toISOString() };
+        }
+        if (message.action === 'ITEM_CREATED') {
+            return { id: `activity-item-created-${message.item_id}`, text: `Se agregó un ítem nuevo en la lista actual.`, ts: new Date().toISOString() };
+        }
+        if (message.action === 'ITEM_UPDATED') {
+            return { id: `activity-item-updated-${message.item_id}`, text: `Un ítem fue actualizado en la lista.`, ts: new Date().toISOString() };
+        }
+        if (message.action === 'ITEM_DELETED') {
+            return { id: `activity-item-deleted-${message.item_id}`, text: `Un ítem fue eliminado de la lista.`, ts: new Date().toISOString() };
+        }
+        if (message.type === 'typing') {
+            const typingUser = message.user?.nombre || message.user?.username || 'Alguien';
+            return { id: `activity-typing-${typingUser}-${Date.now()}`, text: `${typingUser} está escribiendo un mensaje...`, ts: new Date().toISOString() };
+        }
+        return null;
+    };
+
     const visibleItems = hidePurchased ? items.filter(i => i.status !== 'comprado') : items;
 
     // Filters
@@ -117,6 +188,10 @@ function ShoppingListView() {
     const [modalCategory, setModalCategory] = useState('');
     const [showGalleryModal, setShowGalleryModal] = useState(false);
     const [selectedItemForGallery, setSelectedItemForGallery] = useState(null);
+    const [recentEvents, setRecentEvents] = useState([]);
+    const [privateChatRecipient, setPrivateChatRecipient] = useState(null);
+    const familyId = listDetails?.calendar?.family_id || (listDetails?.calendar ? listDetails.calendar.family_id : null);
+    const { lastMessage, isConnected, sendJson } = useWebSocket(familyId);
 
     const sortedItems = React.useMemo(() => {
         const base = visibleItems.slice();
@@ -603,12 +678,13 @@ function ShoppingListView() {
         return () => clearTimeout(handler);
     }, [listId, searchTerm, statusFilter, categoryFilter, brandFilter, hidePurchased]);
 
-    // WebSocket Integration
-    const familyId = listDetails?.calendar?.family_id || null;
-    const { lastMessage, isConnected } = useWebSocket(familyId);
+    // WebSocket Integration handled above
 
     useEffect(() => {
         if (lastMessage) {
+            const event = buildActivityEvent(lastMessage);
+            if (event) addActivityEvent(event);
+
             // Check for list-specific updates
             if (lastMessage.list_id && lastMessage.list_id === parseInt(listId)) {
                 console.log("WebSocket update received for current list UI. Trigerring refresh...", lastMessage.action);
@@ -1144,7 +1220,7 @@ function ShoppingListView() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <button
                             className={`btn-premium ${isShoppingMode ? 'btn-success' : 'btn-primary'}`}
-                            onClick={() => setIsShoppingMode(!isShoppingMode)}
+                            onClick={() => handleToggleShoppingMode()}
                             style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', flexShrink: 0 }}
                         >
                             <ShoppingBag size={18} />
@@ -1556,6 +1632,26 @@ function ShoppingListView() {
                 </div>
             )}
 
+            {familyId && (
+                <div className="grid-mobile-stack social-grid" style={{ gap: '20px', marginBottom: '24px' }}>
+                    <ChatPanel
+                        familyId={familyId}
+                        websocketMessage={lastMessage}
+                        sendWsEvent={sendJson}
+                        isConnected={isConnected}
+                        privateChatRecipient={privateChatRecipient}
+                        onSelectPrivateRecipient={setPrivateChatRecipient}
+                    />
+                    <MemberPresencePanel
+                        familyId={familyId}
+                        websocketMessage={lastMessage}
+                        onOpenPrivateChat={setPrivateChatRecipient}
+                        onJoinActivity={handleJoinActivity}
+                    />
+                    <ActivityFeedPanel events={recentEvents} />
+                </div>
+            )}
+
             {suggestedProducts.length > 0 || suggestionsLoading ? (
                 <div className="glass-panel suggested-products-container" style={{ padding: '24px', marginBottom: '24px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '16px', flexWrap: 'wrap' }}>
@@ -1857,6 +1953,20 @@ function ShoppingListView() {
                 handleClose={() => setShowPriceHistoryModal(false)}
                 item={selectedItemForPriceHistory}
             />
+
+            {isShoppingMode && (
+                <div className="mobile-action-bar">
+                    <button className="btn-premium btn-secondary" type="button" onClick={() => setHidePurchased(!hidePurchased)}>
+                        {hidePurchased ? 'Mostrar comprados' : 'Ocultar comprados'}
+                    </button>
+                    <button className="btn-premium btn-primary" type="button" onClick={() => setShowStoreUrlModal(true)}>
+                        Agregar desde URL
+                    </button>
+                    <button className="btn-premium btn-secondary" type="button" onClick={() => setShowPreviousItemsModal(true)}>
+                        Productos recurrentes
+                    </button>
+                </div>
+            )}
 
             {/* New Product Modal - Vanilla Implementation */}
             {showNewProductModal && ReactDOM.createPortal(

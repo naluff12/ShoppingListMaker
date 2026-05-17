@@ -12,6 +12,7 @@ from sqlalchemy import func, inspect, text
 from sqlalchemy.exc import OperationalError
 from .schemas import ListItem as ListItemSchema
 
+import json
 from fastapi import Depends, FastAPI, HTTPException, status, Body, UploadFile, File, BackgroundTasks, WebSocket, WebSocketDisconnect, Response, Request, Query
 from fastapi.staticfiles import StaticFiles
 
@@ -1208,6 +1209,85 @@ def delete_notification(
         raise HTTPException(status_code=404, detail="Notification not found")
     return
 
+@app.get("/families/{family_id}/chat-messages", response_model=List[schemas.ChatMessage])
+def get_family_chat_messages(
+    family_id: int,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    get_family_for_user(family_id, current_user)
+    return crud.get_chat_messages_by_family(db=db, family_id=family_id, current_user_id=current_user.id, limit=limit)
+
+@app.post("/families/{family_id}/chat-messages", response_model=schemas.ChatMessage)
+async def post_family_chat_message(
+    family_id: int,
+    message_data: schemas.ChatMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    get_family_for_user(family_id, current_user)
+    if message_data.is_private and not message_data.recipient_id:
+        raise HTTPException(status_code=400, detail="recipient_id is required for private messages")
+
+    chat_message = crud.create_chat_message(
+        db=db,
+        family_id=family_id,
+        user_id=current_user.id,
+        message=message_data.message,
+        list_id=message_data.list_id,
+        is_private=message_data.is_private,
+        recipient_id=message_data.recipient_id
+    )
+
+    recipients = None
+    if chat_message.is_private and chat_message.recipient_id:
+        recipients = [current_user.id, chat_message.recipient_id]
+
+    await manager.broadcast_to_family(family_id, {
+        "type": "chat_message",
+        "chat_message": {
+            "id": chat_message.id,
+            "family_id": chat_message.family_id,
+            "user_id": chat_message.user_id,
+            "recipient_id": chat_message.recipient_id,
+            "list_id": chat_message.list_id,
+            "message": chat_message.message,
+            "is_private": chat_message.is_private,
+            "created_at": chat_message.created_at.isoformat(),
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "nombre": current_user.nombre
+            },
+            "recipient": {
+                "id": chat_message.recipient.id,
+                "username": chat_message.recipient.username,
+                "nombre": chat_message.recipient.nombre
+            } if chat_message.recipient else None
+        }
+    }, target_user_ids=recipients)
+    return chat_message
+
+@app.get("/families/{family_id}/members-status")
+def get_family_members_status(
+    family_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    family = get_family_for_user(family_id, current_user)
+    online_ids = manager.get_online_user_ids(family_id)
+    members = []
+    for member in family.users:
+        members.append({
+            "id": member.id,
+            "username": member.username,
+            "nombre": member.nombre,
+            "is_online": member.id in online_ids,
+            "last_seen": manager.last_seen.get(member.id)
+        })
+    return members
+
 @app.get("/listas/{lista_id}/items", response_model=schemas.Page[schemas.ListItem])
 def get_items_for_list(
     lista_id: int,
@@ -2060,7 +2140,9 @@ async def websocket_endpoint(websocket: WebSocket, family_id: int):
         return
     try:
         payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
-        user_id = int(payload.get("sub"))
+        username = payload.get("sub")
+        if not isinstance(username, str):
+            raise ValueError("Invalid token subject")
     except (JWTError, ValueError, TypeError):
         await websocket.close(code=4001, reason="Invalid authentication")
         return
@@ -2068,16 +2150,68 @@ async def websocket_endpoint(websocket: WebSocket, family_id: int):
     # Verify user belongs to the family
     db = SessionLocal()
     try:
-        user = db.query(models.User).filter(models.User.id == user_id).first()
+        user = db.query(models.User).filter(models.User.username == username).first()
         if not user or family_id not in [f.id for f in user.families]:
             await websocket.close(code=4003, reason="Not authorized for this family")
             return
     finally:
         db.close()
     
-    await manager.connect(websocket, family_id)
+    await manager.connect(websocket, family_id, user.id)
+    await manager.broadcast_to_family(family_id, {
+        "type": "presence_update",
+        "action": "connected",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "nombre": user.nombre
+        },
+        "online_user_ids": manager.get_online_user_ids(family_id)
+    })
     try:
         while True:
-            data = await websocket.receive_text()
+            raw = await websocket.receive_text()
+            try:
+                payload = json.loads(raw)
+            except ValueError:
+                continue
+
+            payload_type = payload.get("type")
+            if payload_type == "typing":
+                await manager.broadcast_to_family(family_id, {
+                    "type": "typing",
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "nombre": user.nombre
+                    }
+                })
+            elif payload_type in {"heartbeat", "presence_ping"}:
+                manager.last_seen[user.id] = datetime.utcnow()
+            elif payload_type == "activity_update":
+                activity_data = {
+                    "type": "activity_update",
+                    "action": payload.get("action"),
+                    "list_id": payload.get("list_id"),
+                    "list_name": payload.get("list_name"),
+                    "user": {
+                        "id": user.id,
+                        "username": user.username,
+                        "nombre": user.nombre
+                    },
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                await manager.broadcast_to_family(family_id, activity_data)
+            # Ignore other incoming messages; family updates are handled by API endpoints.
     except WebSocketDisconnect:
         manager.disconnect(websocket, family_id)
+        await manager.broadcast_to_family(family_id, {
+            "type": "presence_update",
+            "action": "disconnected",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "nombre": user.nombre
+            },
+            "online_user_ids": manager.get_online_user_ids(family_id)
+        })

@@ -99,13 +99,14 @@ El objetivo es facilitar la gestión de compras recurrentes y mejorar la product
 
 ### Configuración de entorno
 
-1. Copia el archivo de ejemplo:
+1. Crea un archivo `.env` en la raíz del proyecto.
+   Si existe un ejemplo, cópialo con:
 
    ```bash
    cp .env.example .env
    ```
 
-2. Llena los valores en `.env`:
+2. Llena los valores en `.env` para el entorno local.
    - `MYSQL_ROOT_PASSWORD`
    - `MYSQL_DATABASE`
    - `MYSQL_USER`
@@ -118,17 +119,25 @@ El objetivo es facilitar la gestión de compras recurrentes y mejorar la product
    - `VAPID_PUBLIC_KEY`
    - `FRONTEND_PORT`
    - `FRONTEND_URL`
+   - `COOKIE_SECURE`
    - `VITE_API_BASE_URL`
    - `VITE_WS_URL`
    - `VAPID_SUB_MAIL`
 
-3. Genera las llaves VAPID si aun no las tienes:
+3. Genera las llaves VAPID si aún no las tienes:
 
    ```bash
    python backend/app/generate_keys.py
    ```
 
    Copia las llaves generadas a `VAPID_PRIVATE_KEY` y `VAPID_PUBLIC_KEY`.
+
+4. Asegúrate de que `VITE_API_BASE_URL` apunte al backend y `VITE_WS_URL` apunte al WebSocket del backend. En desarrollo local suelen ser:
+
+   - `VITE_API_BASE_URL=http://localhost:8000`
+   - `VITE_WS_URL=ws://localhost:8000/ws`
+
+5. Si trabajas localmente sin HTTPS, deja `COOKIE_SECURE=false` para que las cookies de sesión funcionen en `http://`.
 
 ### Levantar la aplicación con Docker Compose
 
@@ -169,11 +178,14 @@ npm run dev
 - `MYSQL_USER` – usuario de base de datos
 - `MYSQL_PASSWORD` – contraseña del usuario de base de datos
 - `DB_PORT` – puerto de MariaDB en el host
+- `TZ` – zona horaria del contenedor
+- `BACKEND_PORT` – puerto en el que se expone el backend
 - `SECRET_KEY` – clave secreta para JWT y sesiones
+- `COOKIE_SECURE` – `false` en desarrollo local, `true` solo en HTTPS de producción
 - `VAPID_PRIVATE_KEY` / `VAPID_PUBLIC_KEY` – llaves para notificaciones push
-- `FRONTEND_URL` – URL del frontend
-- `VITE_API_BASE_URL` – URL base de la API en frontend
-- `VITE_WS_URL` – URL del WebSocket en frontend
+- `FRONTEND_URL` – URL pública del frontend, usada por el backend para CORS
+- `VITE_API_BASE_URL` – URL base de la API usada por el frontend
+- `VITE_WS_URL` – URL del WebSocket usada por el frontend
 - `VAPID_SUB_MAIL` – correo de suscripción push
 
 ## Casos de uso

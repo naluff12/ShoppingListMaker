@@ -1,4 +1,4 @@
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, or_
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from datetime import datetime, date, timedelta
@@ -916,6 +916,35 @@ def delete_notification(db: Session, notification_id: int, user_id: int):
         db.delete(notification)
         db.commit()
     return notification
+
+
+def create_chat_message(db: Session, family_id: int, user_id: int, message: str, list_id: int = None, is_private: bool = False, recipient_id: int = None):
+    chat_message = models.ChatMessage(
+        family_id=family_id,
+        user_id=user_id,
+        list_id=list_id,
+        message=message,
+        is_private=is_private,
+        recipient_id=recipient_id
+    )
+    db.add(chat_message)
+    db.commit()
+    db.refresh(chat_message)
+    return chat_message
+
+
+def get_chat_messages_by_family(db: Session, family_id: int, current_user_id: int, limit: int = 100):
+    query = db.query(models.ChatMessage).filter(
+        models.ChatMessage.family_id == family_id,
+        or_(
+            models.ChatMessage.is_private == False,
+            models.ChatMessage.user_id == current_user_id,
+            models.ChatMessage.recipient_id == current_user_id
+        )
+    ).order_by(models.ChatMessage.created_at.desc()).limit(limit)
+    messages = query.all()
+    return list(reversed(messages))
+
 
 def get_list_filter_options(db: Session, list_id: int):
     """

@@ -3,6 +3,9 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Calendar from 'react-calendar';
 import './custom-calendar.css';
 import PreviousItemsModal from './PreviousItemsModal';
+import ChatPanel from './ChatPanel';
+import MemberPresencePanel from './MemberPresencePanel';
+import { useWebSocket } from './useWebSocket';
 import { ArrowLeft, Plus, Trash2, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function CalendarView() {
@@ -71,6 +74,8 @@ function CalendarView() {
     // modals
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [newlyCreatedList, setNewlyCreatedList] = useState(null);
+    const familyId = calendar?.family_id || null;
+    const { lastMessage, isConnected, sendJson } = useWebSocket(familyId);
 
     const fetchLists = (startDate, endDate) => {
         if (!calendar || !calendar.id) return;
@@ -266,7 +271,6 @@ function CalendarView() {
                         </div>
                     </div>
                 </div>
-
                 {/* Date Details Area */}
                 <div className="glass-panel" style={{ padding: '24px' }}>
                     <h3 style={{ fontSize: '1.5rem', marginBottom: '16px', color: 'var(--text-primary)' }}>
@@ -326,6 +330,13 @@ function CalendarView() {
                     </div>
                 </div>
             </div>
+
+            {familyId && (
+                <div className="grid-mobile-stack social-grid" style={{ gap: '20px', marginTop: '24px' }}>
+                    <ChatPanel familyId={familyId} websocketMessage={lastMessage} sendWsEvent={sendJson} isConnected={isConnected} />
+                    <MemberPresencePanel familyId={familyId} websocketMessage={lastMessage} />
+                </div>
+            )}
 
             <PreviousItemsModal
                 show={showPreviousItemsModal}
