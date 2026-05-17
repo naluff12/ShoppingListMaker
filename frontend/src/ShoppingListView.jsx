@@ -1,7 +1,7 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { Eye, EyeOff, PlusCircle, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, X, ShoppingBag } from 'lucide-react';
+import { Eye, EyeOff, PlusCircle, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, X, ShoppingBag, Globe, Star } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css';
@@ -58,6 +58,19 @@ function ShoppingListView() {
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [quickAddItemName, setQuickAddItemName] = useState('');
     const [isQuickAdding, setIsQuickAdding] = useState(false);
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+    const [templates, setTemplates] = useState([]);
+    const [templateName, setTemplateName] = useState('');
+    const [templateDescription, setTemplateDescription] = useState('');
+    const [templatesLoading, setTemplatesLoading] = useState(false);
+    const [suggestedProducts, setSuggestedProducts] = useState([]);
+    const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+    const [suggestionAddLoading, setSuggestionAddLoading] = useState(null);
+    const [favoriteProducts, setFavoriteProducts] = useState([]);
+    const [favoritesLoading, setFavoritesLoading] = useState(false);
+    const [groupByCategory, setGroupByCategory] = useState(false);
+    const quickAddInputRef = useRef(null);
 
     // Modals & Popovers
     const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -74,6 +87,14 @@ function ShoppingListView() {
     const [sortOption, setSortOption] = useState('default');
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
     const [toast, setToast] = useState(null); // { message, type }
+    const [showStoreUrlModal, setShowStoreUrlModal] = useState(false);
+    const [storeUrlInput, setStoreUrlInput] = useState('');
+    const [storeUrlLoading, setStoreUrlLoading] = useState(false);
+    const [storeConnectors, setStoreConnectors] = useState([]);
+    const [selectedStoreConnectorId, setSelectedStoreConnectorId] = useState(null);
+    const [storePreview, setStorePreview] = useState(null);
+    const [storePreviewLoading, setStorePreviewLoading] = useState(false);
+    const [storePreviewError, setStorePreviewError] = useState(null);
 
     const showToast = (message, type = 'info') => {
         setToast({ message, type });
@@ -121,6 +142,92 @@ function ShoppingListView() {
         }
     }, [visibleItems, sortOption]);
 
+    const groupedItems = React.useMemo(() => {
+        if (!groupByCategory) return [];
+        const groups = {};
+        sortedItems.forEach(item => {
+            const category = item.product?.category?.trim() || item.category?.trim() || 'Sin categoría';
+            if (!groups[category]) groups[category] = [];
+            groups[category].push(item);
+        });
+        return Object.entries(groups).map(([category, items]) => ({ category, items }));
+    }, [sortedItems, groupByCategory]);
+
+    const categorySummary = React.useMemo(() => {
+        const summary = {};
+        items.forEach(item => {
+            const category = item.product?.category?.trim() || item.category?.trim() || 'Sin categoría';
+            const qty = Number(item.cantidad ?? 1) || 1;
+            const unitPrice = Number(item.precio_confirmado ?? item.product?.last_price ?? item.precio_estimado ?? 0) || 0;
+            if (!summary[category]) summary[category] = { count: 0, quantity: 0, total: 0 };
+            summary[category].count += 1;
+            summary[category].quantity += qty;
+            summary[category].total += unitPrice * qty;
+        });
+        return Object.entries(summary)
+            .map(([category, data]) => ({ category, ...data }))
+            .sort((a, b) => b.total - a.total)
+            .slice(0, 5);
+    }, [items]);
+
+    const renderItemCard = (item) => (
+        <CSSTransition key={item.id} timeout={400} classNames="fade">
+            {viewMode === 'card' ? (
+                <ShoppingItemCard
+                    item={item}
+                    onStatusChange={handleStatus}
+                    onDelete={handleDelete}
+                    onImageUpload={handleImageUpload}
+                    onItemUpdate={handleItemUpdate}
+                    onPriceChange={handlePriceChange}
+                    onShowItemBlame={handleShowItemBlame}
+                    onItemCommentSubmit={handleItemCommentSubmit}
+                    onShowPriceHistory={handleShowPriceHistory}
+                    onShowGallery={handleShowGallery}
+                    editingItem={editingItem}
+                    setEditingItem={setEditingItem}
+                    editingPrice={editingPrice}
+                    setEditingPrice={setEditingPrice}
+                    showItemBlame={showItemBlame}
+                    itemBlames={itemBlames}
+                    newItemComment={newItemComment}
+                    setNewItemComment={setNewItemComment}
+                    loadingItemBlame={loadingItemBlame}
+                    loading={loading}
+                    onProductUpdate={() => fetchListAndBlame(itemsPage)}
+                    isSelected={selectedItems.has(item.id)}
+                    onSelect={() => toggleItemSelection(item.id)}
+                />
+            ) : (
+                <ShoppingListItem
+                    item={item}
+                    onStatusChange={handleStatus}
+                    onDelete={handleDelete}
+                    onImageUpload={handleImageUpload}
+                    onItemUpdate={handleItemUpdate}
+                    onPriceChange={handlePriceChange}
+                    onShowItemBlame={handleShowItemBlame}
+                    onItemCommentSubmit={handleItemCommentSubmit}
+                    onShowPriceHistory={handleShowPriceHistory}
+                    onShowGallery={handleShowGallery}
+                    editingItem={editingItem}
+                    setEditingItem={setEditingItem}
+                    editingPrice={editingPrice}
+                    setEditingPrice={setEditingPrice}
+                    showItemBlame={showItemBlame}
+                    itemBlames={itemBlames}
+                    newItemComment={newItemComment}
+                    setNewItemComment={setNewItemComment}
+                    loadingItemBlame={loadingItemBlame}
+                    loading={loading}
+                    onProductUpdate={() => fetchListAndBlame(itemsPage)}
+                    isSelected={selectedItems.has(item.id)}
+                    onSelect={() => toggleItemSelection(item.id)}
+                />
+            )}
+        </CSSTransition>
+    );
+
     // WebSocket setup moved down
 
     useEffect(() => {
@@ -141,6 +248,25 @@ function ShoppingListView() {
             .catch(() => setFilterOptions({ categories: [], brands: [] }));
     }, [listId]);
 
+    useEffect(() => {
+        const fetchStoreConnectors = async () => {
+            try {
+                const res = await fetch('/api/stores/connectors?active_only=true');
+                if (!res.ok) throw new Error('No se pudieron cargar los conectores');
+                const data = await res.json();
+                setStoreConnectors(data);
+                const defaultConnector = data.find(c => c.is_default) || data[0];
+                if (defaultConnector) {
+                    setSelectedStoreConnectorId(defaultConnector.id);
+                }
+            } catch (err) {
+                console.error(err);
+                setStoreConnectors([]);
+            }
+        };
+        fetchStoreConnectors();
+    }, []);
+
     const fetchBudgetDetails = async () => {
         if (!listId) return;
         try {
@@ -152,6 +278,220 @@ function ShoppingListView() {
         } catch (err) {
             console.error("Error fetching budget details:", err);
         }
+    };
+
+    const fetchTemplates = async () => {
+        const familyId = listDetails?.calendar?.family_id;
+        if (!familyId) return;
+        setTemplatesLoading(true);
+        try {
+            const res = await fetch(`/api/families/${familyId}/templates`);
+            if (res.ok) {
+                const data = await res.json();
+                setTemplates(data);
+            }
+        } catch (err) {
+            console.error('Error fetching templates:', err);
+        } finally {
+            setTemplatesLoading(false);
+        }
+    };
+
+    const fetchSuggestedProducts = async () => {
+        const familyId = listDetails?.calendar?.family_id;
+        if (!familyId) return;
+        setSuggestionsLoading(true);
+        try {
+            const res = await fetch(`/api/families/${familyId}/suggested-products`);
+            if (!res.ok) throw new Error('No se pudieron obtener sugerencias');
+            const data = await res.json();
+            setSuggestedProducts(data);
+        } catch (err) {
+            console.error('Error fetching suggested products:', err);
+            setSuggestedProducts([]);
+        } finally {
+            setSuggestionsLoading(false);
+        }
+    };
+
+    const fetchFavoriteProducts = async () => {
+        const familyId = listDetails?.calendar?.family_id;
+        if (!familyId) return;
+        setFavoritesLoading(true);
+        try {
+            const res = await fetch(`/api/families/${familyId}/favorite-products`);
+            if (!res.ok) throw new Error('No se pudieron cargar los favoritos');
+            const data = await res.json();
+            setFavoriteProducts(data);
+        } catch (err) {
+            console.error('Error fetching favorite products:', err);
+            setFavoriteProducts([]);
+        } finally {
+            setFavoritesLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (listDetails?.calendar?.family_id) {
+            fetchSuggestedProducts();
+            fetchFavoriteProducts();
+        }
+    }, [listDetails?.calendar?.family_id]);
+
+    const handleToggleFavorite = async (product) => {
+        try {
+            const res = await fetch(`/api/products/${product.id}/favorite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ favorite: !product.is_favorite })
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'No se pudo actualizar el favorito');
+            }
+            const updated = await res.json();
+            setFavoriteProducts(prev => {
+                if (updated.is_favorite) {
+                    return [updated, ...prev.filter(p => p.id !== updated.id)];
+                }
+                return prev.filter(p => p.id !== updated.id);
+            });
+            setProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+            setSuggestedProducts(prev => prev.map(p => p.id === updated.id ? updated : p));
+        } catch (err) {
+            console.error(err);
+            showToast(err.message || 'Error actualizando favorito', 'error');
+        }
+    };
+
+    const handleAddFavorite = async (product) => {
+        if (!listId) return;
+        setSuggestionAddLoading(product.id);
+        try {
+            const body = {
+                nombre: product.name,
+                cantidad: 1,
+                unit: 'piezas',
+                list_id: parseInt(listId),
+                category: product.category,
+                brand: product.brand,
+                precio_estimado: product.last_price ?? undefined
+            };
+            const res = await fetch('/api/items/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'No se pudo agregar el producto favorito');
+            }
+            await res.json();
+            showToast(`'${product.name}' agregado a la lista`, 'success');
+            fetchListAndBlame(itemsPage);
+            fetchBudgetDetails();
+        } catch (err) {
+            console.error(err);
+            showToast(err.message || 'Error al agregar favorito', 'error');
+        } finally {
+            setSuggestionAddLoading(null);
+        }
+    };
+
+    const handleAddSuggestedProduct = async (product) => {
+        if (!listId) return;
+        setSuggestionAddLoading(product.id);
+        try {
+            const body = {
+                nombre: product.name,
+                cantidad: 1,
+                unit: 'piezas',
+                list_id: parseInt(listId),
+                category: product.category,
+                brand: product.brand,
+                precio_estimado: product.last_price ?? undefined
+            };
+            const res = await fetch('/api/items/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'No se pudo agregar el producto sugerido');
+            }
+            await res.json();
+            showToast(`'${product.name}' agregado a la lista`, 'success');
+            fetchListAndBlame(itemsPage);
+            fetchBudgetDetails();
+        } catch (err) {
+            console.error(err);
+            showToast(err.message || 'Error al agregar sugerencia', 'error');
+        } finally {
+            setSuggestionAddLoading(null);
+        }
+    };
+
+    const handleOpenTemplates = async () => {
+        await fetchTemplates();
+        setShowTemplateModal(true);
+    };
+
+    const handleSaveTemplate = async () => {
+        if (!templateName.trim() || !listId) return;
+        try {
+            const res = await fetch('/api/templates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: templateName, description: templateDescription, list_id: parseInt(listId) })
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'No se pudo guardar la plantilla');
+            }
+            setTemplateName('');
+            setTemplateDescription('');
+            setShowSaveTemplateModal(false);
+            showToast('Plantilla guardada con éxito', 'success');
+            await fetchTemplates();
+        } catch (err) {
+            console.error(err);
+            showToast(err.message || 'Error guardando la plantilla', 'danger');
+        }
+    };
+
+    const handleApplyTemplate = async (templateId) => {
+        if (!templateId || !listId) return;
+        try {
+            const res = await fetch(`/api/templates/${templateId}/apply?list_id=${listId}`, {
+                method: 'POST'
+            });
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'No se pudo aplicar la plantilla');
+            }
+            setShowTemplateModal(false);
+            showToast('Plantilla aplicada a la lista', 'success');
+            fetchListAndBlame(itemsPage);
+            fetchBudgetDetails();
+        } catch (err) {
+            console.error(err);
+            showToast(err.message || 'Error aplicando la plantilla', 'danger');
+        }
+    };
+
+    const handleOpenSaveTemplateModal = () => {
+        setTemplateName('');
+        setTemplateDescription('');
+        setShowSaveTemplateModal(true);
+    };
+
+    const handleCloseSaveTemplateModal = () => {
+        setShowSaveTemplateModal(false);
+    };
+
+    const handleCloseTemplatesModal = () => {
+        setShowTemplateModal(false);
     };
 
     const handleQuickAdd = async (e) => {
@@ -365,6 +705,74 @@ function ShoppingListView() {
             setShowNewProductModal(true);
         } else {
             proceedWithAdd(existingProduct.brand, existingProduct.category);
+        }
+    };
+
+    const handlePreviewStoreUrl = async () => {
+        if (!storeUrlInput.trim()) {
+            showToast('Ingresa una URL de producto', 'error');
+            return;
+        }
+        setStorePreviewLoading(true);
+        setStorePreview(null);
+        setStorePreviewError(null);
+        try {
+            const res = await fetch('/api/stores/extract-product', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: storeUrlInput,
+                    connector_id: selectedStoreConnectorId
+                })
+            });
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || 'Error al obtener la vista previa');
+            }
+            const data = await res.json();
+            setStorePreview(data);
+        } catch (err) {
+            setStorePreviewError(err.message || 'Error al obtener la vista previa');
+        } finally {
+            setStorePreviewLoading(false);
+        }
+    };
+
+    const handleAddByUrl = async () => {
+        if (!storeUrlInput.trim()) {
+            showToast('Ingresa una URL de producto', 'error');
+            return;
+        }
+        setStoreUrlLoading(true);
+        try {
+            const res = await fetch('/api/items/add-by-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    list_id: listId,
+                    url: storeUrlInput,
+                    connector_id: selectedStoreConnectorId,
+                    cantidad: newQuantity,
+                    unit: newUnit,
+                    comentario: newItemComment
+                })
+            });
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(errorText || 'Error al agregar desde URL');
+            }
+            await res.json();
+            setStoreUrlInput('');
+            setStorePreview(null);
+            setStorePreviewError(null);
+            setShowStoreUrlModal(false);
+            fetchListAndBlame();
+            fetchBudgetDetails();
+            showToast('Producto agregado desde la tienda', 'success');
+        } catch (err) {
+            showToast(err.message || 'Error al agregar desde URL', 'error');
+        } finally {
+            setStoreUrlLoading(false);
         }
     };
 
@@ -733,15 +1141,35 @@ function ShoppingListView() {
                         </h1>
                     )}
 
-                    <button
-                        className={`btn-premium ${isShoppingMode ? 'btn-success' : 'btn-primary'}`}
-                        onClick={() => setIsShoppingMode(!isShoppingMode)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', flexShrink: 0 }}
-                    >
-                        <ShoppingBag size={18} />
-                        <span className="hide-mobile">{isShoppingMode ? 'Salir' : 'Modo Comprando'}</span>
-                        {!isShoppingMode && <span className="show-mobile">Modo</span>}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                            className={`btn-premium ${isShoppingMode ? 'btn-success' : 'btn-primary'}`}
+                            onClick={() => setIsShoppingMode(!isShoppingMode)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', flexShrink: 0 }}
+                        >
+                            <ShoppingBag size={18} />
+                            <span className="hide-mobile">{isShoppingMode ? 'Salir' : 'Modo Comprando'}</span>
+                            {!isShoppingMode && <span className="show-mobile">Modo</span>}
+                        </button>
+                        {listDetails && (
+                            <>
+                                <button
+                                    className="btn-premium btn-secondary btn-compact"
+                                    onClick={handleOpenSaveTemplateModal}
+                                    style={{ padding: '8px 16px' }}
+                                >
+                                    Guardar plantilla
+                                </button>
+                                <button
+                                    className="btn-premium btn-secondary btn-compact"
+                                    onClick={handleOpenTemplates}
+                                    style={{ padding: '8px 16px' }}
+                                >
+                                    Aplicar plantilla
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {isShoppingMode && (
@@ -777,6 +1205,18 @@ function ShoppingListView() {
                 )}
             </div>
 
+            <div className="mobile-action-bar">
+                <button className="btn-premium btn-primary" type="button" onClick={() => quickAddInputRef.current?.focus()}>
+                    Agregar producto
+                </button>
+                <button className="btn-premium btn-secondary" type="button" onClick={handleOpenSaveTemplateModal}>
+                    Guardar plantilla
+                </button>
+                <button className="btn-premium btn-secondary" type="button" onClick={handleOpenTemplates}>
+                    Aplicar plantilla
+                </button>
+            </div>
+
             {isShoppingMode && selectedItems.size > 0 && (
                 <div className="shopping-selection-toolbar">
                     <span style={{ fontWeight: 600 }}>{selectedItems.size} seleccionado{selectedItems.size === 1 ? '' : 's'}</span>
@@ -800,7 +1240,17 @@ function ShoppingListView() {
             {!isShoppingMode && (
                 <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px' }}>
                     <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
-                        <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
+                        <div>
+                            <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+                                <button className="btn-premium btn-primary" onClick={handleOpenSaveTemplateModal} style={{ padding: '8px 16px' }}>
+                                    Guardar como plantilla
+                                </button>
+                                <button className="btn-premium btn-secondary" onClick={handleOpenTemplates} style={{ padding: '8px 16px' }}>
+                                    Aplicar plantilla
+                                </button>
+                            </div>
+                        </div>
                         {listDetails && (
                             <div
                                 onClick={handleListStatusChange}
@@ -835,6 +1285,24 @@ function ShoppingListView() {
                             <h5 style={{ fontSize: '1.1rem', marginBottom: '8px', color: 'var(--text-primary)' }}>Progreso de Artículos</h5>
                             <ProgressBar progress={itemsProgress} variant="success" label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
                         </div>
+
+                        {categorySummary.length > 0 && (
+                            <div style={{ marginTop: '24px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                                    <h5 style={{ fontSize: '1.1rem', margin: 0, color: 'var(--text-primary)' }}>Resumen por categoría</h5>
+                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Top {categorySummary.length} categorías por gasto</span>
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginTop: '12px' }}>
+                                    {categorySummary.map(category => (
+                                        <div key={category.category} style={{ padding: '12px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                                            <div style={{ fontWeight: 700 }}>{category.category}</div>
+                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '6px 0' }}>{category.count} artículo{category.count === 1 ? '' : 's'} • {category.quantity.toFixed(0)} unidad{category.quantity === 1 ? '' : 'es'}</div>
+                                            <div style={{ fontWeight: 600 }}>${category.total.toFixed(2)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div style={{ height: '1px', background: 'var(--border-color)', margin: '32px 0' }} />
@@ -842,6 +1310,7 @@ function ShoppingListView() {
                     <form onSubmit={handleAdd} className="add-item-form" style={{ display: 'flex', gap: '12px', position: 'relative', zIndex: 10, flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, position: 'relative' }}>
                             <input
+                                ref={quickAddInputRef}
                                 type="text"
                                 className="premium-input"
                                 placeholder="Nuevo producto (con detalles)"
@@ -893,10 +1362,19 @@ function ShoppingListView() {
                                                 onMouseEnter={() => setHighlightedIndex(index)}
                                             >
                                                 <img src={getImageSrc(p.shared_image?.file_path)} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
-                                                <div>
+                                                <div style={{ flex: 1 }}>
                                                     <div style={{ fontWeight: 500 }}>{p.name}</div>
                                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.brand} / {p.category}</div>
                                                 </div>
+                                                <button
+                                                    type="button"
+                                                    className="btn-premium btn-compact"
+                                                    style={{ minWidth: '40px', width: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: p.is_favorite ? 'var(--warning-color)' : 'var(--text-secondary)' }}
+                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleFavorite(p); }}
+                                                    title={p.is_favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
+                                                >
+                                                    <Star size={18} />
+                                                </button>
                                             </div>
                                         );
                                     })}
@@ -920,17 +1398,250 @@ function ShoppingListView() {
                         </select>
 
                         <button type="submit" className="btn-premium btn-primary" disabled={loading} style={{ padding: '8px 24px' }}>Agregar</button>
-
+                        <button
+                            type="button"
+                            className="btn-premium btn-secondary"
+                            style={{ background: 'rgba(59, 130, 246, 0.12)', color: 'var(--primary-color)', padding: '8px 18px' }}
+                            onClick={() => setShowStoreUrlModal(true)}
+                        >
+                            <Globe size={18} /> Agregar desde URL
+                        </button>
                         <button type="button" className="btn-premium" style={{ background: 'var(--info-color)', padding: '8px 16px' }} title="Agregar productos no comprados de otra lista" onClick={() => setShowPreviousItemsModal(true)}>
                             <PlusCircle size={20} color="white" />
                         </button>
                     </form>
+
+                    {showStoreUrlModal && (
+                        <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px' }}>
+                            <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '24px', position: 'relative' }}>
+                                <button onClick={() => setShowStoreUrlModal(false)} style={{ position: 'absolute', top: '14px', right: '14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '1.4rem' }}><X size={22} /></button>
+                                <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Agregar producto desde URL de tienda</h3>
+                                <p style={{ margin: '0 0 16px 0', color: 'var(--text-secondary)' }}>Pega la URL del producto en la tienda online y el sistema intentará extraer nombre, precio e imagen.</p>
+                                <input
+                                    type="text"
+                                    className="premium-input"
+                                    placeholder="https://www.tutienda.com/producto/12345"
+                                    value={storeUrlInput}
+                                    onChange={(e) => setStoreUrlInput(e.target.value)}
+                                    style={{ width: '100%', marginBottom: '12px' }}
+                                />
+                                {storeConnectors.length > 0 ? (
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '16px' }}>
+                                        <label style={{ margin: 0, minWidth: '110px', color: 'var(--text-secondary)' }}>Conector</label>
+                                        <select
+                                            className="premium-input"
+                                            value={selectedStoreConnectorId || ''}
+                                            onChange={(e) => setSelectedStoreConnectorId(e.target.value ? parseInt(e.target.value) : null)}
+                                            style={{ flex: 1, minWidth: '220px' }}
+                                        >
+                                            {storeConnectors.map(connector => (
+                                                <option key={connector.id} value={connector.id}>
+                                                    {connector.name} {connector.is_default ? '(Por defecto)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ) : (
+                                    <p style={{ color: 'var(--text-secondary)', marginBottom: '16px', fontSize: '0.9rem' }}>
+                                        No hay conectores de tienda configurados. El sistema intentará extraer el producto de forma genérica.
+                                    </p>
+                                )}
+                                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                                    <button className="btn-premium btn-secondary" type="button" onClick={handlePreviewStoreUrl} disabled={storePreviewLoading || !storeUrlInput.trim()} style={{ padding: '10px 18px' }}>
+                                        {storePreviewLoading ? 'Obteniendo vista previa...' : 'Previsualizar'}
+                                    </button>
+                                    <button className="btn-premium btn-primary" onClick={handleAddByUrl} disabled={storeUrlLoading} style={{ padding: '10px 18px' }}>
+                                        {storeUrlLoading ? 'Agregando...' : 'Agregar desde tienda'}
+                                    </button>
+                                    <button className="btn-premium btn-secondary" onClick={() => { setShowStoreUrlModal(false); setStorePreview(null); setStorePreviewError(null); }} style={{ padding: '10px 18px' }}>
+                                        Cancelar
+                                    </button>
+                                </div>
+                                {storePreviewError && (
+                                    <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(220, 38, 38, 0.12)', color: 'var(--danger-color)', marginBottom: '16px' }}>
+                                        {storePreviewError}
+                                    </div>
+                                )}
+                                {storePreview && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px', padding: '16px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.05)', marginBottom: '16px' }}>
+                                        {storePreview.data.image_url && (
+                                            <div style={{ minWidth: '120px', borderRadius: '12px', overflow: 'hidden', background: '#000' }}>
+                                                <img src={storePreview.data.image_url} alt={storePreview.data.name || 'Imagen de producto'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            </div>
+                                        )}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <div>
+                                                <strong>Nombre:</strong> {storePreview.data.name || 'No disponible'}
+                                            </div>
+                                            <div>
+                                                <strong>Precio estimado:</strong> {storePreview.data.price != null ? `$${storePreview.data.price}` : 'No disponible'}
+                                            </div>
+                                            <div>
+                                                <strong>Tienda:</strong> {storePreview.data.store_name || 'No disponible'}
+                                            </div>
+                                            {storePreview.data.description && (
+                                                <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{storePreview.data.description}</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px' }}>
                         <h5 style={{ margin: 0, fontWeight: 600 }}>Total Comprado: <span className="badge" style={{ background: 'var(--success-color)', fontSize: '1.2rem', padding: '6px 12px' }}>${budgetDetails.total_comprado.toFixed(2)}</span></h5>
                     </div>
                 </div>
             )}
+
+            {showSaveTemplateModal && (
+                <div className="modal-backdrop" onClick={handleCloseSaveTemplateModal}>
+                    <div className="modal-content" style={{ maxWidth: '520px', width: '95%', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h5 className="modal-title">Guardar lista como plantilla</h5>
+                            <button className="modal-close" onClick={handleCloseSaveTemplateModal}><X size={24} /></button>
+                        </div>
+                        <div className="modal-body" style={{ padding: '24px' }}>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Nombre de plantilla</label>
+                                <input className="premium-input" value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Ej. Compra semanal" />
+                            </div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Descripción (opcional)</label>
+                                <textarea className="premium-input" rows={4} value={templateDescription} onChange={(e) => setTemplateDescription(e.target.value)} placeholder="Lista de productos base para esta compra" />
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn-premium btn-secondary" onClick={handleCloseSaveTemplateModal}>Cancelar</button>
+                            <button className="btn-premium btn-primary" onClick={handleSaveTemplate}>Guardar plantilla</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showTemplateModal && (
+                <div className="modal-backdrop" onClick={handleCloseTemplatesModal}>
+                    <div className="modal-content" style={{ maxWidth: '900px', width: '95%', position: 'relative', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h5 className="modal-title">Aplicar plantilla</h5>
+                            <button className="modal-close" onClick={handleCloseTemplatesModal}><X size={24} /></button>
+                        </div>
+                        <div className="modal-body" style={{ overflowY: 'auto', flex: 1, padding: '24px' }}>
+                            {templatesLoading ? (
+                                <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}><span className="text-gradient" style={{ fontSize: '1.2rem', fontWeight: 600 }}>Cargando plantillas...</span></div>
+                            ) : templates.length === 0 ? (
+                                <div className="alert-info">No hay plantillas disponibles. Guarda esta lista como plantilla y vuelve para aplicar.</div>
+                            ) : (
+                                <div style={{ display: 'grid', gap: '16px' }}>
+                                    {templates.map(template => (
+                                        <div key={template.id} className="glass-panel" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 600, marginBottom: '6px' }}>{template.name}</div>
+                                                <div style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '6px' }}>{template.description || 'Plantilla sin descripción'}</div>
+                                                <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{template.items.length} productos</div>
+                                            </div>
+                                            <button className="btn-premium btn-primary" onClick={() => handleApplyTemplate(template.id)}>
+                                                Aplicar plantilla
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn-premium btn-secondary" onClick={handleCloseTemplatesModal}>Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {suggestedProducts.length > 0 || suggestionsLoading ? (
+                <div className="glass-panel suggested-products-container" style={{ padding: '24px', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '16px', flexWrap: 'wrap' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1.4rem' }}>Productos sugeridos</h3>
+                            <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)' }}>Añade rápidamente artículos usados con frecuencia por tu familia.</p>
+                        </div>
+                    </div>
+                    {suggestionsLoading ? (
+                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando sugerencias...</div>
+                    ) : suggestedProducts.length === 0 ? (
+                        <div style={{ padding: '16px 0', color: 'var(--text-secondary)' }}>No hay sugerencias disponibles todavía.</div>
+                    ) : (
+                        <div className="suggested-products-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+                            {suggestedProducts.map(product => (
+                                <div key={product.id} className="glass-panel suggested-card" style={{ padding: '16px', display: 'grid', gap: '10px' }}>
+                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                        <div style={{ width: '52px', height: '52px', borderRadius: '14px', overflow: 'hidden', background: 'rgba(255,255,255,0.08)' }}>
+                                            <img src={getImageSrc(product.shared_image?.file_path)} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 600 }}>{product.name}</div>
+                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{product.brand || 'Marca no definida'} · {product.category || 'Categoría no definida'}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontWeight: 600 }}>{product.last_price ? `$${product.last_price.toFixed(2)}` : 'Precio desconocido'}</span>
+                                        <button className="btn-premium btn-primary" onClick={() => handleAddSuggestedProduct(product)} disabled={suggestionAddLoading === product.id}>
+                                            {suggestionAddLoading === product.id ? 'Agregando...' : 'Agregar'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : null}
+
+            {favoriteProducts.length > 0 || favoritesLoading ? (
+                <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '16px', flexWrap: 'wrap' }}>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '1.4rem' }}>Favoritos rápidos</h3>
+                            <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)' }}>Agrega tus productos preferidos con un solo toque.</p>
+                        </div>
+                    </div>
+                    {favoritesLoading ? (
+                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando favoritos...</div>
+                    ) : favoriteProducts.length === 0 ? (
+                        <div style={{ padding: '16px 0', color: 'var(--text-secondary)' }}>No tienes productos marcados como favoritos aún.</div>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+                            {favoriteProducts.map(product => (
+                                <div key={product.id} className="glass-panel" style={{ padding: '16px', display: 'grid', gap: '10px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                            <div style={{ width: '52px', height: '52px', borderRadius: '14px', overflow: 'hidden', background: 'rgba(255,255,255,0.08)' }}>
+                                                <img src={getImageSrc(product.shared_image?.file_path)} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            </div>
+                                            <div>
+                                                <div style={{ fontWeight: 600 }}>{product.name}</div>
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{product.brand || 'Marca no definida'} · {product.category || 'Categoría no definida'}</div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="btn-premium btn-secondary btn-compact"
+                                            style={{ minWidth: '40px', width: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--warning-color)' }}
+                                            onClick={() => handleToggleFavorite(product)}
+                                            title="Quitar de favoritos"
+                                        >
+                                            <Star size={18} />
+                                        </button>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                        <span style={{ fontWeight: 600 }}>{product.last_price ? `$${product.last_price.toFixed(2)}` : 'Precio desconocido'}</span>
+                                        <button className="btn-premium btn-primary" onClick={() => handleAddFavorite(product)} disabled={suggestionAddLoading === product.id}>
+                                            {suggestionAddLoading === product.id ? 'Agregando...' : 'Agregar'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : null}
 
             {/* Filtering and View Options */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
@@ -960,6 +1671,9 @@ function ShoppingListView() {
                         <option value="price_asc">Precio ↑</option>
                         <option value="price_desc">Precio ↓</option>
                     </select>
+                    <button className={`btn-premium ${groupByCategory ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '8px 16px' }} onClick={() => setGroupByCategory(prev => !prev)}>
+                        {groupByCategory ? 'Quitar agrupado' : 'Agrupar por categoría'}
+                    </button>
                     {showFilters && (
                         <div className="glass-panel" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 100, width: '300px', padding: '16px' }}>
                             <div style={{ marginBottom: '16px' }}>
@@ -1034,77 +1748,26 @@ function ShoppingListView() {
                             )
                         )}
                     </div>
+                ) : groupByCategory && !isShoppingMode ? (
+                    <div style={{ display: 'grid', gap: '24px' }}>
+                        {groupedItems.map(group => (
+                            <div key={group.category} style={{ display: 'grid', gap: '16px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                    <h4 style={{ margin: 0, fontSize: '1.2rem' }}>{group.category}</h4>
+                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{group.items.length} artículos</span>
+                                </div>
+                                <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '24px' }}>
+                                    <TransitionGroup component={null}>
+                                        {group.items.map(item => renderItemCard(item))}
+                                    </TransitionGroup>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 ) : (
                     <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr'), gap: isShoppingMode ? '12px' : '24px' }}>
                         <TransitionGroup component={null}>
-                            {(isShoppingMode ? items : sortedItems).map(item => (
-                                <CSSTransition key={item.id} timeout={400} classNames="fade">
-                                    {isShoppingMode ? (
-                                        <ShoppingModeItem
-                                            item={item}
-                                            onItemUpdate={handleItemUpdate}
-                                            onStatusChange={handleStatus}
-                                            loading={loading}
-                                            isSelected={selectedItems.has(item.id)}
-                                            onSelect={() => toggleItemSelection(item.id)}
-                                        />
-                                    ) : (
-                                        viewMode === 'card' ? (
-                                            <ShoppingItemCard
-                                                item={item}
-                                                onStatusChange={handleStatus}
-                                                onDelete={handleDelete}
-                                                onImageUpload={handleImageUpload}
-                                                onItemUpdate={handleItemUpdate}
-                                                onPriceChange={handlePriceChange}
-                                                onShowItemBlame={handleShowItemBlame}
-                                                onItemCommentSubmit={handleItemCommentSubmit}
-                                                onShowPriceHistory={handleShowPriceHistory}
-                                                onShowGallery={handleShowGallery}
-                                                editingItem={editingItem}
-                                                setEditingItem={setEditingItem}
-                                                editingPrice={editingPrice}
-                                                setEditingPrice={setEditingPrice}
-                                                showItemBlame={showItemBlame}
-                                                itemBlames={itemBlames}
-                                                newItemComment={newItemComment}
-                                                setNewItemComment={setNewItemComment}
-                                                loadingItemBlame={loadingItemBlame}
-                                                loading={loading}
-                                                onProductUpdate={() => fetchListAndBlame(itemsPage)}
-                                                isSelected={selectedItems.has(item.id)}
-                                                onSelect={() => toggleItemSelection(item.id)}
-                                            />
-                                        ) : (
-                                            <ShoppingListItem
-                                                item={item}
-                                                onStatusChange={handleStatus}
-                                                onDelete={handleDelete}
-                                                onImageUpload={handleImageUpload}
-                                                onItemUpdate={handleItemUpdate}
-                                                onPriceChange={handlePriceChange}
-                                                onShowItemBlame={handleShowItemBlame}
-                                                onItemCommentSubmit={handleItemCommentSubmit}
-                                                onShowPriceHistory={handleShowPriceHistory}
-                                                onShowGallery={handleShowGallery}
-                                                editingItem={editingItem}
-                                                setEditingItem={setEditingItem}
-                                                editingPrice={editingPrice}
-                                                setEditingPrice={setEditingPrice}
-                                                showItemBlame={showItemBlame}
-                                                itemBlames={itemBlames}
-                                                newItemComment={newItemComment}
-                                                setNewItemComment={setNewItemComment}
-                                                loadingItemBlame={loadingItemBlame}
-                                                loading={loading}
-                                                onProductUpdate={() => fetchListAndBlame(itemsPage)}
-                                                isSelected={selectedItems.has(item.id)}
-                                                onSelect={() => toggleItemSelection(item.id)}
-                                            />
-                                        )
-                                    )}
-                                </CSSTransition>
-                            ))}
+                            {(isShoppingMode ? items : sortedItems).map(item => renderItemCard(item))}
                         </TransitionGroup>
                     </div>
                 )}

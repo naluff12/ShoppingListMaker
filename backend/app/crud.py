@@ -1,27 +1,38 @@
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
-from datetime import date
+from datetime import datetime, date, timedelta
 from . import models, schemas, security
 
 # CRUD for Products
-def get_or_create_product(db: Session, product_name: str, family_id: int, category: str = None, brand: str = None) -> models.Product:
+def get_or_create_product(db: Session, product_name: str, family_id: int, category: str = None, brand: str = None, product_url: str = None, store_name: str = None) -> models.Product:
     # Check if product exists (case-insensitive)
     db_product = db.query(models.Product).filter(
         func.lower(models.Product.name) == func.lower(product_name),
         models.Product.family_id == family_id
     ).first()
     if db_product:
-        # If product exists, update category and brand if they are provided
+        # If product exists, update category, brand or store info if they are provided
         if category and db_product.category != category:
             db_product.category = category
         if brand and db_product.brand != brand:
             db_product.brand = brand
+        if product_url and db_product.product_url != product_url:
+            db_product.product_url = product_url
+        if store_name and db_product.store_name != store_name:
+            db_product.store_name = store_name
         db.commit()
         db.refresh(db_product)
         return db_product
     # Create new product if not found
-    db_product = models.Product(name=product_name, family_id=family_id, category=category, brand=brand)
+    db_product = models.Product(
+        name=product_name,
+        family_id=family_id,
+        category=category,
+        brand=brand,
+        product_url=product_url,
+        store_name=store_name
+    )
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
@@ -65,6 +76,42 @@ def get_products_by_family(db: Session, family_id: int, skip: int = 0, limit: in
     total = query.count()
     items = query.offset(skip).limit(limit).all()
     return {"items": items, "total": total}
+
+
+def get_favorite_products_by_family(db: Session, family_id: int, limit: int = 10):
+    return db.query(models.Product).options(joinedload(models.Product.shared_image)).filter(
+        models.Product.family_id == family_id,
+        models.Product.is_favorite == True
+    ).order_by(models.Product.updated_at.desc()).limit(limit).all()
+
+
+def set_product_favorite(db: Session, product_id: int, is_favorite: bool):
+    db_product = get_product(db, product_id)
+    if not db_product:
+        return None
+    db_product.is_favorite = is_favorite
+    db.commit()
+    db.refresh(db_product)
+    return db_product
+
+
+def get_suggested_products_for_family(db: Session, family_id: int, limit: int = 8):
+    usage_subquery = db.query(
+        models.ListItem.product_id.label('product_id'),
+        func.count(models.ListItem.id).label('usage_count')
+    ).filter(
+        models.ListItem.product_id != None
+    ).group_by(models.ListItem.product_id).subquery()
+
+    query = db.query(models.Product).join(
+        usage_subquery,
+        models.Product.id == usage_subquery.c.product_id
+    ).filter(
+        models.Product.family_id == family_id
+    ).order_by(desc(usage_subquery.c.usage_count), models.Product.created_at.desc()).limit(limit)
+
+    return query.all()
+
 
 def get_all_products(db: Session, skip: int = 0, limit: int = 100, category: str = None, brand: str = None):
     query = db.query(models.Product).options(joinedload(models.Product.family), joinedload(models.Product.shared_image))
@@ -302,6 +349,159 @@ def get_lists_by_family(db: Session, family_id: int, skip: int = 0, limit: int =
     total = query.count()
     items = query.order_by(models.ShoppingList.created_at.desc()).offset(skip).limit(limit).all()
     return {"items": items, "total": total}
+
+
+def get_previous_product_history_by_family(db: Session, family_id: int, days: int = 90, limit: int = 50):
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    items = db.query(models.ListItem).join(models.ShoppingList).join(models.Calendar).options(
+        joinedload(models.ListItem.product).joinedload(models.Product.shared_image),
+        joinedload(models.ListItem.list)
+    ).filter(
+        models.Calendar.family_id == family_id,
+        models.ListItem.created_at >= cutoff_date
+    ).order_by(models.ListItem.created_at.desc()).all()
+
+    history = {}
+    for item in items:
+        category = (item.product.category if item.product and item.product.category else '')
+        brand = (item.product.brand if item.product and item.product.brand else '')
+        key = (item.product_id, item.nombre.strip().lower(), category.strip().lower(), brand.strip().lower())
+        if key not in history:
+            history[key] = {
+                'product_id': item.product_id,
+                'name': item.nombre,
+                'category': category,
+                'brand': brand,
+                'occurrences': 0,
+                'pending_count': 0,
+                'purchased_count': 0,
+                'last_seen': item.created_at,
+                'last_list_name': item.list.name if item.list else None,
+                'last_list_date': item.list.list_for_date if item.list else None,
+                'last_price': item.precio_confirmado if item.precio_confirmado is not None else (item.product.last_price if item.product else None),
+                'shared_image': item.product.shared_image if item.product else None,
+            }
+        entry = history[key]
+        entry['occurrences'] += 1
+        if item.status == 'pendiente':
+            entry['pending_count'] += 1
+        elif item.status == 'comprado':
+            entry['purchased_count'] += 1
+        if item.created_at > entry['last_seen']:
+            entry['last_seen'] = item.created_at
+            entry['last_list_name'] = item.list.name if item.list else entry['last_list_name']
+            entry['last_list_date'] = item.list.list_for_date if item.list else entry['last_list_date']
+            entry['last_price'] = item.precio_confirmado if item.precio_confirmado is not None else (item.product.last_price if item.product else entry['last_price'])
+            entry['shared_image'] = item.product.shared_image if item.product else entry['shared_image']
+
+    sorted_history = sorted(history.values(), key=lambda x: x['last_seen'], reverse=True)
+    return sorted_history[:limit]
+
+
+def get_templates_by_family(db: Session, family_id: int):
+    return db.query(models.ShoppingListTemplate).options(joinedload(models.ShoppingListTemplate.items)).filter(models.ShoppingListTemplate.family_id == family_id).order_by(models.ShoppingListTemplate.created_at.desc()).all()
+
+
+def get_template(db: Session, template_id: int):
+    return db.query(models.ShoppingListTemplate).options(joinedload(models.ShoppingListTemplate.items)).filter(models.ShoppingListTemplate.id == template_id).first()
+
+
+def create_template_from_list(db: Session, template_data: schemas.ShoppingListTemplateCreate, owner_id: int):
+    shopping_list = get_list(db, template_data.list_id)
+    if not shopping_list:
+        return None
+
+    family_id = shopping_list.calendar.family_id if shopping_list.calendar else None
+
+    db_template = models.ShoppingListTemplate(
+        name=template_data.name,
+        description=template_data.description,
+        owner_id=owner_id,
+        family_id=family_id
+    )
+    db.add(db_template)
+    db.flush()
+
+    for item in shopping_list.items:
+        template_item = models.ShoppingListTemplateItem(
+            template_id=db_template.id,
+            nombre=item.nombre,
+            cantidad=item.cantidad,
+            unit=item.unit,
+            category=item.product.category if item.product else None,
+            brand=item.product.brand if item.product else None,
+            precio_estimado=item.precio_estimado,
+            precio_confirmado=item.precio_confirmado
+        )
+        db.add(template_item)
+
+    db.commit()
+    db.refresh(db_template)
+    return db_template
+
+
+def apply_template_to_list(db: Session, template_id: int, list_id: int, user_id: int):
+    db_template = get_template(db, template_id)
+    if not db_template:
+        return None
+
+    shopping_list = get_list(db, list_id)
+    if not shopping_list:
+        return None
+
+    family_id = shopping_list.calendar.family_id if shopping_list.calendar else db_template.family_id
+    if not family_id:
+        return None
+
+    new_items = []
+    for template_item in db_template.items:
+        product = get_or_create_product(
+            db,
+            template_item.nombre,
+            family_id,
+            template_item.category,
+            template_item.brand
+        )
+
+        db_item = models.ListItem(
+            list_id=list_id,
+            product_id=product.id,
+            nombre=template_item.nombre,
+            cantidad=template_item.cantidad,
+            unit=template_item.unit,
+            comentario=None,
+            precio_estimado=template_item.precio_estimado,
+            precio_confirmado=template_item.precio_confirmado,
+            status='pendiente',
+            creado_por_id=user_id
+        )
+        db.add(db_item)
+        new_items.append(db_item)
+
+        if template_item.precio_confirmado is not None:
+            product.last_price = template_item.precio_confirmado
+            db.add(product)
+            price_history_entry = models.PriceHistory(
+                product_id=product.id,
+                price=template_item.precio_confirmado
+            )
+            db.add(price_history_entry)
+
+    db.flush()
+
+    for item in new_items:
+        blame_entry = models.Blame(
+            user_id=user_id,
+            action="create",
+            entity_type="item",
+            entity_id=item.id,
+            detalles=f"Producto '{item.nombre}' agregado desde plantilla '{db_template.name}'."
+        )
+        db.add(blame_entry)
+
+    db.commit()
+    return new_items
+
 
 def get_lists_by_user(db: Session, user_id: int):
     return db.query(models.ShoppingList).filter(models.ShoppingList.owner_id == user_id).all()
@@ -786,5 +986,51 @@ def delete_image_search_config(db: Session, config_id: int):
         db.commit()
     return db_config
 
+
+def get_store_connectors(db: Session, active_only: bool = False):
+    query = db.query(models.StoreConnectorConfig)
+    if active_only:
+        query = query.filter(models.StoreConnectorConfig.is_active == True)
+    return query.order_by(models.StoreConnectorConfig.name).all()
+
+
+def get_store_connector(db: Session, connector_id: int):
+    return db.query(models.StoreConnectorConfig).filter(models.StoreConnectorConfig.id == connector_id).first()
+
+
+def get_default_store_connector(db: Session):
+    return db.query(models.StoreConnectorConfig).filter(models.StoreConnectorConfig.is_default == True).first()
+
+
+def create_store_connector(db: Session, config: schemas.StoreConnectorConfigCreate):
+    db_config = models.StoreConnectorConfig(**config.dict())
+    if db_config.is_default:
+        db.query(models.StoreConnectorConfig).update({models.StoreConnectorConfig.is_default: False})
+    db.add(db_config)
+    db.commit()
+    db.refresh(db_config)
+    return db_config
+
+
+def update_store_connector(db: Session, connector_id: int, config_update: schemas.StoreConnectorConfigBase):
+    db_config = get_store_connector(db, connector_id)
+    if not db_config:
+        return None
+    update_data = config_update.model_dump(exclude_unset=True)
+    if update_data.get('is_default'):
+        db.query(models.StoreConnectorConfig).filter(models.StoreConnectorConfig.id != connector_id).update({models.StoreConnectorConfig.is_default: False})
+    for key, value in update_data.items():
+        setattr(db_config, key, value)
+    db.commit()
+    db.refresh(db_config)
+    return db_config
+
+
+def delete_store_connector(db: Session, connector_id: int):
+    db_config = get_store_connector(db, connector_id)
+    if db_config:
+        db.delete(db_config)
+        db.commit()
+    return db_config
 
 

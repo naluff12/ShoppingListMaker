@@ -183,7 +183,16 @@ const ShoppingItemCard = ({
                         <p style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                             {item.product?.brand || 'Sin marca'} / {item.product?.category || 'Sin categoría'}
                         </p>
-                        
+                        {item.product?.store_name && (
+                            <p style={{ margin: '0 0 8px 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                Tienda: <strong>{item.product.store_name}</strong>
+                            </p>
+                        )}
+                        {item.product?.product_url && (
+                            <a href={item.product.product_url} target="_blank" rel="noreferrer" style={{ display: 'inline-block', marginBottom: '12px', fontSize: '0.82rem', color: 'var(--primary-color)', textDecoration: 'underline' }}>
+                                Ver en tienda
+                            </a>
+                        )}
                         {isEditing ? (
                             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
                                 <input 

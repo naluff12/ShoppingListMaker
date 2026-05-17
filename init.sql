@@ -73,6 +73,8 @@ CREATE TABLE products (
     brand VARCHAR(100),
     family_id INT,
     shared_image_id INT NULL,
+    product_url VARCHAR(255),
+    store_name VARCHAR(100),
     last_price FLOAT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -158,6 +160,25 @@ CREATE TABLE image_search_configs (
     json_large_path VARCHAR(100),
     image_selector VARCHAR(100),
     image_attribute VARCHAR(50) DEFAULT 'src',
+    is_active BOOLEAN DEFAULT TRUE,
+    is_default BOOLEAN DEFAULT FALSE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE store_connector_configs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    domain_match VARCHAR(255),
+    response_type ENUM('json', 'html') DEFAULT 'html',
+    json_name_path VARCHAR(100),
+    json_price_path VARCHAR(100),
+    json_image_path VARCHAR(100),
+    json_description_path VARCHAR(100),
+    html_name_selector VARCHAR(100),
+    html_price_selector VARCHAR(100),
+    html_image_selector VARCHAR(100),
+    html_image_attribute VARCHAR(50) DEFAULT 'src',
+    html_description_selector VARCHAR(100),
     is_active BOOLEAN DEFAULT TRUE,
     is_default BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP

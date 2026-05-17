@@ -52,7 +52,10 @@ class ProductBase(BaseModel):
     category: Optional[str] = None
     brand: Optional[str] = None
     family_id: Optional[int] = None
+    product_url: Optional[str] = None
+    store_name: Optional[str] = None
     last_price: Optional[float] = None
+    is_favorite: Optional[bool] = False
 
 class ProductCreate(ProductBase):
     shared_image_id: Optional[int] = None
@@ -62,6 +65,23 @@ class Product(ProductBase):
     shared_image: Optional["SharedImage"] = None
     price_history: List[PriceHistory] = []
     family: Optional["Family"] = None
+
+    class Config:
+        from_attributes = True
+
+class PreviousProductHistoryItem(BaseModel):
+    product_id: Optional[int] = None
+    name: str
+    category: Optional[str] = None
+    brand: Optional[str] = None
+    occurrences: int = 0
+    pending_count: int = 0
+    purchased_count: int = 0
+    last_seen: datetime
+    last_list_name: Optional[str] = None
+    last_list_date: Optional[datetime] = None
+    last_price: Optional[float] = None
+    shared_image: Optional["SharedImage"] = None
 
     class Config:
         from_attributes = True
@@ -335,6 +355,38 @@ class ListItemCreateBulk(BaseModel):
 class ListItemsBulkCreate(BaseModel):
     items: List[ListItemCreateBulk]
 
+class ShoppingListTemplateItem(BaseModel):
+    id: int
+    nombre: str
+    cantidad: float
+    unit: Optional[str] = None
+    category: Optional[str] = None
+    brand: Optional[str] = None
+    precio_estimado: Optional[float] = None
+    precio_confirmado: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+class ShoppingListTemplateBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+    family_id: Optional[int] = None
+
+class ShoppingListTemplateCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    list_id: int
+
+class ShoppingListTemplate(ShoppingListTemplateBase):
+    id: int
+    owner_id: int
+    created_at: datetime
+    items: List[ShoppingListTemplateItem] = []
+
+    class Config:
+        from_attributes = True
+
 class BudgetDetails(BaseModel):
     total_estimado: float
     total_comprado: float
@@ -353,6 +405,7 @@ User.model_rebuild()
 Blame.model_rebuild()
 ShoppingList.model_rebuild()
 Product.model_rebuild()
+PreviousProductHistoryItem.model_rebuild()
 ListItem.model_rebuild()
 
 # ---------- IMAGE SEARCH CONFIG ----------
@@ -374,6 +427,32 @@ class ImageSearchConfigCreate(ImageSearchConfigBase):
     pass
 
 class ImageSearchConfig(ImageSearchConfigBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class StoreConnectorConfigBase(BaseModel):
+    name: str
+    domain_match: Optional[str] = None
+    response_type: str = 'html'
+    json_name_path: Optional[str] = None
+    json_price_path: Optional[str] = None
+    json_image_path: Optional[str] = None
+    json_description_path: Optional[str] = None
+    html_name_selector: Optional[str] = None
+    html_price_selector: Optional[str] = None
+    html_image_selector: Optional[str] = None
+    html_image_attribute: str = 'src'
+    html_description_selector: Optional[str] = None
+    is_active: bool = True
+    is_default: bool = False
+
+class StoreConnectorConfigCreate(StoreConnectorConfigBase):
+    pass
+
+class StoreConnectorConfig(StoreConnectorConfigBase):
     id: int
     created_at: datetime
 

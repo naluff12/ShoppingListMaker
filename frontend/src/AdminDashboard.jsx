@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Users, Home, Package, Globe } from 'lucide-react';
+import { Users, Home, Package, Globe, Link } from 'lucide-react';
 import UserManagement from './UserManagement';
 import FamilyManagement from './FamilyManagement';
 import ProductManagement from './ProductManagement';
 import ImageSearchAdmin from './ImageSearchAdmin';
+import StoreConnectorAdmin from './StoreConnectorAdmin';
 
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('users');
@@ -18,6 +19,8 @@ function AdminDashboard() {
         return <ProductManagement />;
       case 'search':
         return <ImageSearchAdmin apiBaseUrl="/api" />;
+      case 'connectors':
+        return <StoreConnectorAdmin apiBaseUrl="/api" />;
       default:
         return <UserManagement />;
     }
@@ -55,6 +58,13 @@ function AdminDashboard() {
             onClick={() => setActiveTab('search')}
         >
             <Globe size={18} /> Motores de Búsqueda
+        </button>
+        <button 
+            className={`btn-premium ${activeTab === 'connectors' ? 'btn-primary' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+            onClick={() => setActiveTab('connectors')}
+        >
+            <Link size={18} /> Conectores de Tiendas
         </button>
       </div>
 

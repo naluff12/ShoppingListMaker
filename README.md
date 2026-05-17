@@ -1,39 +1,253 @@
-# Refactorización del Almacenamiento de Imágenes e Implementación de Galería Compartida
+# ShoppingListMaker
 
-## Descripción
+## Descripción general
 
-Este proyecto ha sido refactorizado para cambiar el sistema de almacenamiento de imágenes. Anteriormente, las imágenes se guardaban en la base de datos en formato base64. Ahora, las imágenes se guardan en el sistema de archivos del servidor y se ha implementado un sistema de galería de imágenes reutilizables.
+ShoppingListMaker es una aplicación de lista de compras colaborativa diseñada para familias y grupos.
+Permite crear familias, compartir listas, reutilizar productos frecuentes y administrar imágenes de productos desde una galería compartida.
 
-## Cambios Realizados
+## Objetivo del sistema
 
-### Backend (FastAPI)
+El objetivo es facilitar la gestión de compras recurrentes y mejorar la productividad familiar al centralizar:
 
-- **Modelos de Base de Datos:**
-    - Se ha modificado la tabla `products` y `list_items` para cambiar la columna `image_url` de `LONGTEXT` a `String(255)`. Esta columna ahora guarda la ruta (URL) al archivo de imagen estático.
-    - Se ha creado una nueva tabla en la base de datos llamada `shared_images` que contiene `id`, `file_path` y `uploaded_by_user_id`.
-- **Endpoints de Carga:**
-    - Se han modificado los endpoints que suben imágenes para que acepten un archivo (`UploadFile`) en lugar de un string base64.
-    - Al recibir un archivo, el servidor lo guarda en una carpeta estática en el sistema de archivos (`backend/static/images`) con un nombre de archivo único (UUID).
-    - Cada vez que se sube una nueva imagen, se crea un nuevo registro en la tabla `shared_images` con la ruta al archivo.
-- **Endpoints para la Galería:**
-    - Se ha creado un nuevo endpoint `GET /api/images/gallery` que devuelve una lista de todas las imágenes disponibles en la tabla `shared_images`.
-    - Se han modificado los endpoints de creación/actualización de productos para que, para asignar una imagen a un producto, el frontend pueda enviar el `id` de una imagen existente de la galería.
+- registro y control de usuarios
+- organización de familias y miembros
+- gestión de listas de compras y elementos
+- reutilización de productos frecuentes y plantillas
+- administración de imágenes compartidas para productos
+- seguimiento por historial de compras y sugerencias inteligentes
 
-### Frontend (React)
+## Funcionalidades principales
 
-- **Carga de Imágenes:**
-    - Se ha modificado el componente `ImageUploader.jsx` para que use `FormData` para enviar el archivo de imagen completo al backend.
-- **Componente de Galería:**
-    - Se ha creado un nuevo componente `ImageGalleryModal.jsx` que hace una llamada al endpoint `GET /api/images/gallery` y muestra las imágenes en una grilla seleccionable.
-- **Integración en el Flujo de Usuario:**
-    - Al crear o editar un producto, el usuario ahora tiene dos opciones: "Subir nueva imagen" o "Elegir de la galería".
-    - Al hacer clic en "Elegir de la galería", se abre el `ImageGalleryModal.jsx`. Al seleccionar una imagen de la galería, su ID se asocia con el producto que se está editando.
+### Gestión de usuarios y familias
 
-## ¿Cómo Probar?
+- Registro y login de usuarios
+- Autenticación basada en JWT y cookies HttpOnly
+- Creación de familias y administración de miembros
+- Unión a familias mediante código de invitación
+- Control de acceso por familia en todas las operaciones
 
-1.  Ejecuta el backend y el frontend.
-2.  Navega a una lista de compras.
-3.  Intenta agregar un nuevo producto. Verás la opción de subir una imagen o elegir una de la galería.
-4.  Sube una nueva imagen. Deberías ver la imagen en la lista de productos.
-5.  Elige una imagen de la galería. Deberías ver la imagen en la lista de productos.
-6.  La imagen subida también debería estar disponible en la galería para otros productos.
+### Listas de compras y productos
+
+- Crear, editar y eliminar listas de compras
+- Agregar y actualizar productos con nombre, cantidad, unidad, categoría, marca y precio estimado
+- Guardar productos como favoritos rápidos
+- Ver el estado de los productos en lista (`pendiente`, `comprado`, etc.)
+
+### Historial recurrente de productos
+
+- Historial familiar de productos usados anteriormente
+- Filtro por período: **30 días**, **90 días**, **180 días**
+- Búsqueda de historial por nombre, marca o categoría
+- Selección múltiple para agregar productos recurrentes a la lista actual
+- Visualización de la fecha de última aparición y origen de lista anterior
+
+### Plantillas de lista
+
+- Guardar una lista existente como plantilla
+- Aplicar una plantilla a otra lista
+- Reutilizar estructuras de compras frecuentes sin recrearlas desde cero
+
+### Sugerencias y favoritos
+
+- Productos sugeridos según el historial familiar
+- Favoritos rápidos para cargar elementos recurrentes de forma inmediata
+- Interfaz directa para agregar sugerencias a la lista activa
+
+### Galería de imágenes compartida
+
+- Subida de imágenes mediante `UploadFile` desde el frontend
+- Almacenamiento de imágenes en el sistema de archivos del servidor
+- Galería centralizada de imágenes reutilizables
+- Selección de imagen de la galería al crear o editar un producto
+
+## Arquitectura y stack tecnológico
+
+### Backend
+
+- FastAPI
+- SQLAlchemy
+- MariaDB (MySQL compatible)
+- Pydantic
+- Uvicorn
+- Autenticación JWT con cookies
+- Almacenamiento de imágenes estáticas en `backend/static/images`
+
+### Frontend
+
+- React
+- Vite
+- React Router
+- React Calendar
+- React Hot Toast
+- Lucide icons
+
+### Contenedores
+
+- Docker Compose para orquestar:
+  - `db` (MariaDB)
+  - `backend` (FastAPI)
+  - `frontend` (React + Nginx)
+
+## Instalación y configuración
+
+### Requisitos previos
+
+- Docker
+- Docker Compose
+- Python 3.11+ (para desarrollo backend local y generación de llaves VAPID)
+- Node.js / npm (para desarrollo frontend local)
+
+### Configuración de entorno
+
+1. Copia el archivo de ejemplo:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Llena los valores en `.env`:
+   - `MYSQL_ROOT_PASSWORD`
+   - `MYSQL_DATABASE`
+   - `MYSQL_USER`
+   - `MYSQL_PASSWORD`
+   - `DB_PORT`
+   - `TZ`
+   - `BACKEND_PORT`
+   - `SECRET_KEY`
+   - `VAPID_PRIVATE_KEY`
+   - `VAPID_PUBLIC_KEY`
+   - `FRONTEND_PORT`
+   - `FRONTEND_URL`
+   - `VITE_API_BASE_URL`
+   - `VITE_WS_URL`
+   - `VAPID_SUB_MAIL`
+
+3. Genera las llaves VAPID si aun no las tienes:
+
+   ```bash
+   python backend/app/generate_keys.py
+   ```
+
+   Copia las llaves generadas a `VAPID_PRIVATE_KEY` y `VAPID_PUBLIC_KEY`.
+
+### Levantar la aplicación con Docker Compose
+
+```bash
+docker compose up --build -d
+```
+
+### Acceder a los servicios
+
+- Frontend: `http://localhost:<FRONTEND_PORT>`
+- Backend: `http://localhost:8000`
+- API docs: `http://localhost:8000/docs`
+
+### Desarrollo local sin Docker
+
+#### Backend
+
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+#### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Variables de entorno importantes
+
+- `MYSQL_ROOT_PASSWORD` – contraseña root de MariaDB
+- `MYSQL_DATABASE` – nombre de la base de datos
+- `MYSQL_USER` – usuario de base de datos
+- `MYSQL_PASSWORD` – contraseña del usuario de base de datos
+- `DB_PORT` – puerto de MariaDB en el host
+- `SECRET_KEY` – clave secreta para JWT y sesiones
+- `VAPID_PRIVATE_KEY` / `VAPID_PUBLIC_KEY` – llaves para notificaciones push
+- `FRONTEND_URL` – URL del frontend
+- `VITE_API_BASE_URL` – URL base de la API en frontend
+- `VITE_WS_URL` – URL del WebSocket en frontend
+- `VAPID_SUB_MAIL` – correo de suscripción push
+
+## Casos de uso
+
+### 1. Registro y autenticación
+
+- Crear una cuenta nueva
+- Iniciar sesión
+- El backend guarda la sesión en una cookie segura
+- El usuario puede navegar a la pantalla principal y ver su familia
+
+### 2. Creación y unión de familias
+
+- Crear una familia propia
+- Invitar a otros usuarios o unirse a una familia existente
+- Compartir listas y datos dentro de la familia
+
+### 3. Gestión de listas de compras
+
+- Crear una nueva lista de compras
+- Agregar productos con cantidad, unidad y precio
+- Editar o eliminar productos existentes
+- Marcar productos como comprados
+
+### 4. Uso de historial recurrente
+
+- Abrir el modal de productos anteriores
+- Seleccionar el período de historial: `30`, `90` o `180` días
+- Ver productos recurrentes usados por la familia
+- Agregar productos recurrentes a la lista actual
+
+### 5. Plantillas de compras
+
+- Guardar una lista como plantilla
+- Aplicar una plantilla a otra lista
+- Reutilizar listas predefinidas rápidamente
+
+### 6. Manejo de imágenes
+
+- Subir una imagen para un producto
+- Escoger una imagen almacenada en la galería compartida
+- Reutilizar imágenes para varios productos
+- Ver las imágenes desde la galería global
+
+### 7. Sugerencias y favoritos
+
+- Consultar productos sugeridos para la familia
+- Agregar productos favoritos rápidamente con un clic
+- Mantener la lista principal organizada y eficiente
+
+## Endpoints clave
+
+- `POST /api/token` – login
+- `GET /api/users/me` – información de usuario actual
+- `POST /api/families/join` – unirse a una familia
+- `GET /api/families/{family_id}/previous_products?days={30|90|180}` – historial recurrente
+- `GET /api/families/{family_id}/suggested-products` – productos sugeridos
+- `GET /api/families/{family_id}/favorite-products` – favoritos rápidos
+- `GET /api/images/gallery` – lista de imágenes compartidas
+- `POST /api/products/{product_id}/favorite` – marcar favorito
+- `POST /api/templates` – crear plantilla
+- `POST /api/templates/{template_id}/apply?list_id={list_id}` – aplicar plantilla
+
+## Estructura del proyecto
+
+- `backend/` – servidor FastAPI y modelos de datos
+- `frontend/` – interfaz React y componentes de UI
+- `docker-compose.yml` – orquestación de contenedores
+- `init.sql` – script inicial de base de datos
+- `uploads/` – almacenamiento de imágenes compartidas
+
+## Notas finales
+
+ShoppingListMaker está diseñado para facilitar la colaboración familiar en la gestión de compras.
+El sistema cubre desde la entrada de productos hasta la reutilización de listas y el uso de historial recurrente para agilizar las compras semanales o mensuales.
+
+Para cualquier mejora, revisa `backend/app/main.py` y `frontend/src/PreviousItemsModal.jsx` para extender las funciones de historial y sugerencias.

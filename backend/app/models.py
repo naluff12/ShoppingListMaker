@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Boolean, Float, Text, DateTime, Table, and_
+﻿from sqlalchemy import Column, Integer, String, TIMESTAMP, ForeignKey, Enum, Boolean, Float, Text, DateTime, Table, and_
 from sqlalchemy.orm import relationship, foreign
 
 from sqlalchemy.ext.declarative import declarative_base
@@ -85,6 +85,34 @@ class ShoppingList(Base):
     )
 
 
+class ShoppingListTemplate(Base):
+    __tablename__ = 'shopping_list_templates'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    family_id = Column(Integer, ForeignKey('families.id'))
+    owner_id = Column(Integer, ForeignKey('users.id'))
+    created_at = Column(DateTime, default=tz_util.now)
+
+    owner = relationship("User")
+    family = relationship("Family")
+    items = relationship("ShoppingListTemplateItem", back_populates="template", cascade="all, delete-orphan")
+
+
+class ShoppingListTemplateItem(Base):
+    __tablename__ = 'shopping_list_template_items'
+    id = Column(Integer, primary_key=True, index=True)
+    template_id = Column(Integer, ForeignKey('shopping_list_templates.id'))
+    nombre = Column(String(255), nullable=False)
+    cantidad = Column(Float, default=1.0)
+    unit = Column(String(50), nullable=True)
+    category = Column(String(100), nullable=True)
+    brand = Column(String(100), nullable=True)
+    precio_estimado = Column(Float, nullable=True)
+    precio_confirmado = Column(Float, nullable=True)
+
+    template = relationship("ShoppingListTemplate", back_populates="items")
+
 
 class Product(Base):
     __tablename__ = 'products'
@@ -95,6 +123,9 @@ class Product(Base):
     brand = Column(String(100), index=True)
     family_id = Column(Integer, ForeignKey('families.id'))
     shared_image_id = Column(Integer, ForeignKey('shared_images.id'), nullable=True)
+    is_favorite = Column(Boolean, default=False)
+    product_url = Column(String(255), nullable=True)
+    store_name = Column(String(100), nullable=True)
     last_price = Column(Float, nullable=True)
     created_at = Column(DateTime, default=tz_util.now)
     updated_at = Column(DateTime, default=tz_util.now, onupdate=tz_util.now)
@@ -150,7 +181,7 @@ class Blame(Base):
 
     user = relationship("User", back_populates="blame")
 
-    # Asociación manual con ShoppingList (N:1)
+    # AsociaciÃ³n manual con ShoppingList (N:1)
     shopping_list = relationship(
         "ShoppingList",
         primaryjoin=lambda: and_(foreign(Blame.entity_id)==ShoppingList.id, Blame.entity_type=='lista'),
@@ -161,7 +192,7 @@ class Blame(Base):
         viewonly=True
     )
 
-    # Asociación manual con ListItem (N:1)
+    # AsociaciÃ³n manual con ListItem (N:1)
     list_item = relationship(
         "ListItem",
         primaryjoin="and_(Blame.entity_id==ListItem.id, Blame.entity_type=='item')",
@@ -220,3 +251,23 @@ class ImageSearchConfig(Base):
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, default=tz_util.now)
+
+class StoreConnectorConfig(Base):
+    __tablename__ = 'store_connector_configs'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    domain_match = Column(String(255), nullable=True)
+    response_type = Column(Enum('json', 'html', name='store_response_type'), default='html')
+    json_name_path = Column(String(100), nullable=True)
+    json_price_path = Column(String(100), nullable=True)
+    json_image_path = Column(String(100), nullable=True)
+    json_description_path = Column(String(100), nullable=True)
+    html_name_selector = Column(String(100), nullable=True)
+    html_price_selector = Column(String(100), nullable=True)
+    html_image_selector = Column(String(100), nullable=True)
+    html_image_attribute = Column(String(50), default='src')
+    html_description_selector = Column(String(100), nullable=True)
+    is_active = Column(Boolean, default=True)
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=tz_util.now)
+
