@@ -20,7 +20,7 @@ services:
     container_name: backend_shopping
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     environment:
       TZ: ${TZ}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
