@@ -115,7 +115,7 @@ async def add_item_by_store_url(
         brand=product.brand
     )
 
-    new_item = crud.create_list_item(db=db, item=list_item, user_id=current_user.id, family_id=family_id)
+    new_item, merged = crud.create_list_item(db=db, item=list_item, user_id=current_user.id, family_id=family_id)
     background_tasks.add_task(
         manager.broadcast_to_family,
         family_id,

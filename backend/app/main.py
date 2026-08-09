@@ -34,6 +34,12 @@ def ensure_database_schema():
                 conn.execute(text('ALTER TABLE products ADD COLUMN store_name VARCHAR(100) NULL'))
             if 'is_favorite' not in columns:
                 conn.execute(text('ALTER TABLE products ADD COLUMN is_favorite BOOLEAN DEFAULT 0'))
+            if 'peso_promedio' not in columns:
+                conn.execute(text('ALTER TABLE products ADD COLUMN peso_promedio FLOAT NULL'))
+            if 'precio_base' not in columns:
+                conn.execute(text('ALTER TABLE products ADD COLUMN precio_base FLOAT NULL'))
+            if 'precio_base_unit' not in columns:
+                conn.execute(text("ALTER TABLE products ADD COLUMN precio_base_unit VARCHAR(10) NULL"))
             conn.commit()
 
 

@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from datetime import datetime, date, timedelta
 from . import models, schemas, security
+from .utils import calc_price_from_base
 
 # CRUD for Products
 def get_or_create_product(db: Session, product_name: str, family_id: int, category: str = None, brand: str = None, product_url: str = None, store_name: str = None) -> models.Product:
@@ -152,6 +153,24 @@ def update_family_product(db: Session, product_id: int, product_update: schemas.
     for key, value in update_data.items():
         setattr(db_product, key, value)
     db.commit()
+
+    # Si cambió la base de precio o el peso promedio, recalcular el precio de todos
+    # los items PENDIENTES de este producto (candado de precio).
+    if 'precio_base' in update_data or 'precio_base_unit' in update_data or 'peso_promedio' in update_data:
+        pending_items = db.query(models.ListItem).filter(
+            models.ListItem.product_id == db_product.id,
+            models.ListItem.status == 'pendiente'
+        ).all()
+        for it in pending_items:
+            precio_calc = calc_price_from_base(
+                it.cantidad, it.unit or 'piezas',
+                db_product.precio_base, db_product.precio_base_unit, db_product.peso_promedio
+            )
+            if precio_calc is not None:
+                it.precio_confirmado = precio_calc
+        if pending_items:
+            db.commit()
+
     db.refresh(db_product)
     return db_product
 
@@ -590,9 +609,70 @@ def update_shopping_list(db: Session, list_id: int, list_update: schemas.Shoppin
 def get_item(db: Session, item_id: int):
     return db.query(models.ListItem).options(joinedload(models.ListItem.product)).filter(models.ListItem.id == item_id).first()
 
+def _normalize_name(name: str) -> str:
+    """Normaliza un nombre para detectar duplicados: minúsculas, sin acentos, sin espacios extra."""
+    import unicodedata
+    if not name:
+        return ''
+    nfkd = unicodedata.normalize('NFKD', name)
+    ascii_str = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    return ' '.join(ascii_str.lower().split())
+
+
 def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, family_id: int):
-    # Find or create the product
+    """Crea un item en la lista.
+
+    Prevención de duplicados: si ya existe un item PENDIENTE en la misma lista con
+    el mismo nombre (normalizado: sin acentos/case/espacios), incrementa su cantidad
+    y devuelve (item_existente, True). Si no existe, crea uno nuevo y devuelve (item, False).
+    """
+    normalized = _normalize_name(item.nombre)
+
+    # --- Prevención de duplicados: buscar item pendiente con el mismo nombre ---
+    existing_items = (
+        db.query(models.ListItem)
+        .filter(models.ListItem.list_id == item.list_id, models.ListItem.status == 'pendiente')
+        .all()
+    )
+    for existing in existing_items:
+        if _normalize_name(existing.nombre) == normalized:
+            extra_qty = item.cantidad or 1
+            existing.cantidad = (existing.cantidad or 1) + extra_qty
+            if item.precio_confirmado is not None:
+                if existing.precio_confirmado is None:
+                    existing.precio_confirmado = item.precio_confirmado
+                if existing.product:
+                    existing.product.last_price = item.precio_confirmado
+                    price_history_entry = models.PriceHistory(
+                        product_id=existing.product.id,
+                        price=item.precio_confirmado
+                    )
+                    db.add(price_history_entry)
+            blame_entry = models.Blame(
+                user_id=user_id,
+                action="update",
+                entity_type="item",
+                entity_id=existing.id,
+                detalles=f"'{item.nombre}' ya estaba en la lista; cantidad incrementada a {existing.cantidad:g}."
+            )
+            db.add(blame_entry)
+            db.commit()
+            db.refresh(existing)
+            db.refresh(existing, attribute_names=['product'])
+            return existing, True
+
+    # --- Creación normal ---
     product = get_or_create_product(db, item.nombre, family_id, item.category, item.brand)
+
+    precio_final = item.precio_confirmado
+    # Candado de precio: si el producto tiene precio_base, calcular el precio desde la base
+    if product.precio_base:
+        precio_calculado = calc_price_from_base(
+            item.cantidad, item.unit or 'piezas',
+            product.precio_base, product.precio_base_unit, product.peso_promedio
+        )
+        if precio_calculado is not None:
+            precio_final = precio_calculado
 
     db_item = models.ListItem(
         list_id=item.list_id,
@@ -602,7 +682,7 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
         unit=item.unit,
         comentario=item.comentario,
         precio_estimado=item.precio_estimado,
-        precio_confirmado=item.precio_confirmado,
+        precio_confirmado=precio_final,
         status='pendiente',
         creado_por_id=user_id
     )
@@ -610,11 +690,11 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
     db.add(db_item)
     db.flush()  # Flush to get the ID
 
-    if item.precio_confirmado is not None:
-        product.last_price = item.precio_confirmado
+    if precio_final is not None:
+        product.last_price = precio_final
         price_history_entry = models.PriceHistory(
             product_id=product.id,
-            price=item.precio_confirmado
+            price=precio_final
         )
         db.add(price_history_entry)
 
@@ -640,7 +720,7 @@ def create_list_item(db: Session, item: schemas.ListItemCreate, user_id: int, fa
     db.refresh(db_item)
     # Eagerly load product for the return value
     db.refresh(db_item, attribute_names=['product'])
-    return db_item
+    return db_item, False
 
 def create_list_items_bulk(db: Session, items: list[schemas.ListItemCreateBulk], list_id: int, user_id: int, family_id: int):
     new_items = []
@@ -694,6 +774,27 @@ def update_item(db: Session, item_id: int, item_update: schemas.ListItemUpdate, 
                 price=update_data['precio_confirmado']
             )
             db.add(price_history_entry)
+
+    # Candado de precio: si el producto tiene precio_base definido, el precio del
+    # item SIEMPRE se recalcula desde la base (kg o pieza) — el precio manual se ignora.
+    product = db_item.product
+    if product and product.precio_base:
+        final_cantidad = update_data.get('cantidad', db_item.cantidad)
+        final_unit = update_data.get('unit', db_item.unit)
+        precio_calculado = calc_price_from_base(
+            final_cantidad, final_unit,
+            product.precio_base, product.precio_base_unit, product.peso_promedio
+        )
+        if precio_calculado is not None:
+            update_data.pop('precio_confirmado', None)
+            db_item.precio_confirmado = precio_calculado
+            product.last_price = precio_calculado
+            price_history_entry = models.PriceHistory(
+                product_id=product.id,
+                price=precio_calculado
+            )
+            db.add(price_history_entry)
+            blame_details.append(f"precio recalculado desde base (${precio_calculado:g})")
 
     for key, value in update_data.items():
         if key == 'shared_image_id':

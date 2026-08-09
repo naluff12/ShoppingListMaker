@@ -4,6 +4,7 @@ import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, 
 import ImageUploader from './ImageUploader';
 import WebImageSearchModal from './WebImageSearchModal';
 import { API_BASE_URL } from './config';
+import { productApi } from './api';
 
 const ShoppingItemCard = ({
     item,
@@ -34,19 +35,30 @@ const ShoppingItemCard = ({
     const isEditing = editingItem && editingItem.id === item.id;
     const [showImageModal, setShowImageModal] = useState(false);
     const [showWebSearchModal, setShowWebSearchModal] = useState(false);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const dropdownRef = useRef(null);
-    const fileInputRef = useRef(null);
+    const [showActionsMenu, setShowActionsMenu] = useState(false);
+    const actionsMenuRef = useRef(null);
+
+    // Candado de precio: estado local para que el check no "parpadee" al refrescar.
+    // Se sincroniza con el valor real del producto cuando llega del backend.
+    const [priceLocked, setPriceLocked] = useState(!!item.product?.precio_base);
+    const [priceBaseDraft, setPriceBaseDraft] = useState(item.product?.precio_base || '');
+    const [pesoDraft, setPesoDraft] = useState(item.product?.peso_promedio || '');
+    useEffect(() => {
+        setPriceLocked(!!item.product?.precio_base);
+        setPriceBaseDraft(item.product?.precio_base || '');
+        setPesoDraft(item.product?.peso_promedio || '');
+    }, [item.product?.precio_base, item.product?.peso_promedio]);
 
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setShowDropdown(false);
+        const closeOnClickOutside = (e) => {
+            if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target)) {
+                setShowActionsMenu(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('mousedown', closeOnClickOutside);
+        return () => document.removeEventListener('mousedown', closeOnClickOutside);
     }, []);
+    const fileInputRef = useRef(null);
 
     const handleFileChange = (e) => {
         const file = e.target.files[0];
@@ -57,17 +69,17 @@ const ShoppingItemCard = ({
 
     const handleViewClick = () => {
         setShowImageModal(true);
-        setShowDropdown(false);
+        setShowActionsMenu(false);
     }
 
     const handleChangeClick = () => {
         fileInputRef.current.click();
-        setShowDropdown(false);
+        setShowActionsMenu(false);
     }
 
     const handleGalleryClick = () => {
         onShowGallery(item);
-        setShowDropdown(false);
+        setShowActionsMenu(false);
     }
 
     const priceValue = (item.precio_confirmado || item.product?.last_price || 0).toFixed(2);
@@ -80,14 +92,25 @@ const ShoppingItemCard = ({
         return `${API_BASE_URL}/api${url}`;
     };
 
+    // Equivalencia unidad→peso: si el producto tiene peso_promedio (g/pieza) y la
+    // unidad es piezas, muestra el peso aproximado de la cantidad.
+    const formatEquivalencia = (it) => {
+        const pesoPromedio = it.product?.peso_promedio;
+        if (!pesoPromedio) return '';
+        const unitKey = (it.unit || '').toLowerCase();
+        if (unitKey === 'piezas' || unitKey === 'pieza' || unitKey === 'pza' || unitKey === 'uds') {
+            const grams = (it.cantidad || 0) * pesoPromedio;
+            if (grams <= 0) return '';
+            return grams >= 1000 ? `${(grams / 1000).toFixed(2).replace(/\.?0+$/, '')} kg` : `${Math.round(grams)} g`;
+        }
+        return '';
+    };
+
     return (
         <div className={`glass-panel item-card ${item.status === 'comprado' ? 'item-comprado' : ''} ${isSelected ? 'item-selected' : ''}`}>
-            <div className="item-card-header d-flex justify-content-between align-items-center">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input type="checkbox" checked={isSelected} onChange={onSelect} style={{ width: '16px', height: '16px' }} />
-                    <span style={{ fontWeight: 600, fontSize: '1.1rem', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit' }}>{item.nombre}</span>
-                </div>
-                <label className="switch" title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'}>
+            <div className="item-card-header" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: '1.1rem', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nombre}</span>
+                <label className="switch" style={{ flexShrink: 0 }} title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'}>
                     <input 
                         type="checkbox" 
                         checked={item.status === 'comprado'} 
@@ -95,33 +118,21 @@ const ShoppingItemCard = ({
                     />
                     <span className="slider round"></span>
                 </label>
+                <label className="custom-check" style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={isSelected} onChange={onSelect} />
+                    <span className="custom-check-box"><Check size={14} /></span>
+                </label>
             </div>
             
             <div className="item-card-body">
                 <div style={{ display: 'flex', gap: '16px' }}>
-                    <div className="item-image-container" ref={dropdownRef} style={{ width: '100px', flexShrink: 0, position: 'relative' }}>
+                    <div className="item-image-container" style={{ width: '100px', flexShrink: 0, position: 'relative' }}>
                         {item.product?.shared_image ? (
                             <>
                                 <div style={{ width: '100px', height: '100px', borderRadius: '8px', overflow: 'hidden', position: 'relative' }}>
                                 <img src={getImageSrc(item.product?.shared_image.file_path)} alt="Producto" style={{ width: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }} />
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setShowDropdown(!showDropdown); }}
-                                        style={{ position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(0,0,0,0.7)', borderRadius: '50%', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', cursor: 'pointer', zIndex: 10 }}
-                                        title="Opciones de imagen"
-                                    >
-                                        <MoreVertical size={16} color="white" />
-                                    </button>
                                 </div>
 
-                                {showDropdown && (
-                                    <div style={{ position: 'absolute', bottom: '100%', left: 0, minWidth: '170px', zIndex: 9999, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', marginBottom: '4px' }}>
-                                        <div className="dropdown-item" onClick={handleViewClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Eye size={16} style={{marginRight: '8px', flexShrink: 0}} /> Ver imagen</div>
-                                        <div className="dropdown-item" onClick={handleChangeClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Camera size={16} style={{marginRight: '8px', flexShrink: 0}} /> Cambiar imagen</div>
-                                        <div className="dropdown-item" onClick={() => { setShowWebSearchModal(true); setShowDropdown(false); }} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Search size={16} style={{marginRight: '8px', flexShrink: 0}} /> Buscar en línea</div>
-                                        <div className="dropdown-item" onClick={handleGalleryClick} style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><ImageIcon size={16} style={{marginRight: '8px', flexShrink: 0}} /> De la galería</div>
-                                    </div>
-                                )}
-                                
                                 <input
                                     type="file"
                                     ref={fileInputRef}
@@ -158,14 +169,6 @@ const ShoppingItemCard = ({
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', height: '100%', width: '100%' }}>
                                 <ImageUploader itemId={item.id} imageUrl={''} onImageUpload={onImageUpload} />
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); setShowWebSearchModal(true); }}
-                                    className="btn-premium btn-secondary"
-                                    style={{ padding: '6px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                                    title="Buscar en línea"
-                                >
-                                    <Search size={14} /> Buscar Web
-                                </button>
                                 <WebImageSearchModal 
                                     show={showWebSearchModal}
                                     handleClose={() => setShowWebSearchModal(false)}
@@ -194,7 +197,7 @@ const ShoppingItemCard = ({
                             </a>
                         )}
                         {isEditing ? (
-                            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                                 <input 
                                     type="number" 
                                     className="premium-input" 
@@ -214,48 +217,184 @@ const ShoppingItemCard = ({
                                     <option value="L">L</option>
                                     <option value="ml">ml</option>
                                 </select>
+                                {item.product?.id && (
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                        <span title="Peso promedio de una pieza, en gramos">Peso:</span>
+                                        <input
+                                            type="number"
+                                            className="premium-input"
+                                            style={{ width: '70px', padding: '6px' }}
+                                            placeholder="g"
+                                            title="Peso promedio de una pieza en gramos (NO es el precio)"
+                                            value={pesoDraft}
+                                            onChange={(e) => {
+                                                setPesoDraft(e.target.value);
+                                                const val = parseFloat(e.target.value);
+                                                if (!isNaN(val) && val > 0 && item.product) {
+                                                    productApi.update(item.product.id, { name: item.product.name, peso_promedio: val })
+                                                        .then(() => onProductUpdate && onProductUpdate())
+                                                        .catch(err => console.error('Error guardando peso', err));
+                                                }
+                                            }}
+                                        />
+                                        <span>g/pieza</span>
+                                    </label>
+                                )}
                                 <button className="btn-premium btn-primary" style={{ padding: '6px 12px' }} onClick={() => onItemUpdate(editingItem.id, { cantidad: editingItem.cantidad, unit: editingItem.unit })}>Guardar</button>
                                 <button className="btn-premium btn-secondary" style={{ padding: '6px 12px' }} onClick={() => setEditingItem(null)}>Cancelar</button>
                             </div>
                         ) : (
                             <div onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar cantidad" style={{ cursor: 'pointer', marginBottom: '8px' }}>
                                 <span><b>Cantidad:</b> {item.cantidad} {item.unit}</span>
+                                {formatEquivalencia(item) && (
+                                    <span style={{ marginLeft: '8px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>≈ {formatEquivalencia(item)}</span>
+                                )}
                             </div>
                         )}
 
-                        <div onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })} title="Doble click para editar precio" style={{ cursor: 'pointer', marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
-                            <b style={{ marginRight: '8px' }}>Precio:</b>
-                            {editingPrice?.id === item.id && editingPrice?.field === 'precio_confirmado' ? (
-                                <input
-                                    type="number"
-                                    className="premium-input"
-                                    step="0.01"
-                                    defaultValue={item.precio_confirmado || item.product?.last_price || ''}
-                                    autoFocus
-                                    onBlur={(e) => onPriceChange(item.id, 'precio_confirmado', e.target.value)}
-                                    onKeyDown={e => e.key === 'Enter' && e.target.blur()}
-                                    style={{ width: '100px', padding: '4px 8px' }}
-                                />
-                            ) : (
-                                <span className={`badge ${priceBadgeClass}`}>${priceValue}</span>
+                        {/* Candado de precio base (por kg o por pieza) — solo en modo edición */}
+                        {isEditing && item.product?.id && (
+                            <div style={{ marginBottom: '10px', fontSize: '0.8rem' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={priceLocked}
+                                        onChange={(e) => {
+                                            if (!item.product) return;
+                                            const willLock = e.target.checked;
+                                            setPriceLocked(willLock);
+                                            if (willLock) {
+                                                // Activar candado: usar el último precio como sugerencia inicial
+                                                const sugerido = item.product.last_price || item.precio_confirmado || 0;
+                                                productApi.update(item.product.id, {
+                                                    name: item.product.name,
+                                                    precio_base: sugerido > 0 ? sugerido : 1,
+                                                    precio_base_unit: 'kg'
+                                                }).then(() => onProductUpdate && onProductUpdate())
+                                                  .catch(err => console.error('Error activando candado', err));
+                                            } else {
+                                                // Desactivar candado: liberar precio manual
+                                                productApi.update(item.product.id, {
+                                                    name: item.product.name,
+                                                    precio_base: null,
+                                                    precio_base_unit: null
+                                                }).then(() => onProductUpdate && onProductUpdate())
+                                                  .catch(err => console.error('Error desactivando candado', err));
+                                            }
+                                        }}
+                                    />
+                                    🔒 Precio por kg/unidad
+                                </label>
+                                {(priceLocked || item.product.precio_base) && (
+                                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>$</span>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            className="premium-input"
+                                            style={{ width: '90px', padding: '6px' }}
+                                            value={priceBaseDraft}
+                                            placeholder="precio"
+                                            onChange={(e) => {
+                                                setPriceBaseDraft(e.target.value);
+                                                const val = parseFloat(e.target.value);
+                                                if (!isNaN(val) && val > 0 && item.product) {
+                                                    productApi.update(item.product.id, {
+                                                        name: item.product.name,
+                                                        precio_base: val,
+                                                        precio_base_unit: item.product.precio_base_unit || 'kg'
+                                                    }).then(() => onProductUpdate && onProductUpdate())
+                                                      .catch(err => console.error('Error guardando precio base', err));
+                                                }
+                                            }}
+                                        />
+                                        <select
+                                            className="premium-input"
+                                            style={{ width: '100px', padding: '6px' }}
+                                            value={item.product.precio_base_unit || 'kg'}
+                                            onChange={(e) => {
+                                                if (!item.product) return;
+                                                productApi.update(item.product.id, {
+                                                    name: item.product.name,
+                                                    precio_base: item.product.precio_base,
+                                                    precio_base_unit: e.target.value
+                                                }).then(() => onProductUpdate && onProductUpdate());
+                                            }}
+                                        >
+                                            <option value="kg">/ kg</option>
+                                            <option value="pieza">/ pieza</option>
+                                        </select>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <div onDoubleClick={() => setEditingPrice({ id: item.id, field: 'precio_confirmado' })} title="Doble click para editar precio" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <b style={{ marginRight: '8px' }}>Precio:</b>
+                                {item.product?.precio_base ? (
+                                    // Candado activo: el precio se calcula desde la base, no es editable
+                                    <span className={`badge ${priceBadgeClass}`}>${priceValue}</span>
+                                ) : editingPrice?.id === item.id && editingPrice?.field === 'precio_confirmado' ? (
+                                    <input
+                                        type="number"
+                                        className="premium-input"
+                                        step="0.01"
+                                        defaultValue={item.precio_confirmado || item.product?.last_price || ''}
+                                        autoFocus
+                                        onBlur={(e) => onPriceChange(item.id, 'precio_confirmado', e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+                                        style={{ width: '100px', padding: '4px 8px' }}
+                                    />
+                                ) : (
+                                    <span className={`badge ${priceBadgeClass}`}>${priceValue}</span>
+                                )}
+                                {item.product?.precio_base && (
+                                    <span style={{ marginLeft: '8px', fontSize: '0.78rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }} title={`Precio base: $${item.product.precio_base}/${item.product.precio_base_unit === 'pieza' ? 'pieza' : 'kg'}`}>
+                                        🔒 ${item.product.precio_base}/{item.product.precio_base_unit === 'pieza' ? 'pieza' : 'kg'}
+                                    </span>
+                                )}
+                            </div>
+                            {isEditing && item.product?.precio_base && (
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                                    = {item.cantidad} {item.unit} × ${item.product.precio_base}/{item.product.precio_base_unit === 'pieza' ? 'pieza' : 'kg'}
+                                    {item.product.precio_base_unit === 'kg' && (item.unit || '').toLowerCase() !== 'kg' && item.product.peso_promedio && (
+                                        <span> (≈ {formatEquivalencia(item)})</span>
+                                    )}
+                                </div>
                             )}
                         </div>
-
-                        <div className="flex-mobile-stack" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                            <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => setEditingItem(item)}>
-                                <Edit2 size={16} /> <span>Editar</span>
-                            </button>
-                            <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', padding: '6px 10px' }} onClick={() => onDelete(item.id)} disabled={loading}>
-                                <Trash size={16} />
-                            </button>
-                            <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => onShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id}>
-                                <MessageSquare size={16} /> <span>Historial</span>
-                            </button>
-                            <button className="btn-premium btn-primary" style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={() => onShowPriceHistory(item)}>
-                                <TrendingUp size={16} /> <span>Precios</span>
-                            </button>
-                        </div>
                     </div>
+                </div>
+
+                <div className="item-card-controls" style={{ display: 'flex', gap: '8px', marginTop: '14px', alignItems: 'center', position: 'relative' }} ref={actionsMenuRef}>
+                    <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', width: '40px', height: '38px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => onShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id} title="Comentarios del producto">
+                        <MessageSquare size={16} />
+                    </button>
+                    <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', width: '40px', height: '38px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => onShowPriceHistory(item)} title="Historial de precios">
+                        <TrendingUp size={16} />
+                    </button>
+                    <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', width: '40px', height: '38px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => setEditingItem(item)} title="Editar cantidad/unidad">
+                        <Edit2 size={16} />
+                    </button>
+                    <button className="btn-premium" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger-color)', width: '40px', height: '38px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => onDelete(item.id)} disabled={loading} title="Eliminar">
+                        <Trash size={16} />
+                    </button>
+                    <button className="btn-premium btn-secondary" style={{ width: '40px', height: '38px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => setShowActionsMenu(prev => !prev)} title="Opciones de imagen">
+                        <MoreVertical size={16} />
+                    </button>
+                    {showActionsMenu && (
+                        <div className="glass-panel" style={{ position: 'absolute', right: 0, bottom: 'calc(100% + 8px)', zIndex: 200, minWidth: '190px', padding: '6px', display: 'flex', flexDirection: 'column' }}>
+                            {item.product?.shared_image && (
+                                <div className="dropdown-item" onClick={handleViewClick} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Eye size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> Ver imagen</div>
+                            )}
+                            {item.product?.shared_image && (
+                                <div className="dropdown-item" onClick={handleChangeClick} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Camera size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> Cambiar imagen</div>
+                            )}
+                            <div className="dropdown-item" onClick={() => { setShowWebSearchModal(true); setShowActionsMenu(false); }} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Search size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> Buscar en línea</div>
+                            <div className="dropdown-item" onClick={handleGalleryClick} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><ImageIcon size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> De la galería</div>
+                        </div>
+                    )}
                 </div>
 
                 {showItemBlame === item.id && (

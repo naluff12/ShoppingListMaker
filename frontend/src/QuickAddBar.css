@@ -1,0 +1,87 @@
+/* Barra de acción rápida fija inferior (buscador + agregar + accesos). */
+
+.quick-add-bar {
+  position: fixed;
+  bottom: 76px; /* encima de la bottom-nav (70px) */
+  left: 0;
+  right: 0;
+  z-index: 1040;
+  padding: 10px 16px;
+  background: rgba(13, 17, 23, 0.97);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+
+.quick-add-bar .premium-input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Botones: compactos por defecto, solo icono en móvil */
+.quick-add-btn {
+  padding: 0 16px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.quick-add-icon-btn {
+  width: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.quick-add-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px); /* abre hacia arriba para no tapar el input */
+  left: 0;
+  right: 0;
+  background: var(--bg-color, #0d1117);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 1050;
+}
+
+.quick-add-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.quick-add-option:hover,
+.quick-add-option.highlighted {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* En móvil: ocultar el texto del botón para evitar empalmes */
+@media (max-width: 480px) {
+  .quick-add-label {
+    display: none;
+  }
+  .quick-add-btn {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+/* En desktop la barra no pisa contenido */
+@media (min-width: 769px) {
+  .quick-add-bar {
+    position: sticky;
+    bottom: 0;
+    background: rgba(13, 17, 23, 0.9);
+  }
+}

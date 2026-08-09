@@ -2,7 +2,7 @@
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -35,6 +35,7 @@ def _resolve_family_for_list(db: Session, lista: models.ShoppingList, current_us
 def create_item_for_list(
     item: schemas.ListItemCreate,
     background_tasks: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -44,7 +45,10 @@ def create_item_for_list(
 
     family_id = _resolve_family_for_list(db, shopping_list, current_user)
 
-    new_item = crud.create_list_item(db=db, item=item, user_id=current_user.id, family_id=family_id)
+    new_item, merged = crud.create_list_item(db=db, item=item, user_id=current_user.id, family_id=family_id)
+    if merged:
+        # El item ya existía: se incrementó su cantidad. Avisar al frontend.
+        response.headers["X-Item-Merged"] = "true"
     background_tasks.add_task(
         manager.broadcast_to_family,
         family_id,

@@ -127,6 +127,9 @@ class Product(Base):
     product_url = Column(String(255), nullable=True)
     store_name = Column(String(100), nullable=True)
     last_price = Column(Float, nullable=True)
+    peso_promedio = Column(Float, nullable=True)  # gramos por pieza (equivalencia unidad/peso)
+    precio_base = Column(Float, nullable=True)     # precio de referencia (por kg o por pieza)
+    precio_base_unit = Column(String(10), nullable=True)  # 'kg' | 'pieza'
     created_at = Column(DateTime, default=tz_util.now)
     updated_at = Column(DateTime, default=tz_util.now, onupdate=tz_util.now)
 

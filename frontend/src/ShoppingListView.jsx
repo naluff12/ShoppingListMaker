@@ -1,7 +1,7 @@
 import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
-import { Eye, EyeOff, PlusCircle, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, X, ShoppingBag, Globe, Star } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Filter, ArrowLeft, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, X, ShoppingBag, Star, Settings, MessageCircle } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ImageUploader from './ImageUploader';
 import './ShoppingListView.css';
@@ -18,16 +18,13 @@ import ActivityFeedPanel from './ActivityFeedPanel';
 import { useWebSocket } from './useWebSocket';
 import { API_BASE_URL } from './config';
 import ShoppingModeItem from './ShoppingModeItem';
-
-function ProgressBar({ progress, variant, label }) {
-    const bgColor = variant === 'danger' ? 'var(--danger-color)' : variant === 'success' ? 'var(--success-color)' : variant === 'warning' ? 'var(--warning-color)' : 'var(--info-color, #3b82f6)';
-    return (
-        <div style={{ position: 'relative', width: '100%', height: '24px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', overflow: 'hidden', marginTop: '8px' }}>
-            <div style={{ height: '100%', width: `${Math.min(100, progress)}%`, backgroundColor: bgColor, transition: 'width 0.3s ease' }}></div>
-            {label && <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>{label}</div>}
-        </div>
-    );
-}
+import BudgetModal from './BudgetModal';
+import NewProductModal from './NewProductModal';
+import FamilySidebar from './FamilySidebar';
+import QuickAddBar from './QuickAddBar';
+import ProgressBar from './ProgressBar';
+import ListSettingsSheet from './ListSettingsSheet';
+import { listApi, productApi, familyApi, templateApi, storeApi } from './api';
 
 function ShoppingListView() {
     const location = useLocation();
@@ -58,6 +55,8 @@ function ShoppingListView() {
     const [itemsTotalPages, setItemsTotalPages] = useState(1);
     const [productsPage, setProductsPage] = useState(1);
     const [productsTotalPages, setProductsTotalPages] = useState(1);
+    const [showListSettings, setShowListSettings] = useState(false);
+    const [showFamilySidebar, setShowFamilySidebar] = useState(false);
     const [showPreviousItemsModal, setShowPreviousItemsModal] = useState(false);
     const [quickAddItemName, setQuickAddItemName] = useState('');
     const [isQuickAdding, setIsQuickAdding] = useState(false);
@@ -75,13 +74,20 @@ function ShoppingListView() {
     const [groupByCategory, setGroupByCategory] = useState(false);
     const quickAddInputRef = useRef(null);
 
+    // Orden personalizado de categorías (persistido por lista) — best practice AnyList
+    const [categoryOrder, setCategoryOrder] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem(`shopCatOrder_${listId}`) || 'null') || [];
+        } catch { return []; }
+    });
+
     // Modals & Popovers
     const [showBudgetModal, setShowBudgetModal] = useState(false);
     const [newBudget, setNewBudget] = useState('');
     const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
     const [selectedItemForPriceHistory, setSelectedItemForPriceHistory] = useState(null);
     const [budgetDetails, setBudgetDetails] = useState({ total_estimado: 0, total_comprado: 0 });
-    const [viewMode, setViewMode] = useState('card');
+    const [viewMode, setViewMode] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768 ? 'list' : 'card');
     const [itemsTotalCount, setItemsTotalCount] = useState(0);
     const [purchasedItemsCount, setPurchasedItemsCount] = useState(0);
     const [searchTerm, setSearchTerm] = useState('');
@@ -89,7 +95,15 @@ function ShoppingListView() {
     const [hidePurchased, setHidePurchased] = useState(false);
     const [sortOption, setSortOption] = useState('default');
     const [bulkActionLoading, setBulkActionLoading] = useState(false);
-    const [toast, setToast] = useState(null); // { message, type }
+    const [toast, setToast] = useState(null); // { message, type, action }
+    const toastTimerRef = useRef(null);
+
+    const showToast = (message, type = 'info', action = null) => {
+        setToast({ message, type, action });
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToast(null), 3500);
+    };
+
     const [showStoreUrlModal, setShowStoreUrlModal] = useState(false);
     const [storeUrlInput, setStoreUrlInput] = useState('');
     const [storeUrlLoading, setStoreUrlLoading] = useState(false);
@@ -98,11 +112,6 @@ function ShoppingListView() {
     const [storePreview, setStorePreview] = useState(null);
     const [storePreviewLoading, setStorePreviewLoading] = useState(false);
     const [storePreviewError, setStorePreviewError] = useState(null);
-
-    const showToast = (message, type = 'info') => {
-        setToast({ message, type });
-        setTimeout(() => setToast(null), 3000);
-    };
 
     const sendActivityUpdate = (action, listName) => {
         if (!sendJson || !familyId) return;
@@ -118,6 +127,18 @@ function ShoppingListView() {
         const nextMode = !isShoppingMode;
         setIsShoppingMode(nextMode);
         sendActivityUpdate(nextMode ? 'started_shopping' : 'stopped_shopping', listDetails?.name);
+        // Recibo/resumen al terminar el modo compras (best practice: SmartCart)
+        if (!nextMode) {
+            const pendientes = items.filter(i => i.status === 'pendiente').length;
+            const total = budgetDetails?.total_comprado || 0;
+            const restante = budget > 0 ? Math.max(0, budget - total) : null;
+            setTimeout(() => {
+                showToast(
+                    `🛒 Compra terminada: ${purchasedItemsCount} comprados, $${total.toFixed(2)} gastado${restante !== null ? `, te sobraron $${restante.toFixed(2)}` : ''}${pendientes > 0 ? ` · ${pendientes} sin comprar` : ''}`,
+                    'info'
+                );
+            }, 300);
+        }
     };
 
     const handleJoinActivity = (activity) => {
@@ -225,29 +246,51 @@ function ShoppingListView() {
             if (!groups[category]) groups[category] = [];
             groups[category].push(item);
         });
-        return Object.entries(groups).map(([category, items]) => ({ category, items }));
-    }, [sortedItems, groupByCategory]);
+        const entries = Object.entries(groups).map(([category, items]) => ({ category, items }));
+        // Aplicar orden personalizado (categorías conocidas primero, resto al final)
+        if (categoryOrder.length > 0) {
+            entries.sort((a, b) => {
+                const ia = categoryOrder.indexOf(a.category);
+                const ib = categoryOrder.indexOf(b.category);
+                if (ia === -1 && ib === -1) return 0;
+                if (ia === -1) return 1;
+                if (ib === -1) return -1;
+                return ia - ib;
+            });
+        }
+        return entries;
+    }, [sortedItems, groupByCategory, categoryOrder]);
 
-    const categorySummary = React.useMemo(() => {
-        const summary = {};
-        items.forEach(item => {
-            const category = item.product?.category?.trim() || item.category?.trim() || 'Sin categoría';
-            const qty = Number(item.cantidad ?? 1) || 1;
-            const unitPrice = Number(item.precio_confirmado ?? item.product?.last_price ?? item.precio_estimado ?? 0) || 0;
-            if (!summary[category]) summary[category] = { count: 0, quantity: 0, total: 0 };
-            summary[category].count += 1;
-            summary[category].quantity += qty;
-            summary[category].total += unitPrice * qty;
+    const moveCategory = (category, dir) => {
+        setCategoryOrder(prev => {
+            const cats = [...prev];
+            const idx = cats.indexOf(category);
+            if (idx === -1) {
+                // Categoría aún no ordenada: añadir al final primero (orden estable)
+                const all = [...cats, category];
+                localStorage.setItem(`shopCatOrder_${listId}`, JSON.stringify(all));
+                return all;
+            }
+            const target = idx + dir;
+            if (target < 0 || target >= cats.length) return prev;
+            [cats[idx], cats[target]] = [cats[target], cats[idx]];
+            localStorage.setItem(`shopCatOrder_${listId}`, JSON.stringify(cats));
+            return [...cats];
         });
-        return Object.entries(summary)
-            .map(([category, data]) => ({ category, ...data }))
-            .sort((a, b) => b.total - a.total)
-            .slice(0, 5);
-    }, [items]);
+    };
 
     const renderItemCard = (item) => (
         <CSSTransition key={item.id} timeout={400} classNames="fade">
-            {viewMode === 'card' ? (
+            {isShoppingMode ? (
+                <ShoppingModeItem
+                    item={item}
+                    onItemUpdate={handleItemUpdate}
+                    onStatusChange={handleStatus}
+                    loading={loading}
+                    isSelected={selectedItems.has(item.id)}
+                    onSelect={() => toggleItemSelection(item.id)}
+                />
+            ) : viewMode === 'card' ? (
                 <ShoppingItemCard
                     item={item}
                     onStatusChange={handleStatus}
@@ -317,8 +360,7 @@ function ShoppingListView() {
 
     useEffect(() => {
         if (!listId) return;
-        fetch(`/api/listas/${listId}/filter-options`)
-            .then(res => res.json())
+        listApi.getFilterOptions(listId)
             .then(data => setFilterOptions(data))
             .catch(() => setFilterOptions({ categories: [], brands: [] }));
     }, [listId]);
@@ -326,9 +368,7 @@ function ShoppingListView() {
     useEffect(() => {
         const fetchStoreConnectors = async () => {
             try {
-                const res = await fetch('/api/stores/connectors?active_only=true');
-                if (!res.ok) throw new Error('No se pudieron cargar los conectores');
-                const data = await res.json();
+                const data = await storeApi.getConnectors();
                 setStoreConnectors(data);
                 const defaultConnector = data.find(c => c.is_default) || data[0];
                 if (defaultConnector) {
@@ -345,11 +385,8 @@ function ShoppingListView() {
     const fetchBudgetDetails = async () => {
         if (!listId) return;
         try {
-            const res = await fetch(`/api/listas/${listId}/budget-details`);
-            if (res.ok) {
-                const data = await res.json();
-                setBudgetDetails(data);
-            }
+            const data = await listApi.getBudgetDetails(listId);
+            setBudgetDetails(data);
         } catch (err) {
             console.error("Error fetching budget details:", err);
         }
@@ -360,11 +397,8 @@ function ShoppingListView() {
         if (!familyId) return;
         setTemplatesLoading(true);
         try {
-            const res = await fetch(`/api/families/${familyId}/templates`);
-            if (res.ok) {
-                const data = await res.json();
-                setTemplates(data);
-            }
+            const data = await familyApi.getTemplates(familyId);
+            setTemplates(data);
         } catch (err) {
             console.error('Error fetching templates:', err);
         } finally {
@@ -377,9 +411,7 @@ function ShoppingListView() {
         if (!familyId) return;
         setSuggestionsLoading(true);
         try {
-            const res = await fetch(`/api/families/${familyId}/suggested-products`);
-            if (!res.ok) throw new Error('No se pudieron obtener sugerencias');
-            const data = await res.json();
+            const data = await familyApi.getSuggestedProducts(familyId);
             setSuggestedProducts(data);
         } catch (err) {
             console.error('Error fetching suggested products:', err);
@@ -394,9 +426,7 @@ function ShoppingListView() {
         if (!familyId) return;
         setFavoritesLoading(true);
         try {
-            const res = await fetch(`/api/families/${familyId}/favorite-products`);
-            if (!res.ok) throw new Error('No se pudieron cargar los favoritos');
-            const data = await res.json();
+            const data = await familyApi.getFavoriteProducts(familyId);
             setFavoriteProducts(data);
         } catch (err) {
             console.error('Error fetching favorite products:', err);
@@ -415,16 +445,7 @@ function ShoppingListView() {
 
     const handleToggleFavorite = async (product) => {
         try {
-            const res = await fetch(`/api/products/${product.id}/favorite`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ favorite: !product.is_favorite })
-            });
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.detail || 'No se pudo actualizar el favorito');
-            }
-            const updated = await res.json();
+            const updated = await productApi.toggleFavorite(product.id, !product.is_favorite);
             setFavoriteProducts(prev => {
                 if (updated.is_favorite) {
                     return [updated, ...prev.filter(p => p.id !== updated.id)];
@@ -452,17 +473,8 @@ function ShoppingListView() {
                 brand: product.brand,
                 precio_estimado: product.last_price ?? undefined
             };
-            const res = await fetch('/api/items/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.detail || 'No se pudo agregar el producto favorito');
-            }
-            await res.json();
-            showToast(`'${product.name}' agregado a la lista`, 'success');
+            const newItem = await listApi.createItem(body);
+            showToast(newItem?._merged ? `'${product.name}' ya estaba en la lista — cantidad actualizada` : `'${product.name}' agregado a la lista`, newItem?._merged ? 'info' : 'success');
             fetchListAndBlame(itemsPage);
             fetchBudgetDetails();
         } catch (err) {
@@ -486,17 +498,8 @@ function ShoppingListView() {
                 brand: product.brand,
                 precio_estimado: product.last_price ?? undefined
             };
-            const res = await fetch('/api/items/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.detail || 'No se pudo agregar el producto sugerido');
-            }
-            await res.json();
-            showToast(`'${product.name}' agregado a la lista`, 'success');
+            const newItem = await listApi.createItem(body);
+            showToast(newItem?._merged ? `'${product.name}' ya estaba en la lista — cantidad actualizada` : `'${product.name}' agregado a la lista`, newItem?._merged ? 'info' : 'success');
             fetchListAndBlame(itemsPage);
             fetchBudgetDetails();
         } catch (err) {
@@ -515,15 +518,7 @@ function ShoppingListView() {
     const handleSaveTemplate = async () => {
         if (!templateName.trim() || !listId) return;
         try {
-            const res = await fetch('/api/templates', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: templateName, description: templateDescription, list_id: parseInt(listId) })
-            });
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.detail || 'No se pudo guardar la plantilla');
-            }
+            await templateApi.create({ name: templateName, description: templateDescription, list_id: parseInt(listId) });
             setTemplateName('');
             setTemplateDescription('');
             setShowSaveTemplateModal(false);
@@ -538,13 +533,7 @@ function ShoppingListView() {
     const handleApplyTemplate = async (templateId) => {
         if (!templateId || !listId) return;
         try {
-            const res = await fetch(`/api/templates/${templateId}/apply?list_id=${listId}`, {
-                method: 'POST'
-            });
-            if (!res.ok) {
-                const error = await res.json();
-                throw new Error(error.detail || 'No se pudo aplicar la plantilla');
-            }
+            await templateApi.apply(templateId, listId);
             setShowTemplateModal(false);
             showToast('Plantilla aplicada a la lista', 'success');
             fetchListAndBlame(itemsPage);
@@ -575,18 +564,13 @@ function ShoppingListView() {
 
         setIsQuickAdding(true);
         try {
-            const res = await fetch(`/api/items/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    list_id: listId,
-                    nombre: quickAddItemName,
-                    cantidad: 1,
-                    unit: 'piezas'
-                })
+            const newItem = await listApi.createItem({
+                list_id: listId,
+                nombre: quickAddItemName,
+                cantidad: 1,
+                unit: 'piezas'
             });
-            if (!res.ok) throw new Error('Error al agregar el producto');
-            await res.json();
+            showToast(newItem?._merged ? `'${quickAddItemName}' ya estaba en la lista — cantidad incrementada` : `'${quickAddItemName}' agregado a la lista`, newItem?._merged ? 'info' : 'success');
             setQuickAddItemName('');
             fetchListAndBlame(itemsPage);
             fetchBudgetDetails();
@@ -604,13 +588,7 @@ function ShoppingListView() {
         }
 
         try {
-            const res = await fetch(`/api/listas/${listId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ budget: budgetValue })
-            });
-            if (!res.ok) throw new Error('Error al actualizar el presupuesto');
-            const updatedList = await res.json();
+            const updatedList = await listApi.updateList(listId, { budget: budgetValue });
             setListDetails(updatedList);
             setShowBudgetModal(false);
             setNewBudget('');
@@ -632,11 +610,11 @@ function ShoppingListView() {
         });
         setLoading(true);
 
-        const listDetailsPromise = fetch(`/api/listas/${listId}`).then(res => res.json());
-        const itemsPromise = fetch(`/api/listas/${listId}/items?${queryParams.toString()}`).then(res => res.json());
-        const blamePromise = fetch(`/api/blame/lista/${listId}`).then(res => res.json());
-        const purchasedCountPromise = fetch(`/api/listas/${listId}/items?status=comprado&size=1`).then(res => res.json());
-        const totalItemsCountPromise = fetch(`/api/listas/${listId}/items?size=1`).then(res => res.json());
+        const listDetailsPromise = listApi.getList(listId);
+        const itemsPromise = listApi.getItems(listId, Object.fromEntries(queryParams));
+        const blamePromise = listApi.getBlame(listId);
+        const purchasedCountPromise = listApi.getPurchasedCount(listId);
+        const totalItemsCountPromise = listApi.getItemCount(listId);
 
         Promise.all([
             listDetailsPromise,
@@ -655,8 +633,7 @@ function ShoppingListView() {
                 setPurchasedItemsCount(purchasedCountData.total);
                 setBlame(Array.isArray(blameData) ? blameData : []);
                 if (listData.calendar && listData.calendar.family_id) {
-                    fetch(`/api/families/${listData.calendar.family_id}/products`)
-                        .then(res => res.json())
+                    productApi.getByFamily(listData.calendar.family_id, 1, 10)
                         .then(data => setProducts(data.items))
                         .catch(() => setProducts([]));
                 }
@@ -714,8 +691,7 @@ function ShoppingListView() {
         }
         setLoadingItemBlame(true);
         try {
-            const res = await fetch(`/api/blame/item/${itemId}`);
-            const data = await res.json();
+            const data = await listApi.getItemBlame(itemId);
             setItemBlames(prev => ({ ...prev, [itemId]: Array.isArray(data) ? data : [] }));
             setShowItemBlame(itemId);
         } catch (err) {
@@ -728,21 +704,16 @@ function ShoppingListView() {
     const proceedWithAdd = async (brand = '', category = '') => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/items/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    list_id: listId,
-                    nombre: newItem,
-                    cantidad: newQuantity,
-                    unit: newUnit,
-                    precio_estimado: newPrice || null,
-                    brand: brand,
-                    category: category
-                })
+            const newItemResp = await listApi.createItem({
+                list_id: listId,
+                nombre: newItem,
+                cantidad: newQuantity,
+                unit: newUnit,
+                precio_estimado: newPrice || null,
+                brand: brand,
+                category: category
             });
-            if (!res.ok) throw new Error('Error al agregar item');
-            await res.json();
+            showToast(newItemResp?._merged ? `'${newItem}' ya estaba en la lista — cantidad actualizada` : `'${newItem}' agregado a la lista`, newItemResp?._merged ? 'info' : 'success');
 
             if (brand && !filterOptions.brands.includes(brand)) {
                 setFilterOptions(prev => ({ ...prev, brands: [...prev.brands, brand] }));
@@ -770,9 +741,7 @@ function ShoppingListView() {
         e.preventDefault();
         if (!newItem) return;
 
-        const searchRes = await fetch(`/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(newItem)}`);
-        const searchData = await searchRes.json();
-
+        const searchData = await productApi.search(listDetails.calendar.family_id, newItem);
         const existingProduct = searchData.items.find(p => p.name.toLowerCase() === newItem.toLowerCase());
 
         if (!existingProduct) {
@@ -793,19 +762,10 @@ function ShoppingListView() {
         setStorePreview(null);
         setStorePreviewError(null);
         try {
-            const res = await fetch('/api/stores/extract-product', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url: storeUrlInput,
-                    connector_id: selectedStoreConnectorId
-                })
+            const data = await storeApi.extractProduct({
+                url: storeUrlInput,
+                connector_id: selectedStoreConnectorId
             });
-            if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(errorText || 'Error al obtener la vista previa');
-            }
-            const data = await res.json();
             setStorePreview(data);
         } catch (err) {
             setStorePreviewError(err.message || 'Error al obtener la vista previa');
@@ -821,30 +781,21 @@ function ShoppingListView() {
         }
         setStoreUrlLoading(true);
         try {
-            const res = await fetch('/api/items/add-by-url', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    list_id: listId,
-                    url: storeUrlInput,
-                    connector_id: selectedStoreConnectorId,
-                    cantidad: newQuantity,
-                    unit: newUnit,
-                    comentario: newItemComment
-                })
+            const newItem = await listApi.addByUrl({
+                list_id: listId,
+                url: storeUrlInput,
+                connector_id: selectedStoreConnectorId,
+                cantidad: newQuantity,
+                unit: newUnit,
+                comentario: newItemComment
             });
-            if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(errorText || 'Error al agregar desde URL');
-            }
-            await res.json();
             setStoreUrlInput('');
             setStorePreview(null);
             setStorePreviewError(null);
             setShowStoreUrlModal(false);
             fetchListAndBlame();
             fetchBudgetDetails();
-            showToast('Producto agregado desde la tienda', 'success');
+            showToast(newItem?._merged ? 'Producto ya estaba en la lista — cantidad actualizada' : 'Producto agregado desde la tienda', newItem?._merged ? 'info' : 'success');
         } catch (err) {
             showToast(err.message || 'Error al agregar desde URL', 'error');
         } finally {
@@ -855,29 +806,19 @@ function ShoppingListView() {
     const handleAddItemsFromModal = async (itemsToAdd) => {
         if (!listId) return;
         try {
-            await fetch(`/api/listas/${listId}/items/bulk`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items: itemsToAdd })
-            });
+            await listApi.bulkCreateItems(listId, itemsToAdd);
             fetchListAndBlame();
             fetchBudgetDetails();
-            showToast('Items agregados a la lista', 'success');
+            showToast('Productos agregados', 'success');
         } catch (err) {
-            showToast('Error al agregar items a la lista', 'error');
+            showToast(err.message || 'Error al agregar productos', 'error');
         }
     };
 
     const handleStatus = async (id, status) => {
         const newStatus = status === 'comprado' ? 'pendiente' : 'comprado';
         try {
-            const res = await fetch(`/api/items/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            });
-            if (!res.ok) throw new Error('Error al actualizar estado');
-            const updatedItem = await res.json();
+            const updatedItem = await listApi.updateItem(id, { status: newStatus });
             setItems(items.map(i => i.id === id ? updatedItem : i));
             fetchBudgetDetails();
             if (newStatus === 'comprado') {
@@ -886,9 +827,22 @@ function ShoppingListView() {
                 setPurchasedItemsCount(prev => prev - 1);
             }
             if (showItemBlame === id) {
-                const resHist = await fetch(`/api/blame/item/${id}`);
-                const dataHist = await resHist.json();
+                const dataHist = await listApi.getItemBlame(id);
                 setItemBlames(prev => ({ ...prev, [id]: Array.isArray(dataHist) ? dataHist : [] }));
+            }
+            // Undo: al marcar comprado, ofrecer deshacer (evita errores de dedo en el súper)
+            if (newStatus === 'comprado') {
+                showToast(`✓ ${updatedItem.nombre} marcado`, 'success', {
+                    label: 'Deshacer',
+                    onAction: async () => {
+                        try {
+                            const reverted = await listApi.updateItem(id, { status: 'pendiente' });
+                            setItems(prev => prev.map(i => i.id === id ? reverted : i));
+                            setPurchasedItemsCount(prev => prev - 1);
+                            fetchBudgetDetails();
+                        } catch (e) { console.error('Undo falló', e); }
+                    }
+                });
             }
         } catch (err) {
             showToast(err.message, 'error');
@@ -899,13 +853,29 @@ function ShoppingListView() {
     const handleDelete = async (id) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/items/${id}`,
-                {
-                    method: 'DELETE',
-                });
-            if (!res.ok) throw new Error('Error al eliminar item');
+            const itemToDelete = items.find(i => i.id === id);
+            await listApi.deleteItem(id);
             fetchListAndBlame();
             fetchBudgetDetails();
+            // Undo: restaurar el item eliminado por error
+            if (itemToDelete) {
+                showToast(`🗑️ ${itemToDelete.nombre} eliminado`, 'error', {
+                    label: 'Restaurar',
+                    onAction: async () => {
+                        try {
+                            await listApi.bulkCreateItems(listId, [{
+                                nombre: itemToDelete.nombre,
+                                cantidad: itemToDelete.cantidad,
+                                unit: itemToDelete.unit,
+                                categoria: itemToDelete.categoria,
+                                marca: itemToDelete.marca,
+                            }]);
+                            fetchListAndBlame();
+                            fetchBudgetDetails();
+                        } catch (e) { console.error('Restaurar falló', e); }
+                    }
+                });
+            }
         } catch (err) {
             showToast(err.message, 'error');
         }
@@ -933,11 +903,7 @@ function ShoppingListView() {
         setBulkActionLoading(true);
         try {
             await Promise.all(ids.map(id =>
-                fetch(`/api/items/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status })
-                })
+                listApi.updateItem(id, { status })
             ));
             clearSelection();
             fetchListAndBlame(itemsPage);
@@ -967,9 +933,7 @@ function ShoppingListView() {
         setBulkActionLoading(true);
         try {
             await Promise.all(ids.map(id =>
-                fetch(`/api/items/${id}`, {
-                    method: 'DELETE'
-                })
+                listApi.deleteItem(id)
             ));
             clearSelection();
             fetchListAndBlame(itemsPage);
@@ -995,14 +959,7 @@ function ShoppingListView() {
     const handleItemCommentSubmit = async (itemId) => {
         if (!newItemComment) return;
         try {
-            const res = await fetch(`/api/items/${itemId}/blames`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ detalles: newItemComment })
-                });
-            if (!res.ok) throw new Error('Error al agregar comentario');
-            const nuevo = await res.json();
+            const nuevo = await listApi.createItemBlame(itemId, { detalles: newItemComment });
             setItemBlames(prev => ({
                 ...prev,
                 [itemId]: [...(prev[itemId] || []), nuevo]
@@ -1017,14 +974,7 @@ function ShoppingListView() {
         e.preventDefault();
         if (!newListComment) return;
         try {
-            const res = await fetch(`/api/listas/${listId}/blames`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ detalles: newListComment })
-                });
-            if (!res.ok) throw new Error('Error al agregar comentario a la lista');
-            const nuevo = await res.json();
+            const nuevo = await listApi.createListBlame(listId, { detalles: newListComment });
             setBlame(prev => [...prev, nuevo]);
             setNewListComment('');
         } catch (err) {
@@ -1034,17 +984,9 @@ function ShoppingListView() {
 
     const handlePriceChange = async (itemId, field, value) => {
         const parsedValue = parseFloat(value);
-
         try {
             if (!isNaN(parsedValue)) {
-                const res = await fetch(`/api/items/${itemId}`,
-                    {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ [field]: parsedValue })
-                    });
-                if (!res.ok) throw new Error('Error al actualizar el precio');
-                const updatedItem = await res.json();
+                const updatedItem = await listApi.updateItem(itemId, { [field]: parsedValue });
                 setItems(items.map(i => i.id === itemId ? updatedItem : i));
                 fetchBudgetDetails();
             }
@@ -1059,13 +1001,7 @@ function ShoppingListView() {
     const handleListStatusChange = async () => {
         const newStatus = listDetails.status === 'revisada' ? 'pendiente' : 'revisada';
         try {
-            const res = await fetch(`/api/listas/${listId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            });
-            if (!res.ok) throw new Error('Error al actualizar estado de la lista');
-            const updatedList = await res.json();
+            const updatedList = await listApi.updateList(listId, { status: newStatus });
             setListDetails(updatedList);
         } catch (err) {
             showToast(err.message, 'error');
@@ -1074,15 +1010,8 @@ function ShoppingListView() {
 
     const handleImageUpload = async (itemId, file) => {
         if (!file) return;
-        const formData = new FormData();
-        formData.append('file', file);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/items/${itemId}/upload-image`, {
-                method: 'POST',
-                body: formData,
-            });
-            if (!res.ok) throw new Error('Error al subir la imagen');
-            const updatedItem = await res.json();
+            const updatedItem = await listApi.uploadItemImage(itemId, file);
             setItems(items.map(i => i.id === itemId ? updatedItem : i));
         } catch (err) {
             showToast(err.message, 'error');
@@ -1095,13 +1024,7 @@ function ShoppingListView() {
     const handleItemUpdate = async (itemId, data) => {
         try {
             const currentItem = items.find(i => i.id === itemId);
-            const res = await fetch(`/api/items/${itemId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (!res.ok) throw new Error('Error al actualizar el item');
-            const updatedItem = await res.json();
+            const updatedItem = await listApi.updateItem(itemId, data);
             setItems(items.map(i => i.id === itemId ? updatedItem : i));
             setEditingItem(null);
             fetchBudgetDetails();
@@ -1123,17 +1046,10 @@ function ShoppingListView() {
             return;
         }
         try {
-            const res = await fetch(
-                `/api/products/search?family_id=${listDetails.calendar.family_id}&q=${encodeURIComponent(query)}&page=${page}&size=5`
-            );
-            if (res.ok) {
-                const data = await res.json();
-                setProducts(Array.isArray(data.items) ? data.items : []);
-                setProductsPage(data.page);
-                setProductsTotalPages(Math.ceil(data.total / data.size));
-            } else {
-                setProducts([]);
-            }
+            const data = await productApi.search(listDetails.calendar.family_id, query, page, 5);
+            setProducts(Array.isArray(data.items) ? data.items : []);
+            setProductsPage(data.page);
+            setProductsTotalPages(Math.ceil(data.total / data.size));
         } catch {
             setProducts([]);
         }
@@ -1200,8 +1116,16 @@ function ShoppingListView() {
     return (
         <div className="app-container animate-fade-in" style={{ maxWidth: '1000px', margin: '0 auto', padding: '24px' }}>
             {toast && (
-                <div className={`toast toast-${toast.type}`}>
-                    {toast.message}
+                <div className={`toast toast-${toast.type}`} style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}>
+                    <span style={{ flex: 1 }}>{toast.message}</span>
+                    {toast.action && (
+                        <button
+                            className="toast-action-btn"
+                            onClick={() => { toast.action.onAction(); setToast(null); }}
+                        >
+                            {toast.action.label}
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -1211,11 +1135,9 @@ function ShoppingListView() {
                         <ArrowLeft size={18} /> <span className="hide-mobile">Volver</span>
                     </button>
 
-                    {isShoppingMode && (
-                        <h1 className="sticky-list-name text-gradient" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, textAlign: 'center', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {listDetails?.name || ''}
-                        </h1>
-                    )}
+                    <h1 className="sticky-list-name text-gradient" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, textAlign: 'center', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {listDetails?.name || ''}
+                    </h1>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <button
@@ -1227,23 +1149,25 @@ function ShoppingListView() {
                             <span className="hide-mobile">{isShoppingMode ? 'Salir' : 'Modo Comprando'}</span>
                             {!isShoppingMode && <span className="show-mobile">Modo</span>}
                         </button>
-                        {listDetails && (
-                            <>
-                                <button
-                                    className="btn-premium btn-secondary btn-compact"
-                                    onClick={handleOpenSaveTemplateModal}
-                                    style={{ padding: '8px 16px' }}
-                                >
-                                    Guardar plantilla
-                                </button>
-                                <button
-                                    className="btn-premium btn-secondary btn-compact"
-                                    onClick={handleOpenTemplates}
-                                    style={{ padding: '8px 16px' }}
-                                >
-                                    Aplicar plantilla
-                                </button>
-                            </>
+                        <button
+                            className="btn-premium btn-secondary btn-compact"
+                            onClick={() => setShowListSettings(true)}
+                            title="Configuración de la lista"
+                            aria-label="Configuración de la lista"
+                            style={{ padding: '8px 12px', flexShrink: 0 }}
+                        >
+                            <Settings size={18} />
+                        </button>
+                        {familyId && (
+                            <button
+                                className="btn-premium btn-secondary btn-compact"
+                                onClick={() => setShowFamilySidebar(true)}
+                                title="Chat familiar"
+                                aria-label="Chat familiar"
+                                style={{ padding: '8px 12px', flexShrink: 0 }}
+                            >
+                                <MessageCircle size={18} />
+                            </button>
                         )}
                     </div>
                 </div>
@@ -1281,18 +1205,6 @@ function ShoppingListView() {
                 )}
             </div>
 
-            <div className="mobile-action-bar">
-                <button className="btn-premium btn-primary" type="button" onClick={() => quickAddInputRef.current?.focus()}>
-                    Agregar producto
-                </button>
-                <button className="btn-premium btn-secondary" type="button" onClick={handleOpenSaveTemplateModal}>
-                    Guardar plantilla
-                </button>
-                <button className="btn-premium btn-secondary" type="button" onClick={handleOpenTemplates}>
-                    Aplicar plantilla
-                </button>
-            </div>
-
             {isShoppingMode && selectedItems.size > 0 && (
                 <div className="shopping-selection-toolbar">
                     <span style={{ fontWeight: 600 }}>{selectedItems.size} seleccionado{selectedItems.size === 1 ? '' : 's'}</span>
@@ -1313,181 +1225,7 @@ function ShoppingListView() {
                 </div>
             )}
 
-            {!isShoppingMode && (
-                <div className="glass-panel" style={{ padding: '24px', marginBottom: '32px' }}>
-                    <div className="flex-mobile-stack" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
-                        <div>
-                            <h2 className="text-gradient" style={{ margin: 0, fontSize: '2.5rem' }}>{listDetails?.name || ''}</h2>
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
-                                <button className="btn-premium btn-primary" onClick={handleOpenSaveTemplateModal} style={{ padding: '8px 16px' }}>
-                                    Guardar como plantilla
-                                </button>
-                                <button className="btn-premium btn-secondary" onClick={handleOpenTemplates} style={{ padding: '8px 16px' }}>
-                                    Aplicar plantilla
-                                </button>
-                            </div>
-                        </div>
-                        {listDetails && (
-                            <div
-                                onClick={handleListStatusChange}
-                                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: 'var(--border-radius-md)', background: listDetails.status === 'revisada' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: listDetails.status === 'revisada' ? 'var(--success-color)' : 'var(--danger-color)', transition: 'all 0.3s ease' }}
-                                title={listDetails.status === 'revisada' ? 'Marcar como Pendiente' : 'Marcar como Revisada'}
-                            >
-                                {listDetails.status === 'revisada' ? <><Eye size={20} /> <span style={{ fontWeight: 600 }}>Revisada</span></> : <><EyeOff size={20} /> <span style={{ fontWeight: 600 }}>No Revisada</span></>}
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ background: 'rgba(0,0,0,0.15)', padding: '24px', borderRadius: 'var(--border-radius-lg)', marginTop: '24px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.4rem' }}>Presupuesto: ${budget.toFixed(2)}</h4>
-                            <button className="btn-premium btn-secondary" style={{ padding: '6px 12px' }} onClick={() => setShowBudgetModal(true)}>
-                                <Pencil size={16} /> Editar
-                            </button>
-                        </div>
-
-                        <ProgressBar progress={budgetProgress} variant={budgetVariant} label={`Estimado ${budgetProgress.toFixed(0)}%`} />
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                            <span style={{ fontWeight: 500 }}>Total Estimado: ${budgetDetails.total_estimado.toFixed(2)}</span>
-                            <span>Restante: <span style={{ fontWeight: 600, color: budgetDetails.total_estimado > budget ? 'var(--danger-color)' : 'var(--success-color)' }}>${(budget - budgetDetails.total_estimado).toFixed(2)}</span></span>
-                        </div>
-
-                        <div style={{ marginTop: '24px' }}>
-                            <ProgressBar progress={purchasedProgress} variant="info" label={`Comprado ${purchasedProgress.toFixed(0)}%`} />
-                        </div>
-
-                        <div style={{ marginTop: '24px' }}>
-                            <h5 style={{ fontSize: '1.1rem', marginBottom: '8px', color: 'var(--text-primary)' }}>Progreso de Artículos</h5>
-                            <ProgressBar progress={itemsProgress} variant="success" label={`${purchasedItemsCount} / ${itemsTotalCount}`} />
-                        </div>
-
-                        {categorySummary.length > 0 && (
-                            <div style={{ marginTop: '24px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                                    <h5 style={{ fontSize: '1.1rem', margin: 0, color: 'var(--text-primary)' }}>Resumen por categoría</h5>
-                                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Top {categorySummary.length} categorías por gasto</span>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginTop: '12px' }}>
-                                    {categorySummary.map(category => (
-                                        <div key={category.category} style={{ padding: '12px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                                            <div style={{ fontWeight: 700 }}>{category.category}</div>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '6px 0' }}>{category.count} artículo{category.count === 1 ? '' : 's'} • {category.quantity.toFixed(0)} unidad{category.quantity === 1 ? '' : 'es'}</div>
-                                            <div style={{ fontWeight: 600 }}>${category.total.toFixed(2)}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div style={{ height: '1px', background: 'var(--border-color)', margin: '32px 0' }} />
-
-                    <form onSubmit={handleAdd} className="add-item-form" style={{ display: 'flex', gap: '12px', position: 'relative', zIndex: 10, flexWrap: 'wrap' }}>
-                        <div style={{ flex: 1, position: 'relative' }}>
-                            <input
-                                ref={quickAddInputRef}
-                                type="text"
-                                className="premium-input"
-                                placeholder="Nuevo producto (con detalles)"
-                                value={newItem}
-                                onChange={async (e) => {
-                                    const value = e.target.value;
-                                    setNewItem(value);
-                                    setHighlightedIndex(-1);
-                                    setProductsPage(1);
-                                    if (!value.trim() || !listDetails?.calendar?.family_id) {
-                                        setProducts([]);
-                                        return;
-                                    }
-                                    fetchProducts(value, 1);
-                                }}
-                                onKeyDown={(e) => {
-                                    if (products.length === 0) return;
-                                    if (e.key === "ArrowDown") {
-                                        e.preventDefault();
-                                        setHighlightedIndex((prev) => (prev + 1) % products.length);
-                                    } else if (e.key === "ArrowUp") {
-                                        e.preventDefault();
-                                        setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
-                                    } else if (e.key === "Enter" && highlightedIndex >= 0) {
-                                        e.preventDefault();
-                                        const selected = products[highlightedIndex];
-                                        if (selected) {
-                                            setNewItem(selected.name);
-                                            if (selected.last_price) {
-                                                setNewPrice(selected.last_price);
-                                            }
-                                            setNewBrand(selected.brand);
-                                            setNewCategory(selected.category);
-                                            setProducts([]);
-                                        }
-                                    }
-                                }}
-                                onBlur={() => { setTimeout(() => { setProducts([]); }, 200); }}
-                            />
-                            {products.length > 0 && newItem.trim() !== "" && (
-                                <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', left: 0, width: '100%', marginTop: '4px', maxHeight: "350px", overflowY: "auto", padding: '8px' }} onMouseDown={(e) => e.preventDefault()}>
-                                    {products.map((p, index) => {
-                                        return (
-                                            <div
-                                                key={p.id}
-                                                className="dropdown-item"
-                                                style={{ display: 'flex', alignItems: 'center', padding: '8px 12px', background: index === highlightedIndex ? 'rgba(255,255,255,0.1)' : 'transparent', borderRadius: '4px', cursor: 'pointer', marginBottom: '4px' }}
-                                                onMouseDown={() => { setNewItem(p.name); if (p.last_price) { setNewPrice(p.last_price); } setNewBrand(p.brand); setNewCategory(p.category); setProducts([]); }}
-                                                onMouseEnter={() => setHighlightedIndex(index)}
-                                            >
-                                                <img src={getImageSrc(p.shared_image?.file_path)} alt={p.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, marginRight: 12, background: 'rgba(255,255,255,0.05)' }} />
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ fontWeight: 500 }}>{p.name}</div>
-                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.brand} / {p.category}</div>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    className="btn-premium btn-compact"
-                                                    style={{ minWidth: '40px', width: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: p.is_favorite ? 'var(--warning-color)' : 'var(--text-secondary)' }}
-                                                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleFavorite(p); }}
-                                                    title={p.is_favorite ? 'Quitar de favoritos' : 'Marcar como favorito'}
-                                                >
-                                                    <Star size={18} />
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', borderTop: '1px solid var(--border-color)', marginTop: '8px' }}>
-                                        <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage <= 1} onClick={() => fetchProducts(newItem, productsPage - 1)}>Anterior</button>
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Página {productsPage} de {productsTotalPages}</span>
-                                        <button type="button" className="btn-premium btn-secondary" style={{ padding: '2px 8px', fontSize: '0.8rem' }} disabled={productsPage >= productsTotalPages} onClick={() => fetchProducts(newItem, productsPage + 1)}>Siguiente</button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        <input type="number" className="premium-input" value={newQuantity} onChange={(e) => setNewQuantity(parseFloat(e.target.value))} style={{ width: '80px', flex: 'none' }} min="0.001" step="any" />
-
-                        <select className="premium-input" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} style={{ width: '120px', flex: 'none' }}>
-                            <option value="piezas">piezas</option>
-                            <option value="kg">kg</option>
-                            <option value="g">g</option>
-                            <option value="L">L</option>
-                            <option value="ml">ml</option>
-                        </select>
-
-                        <button type="submit" className="btn-premium btn-primary" disabled={loading} style={{ padding: '8px 24px' }}>Agregar</button>
-                        <button
-                            type="button"
-                            className="btn-premium btn-secondary"
-                            style={{ background: 'rgba(59, 130, 246, 0.12)', color: 'var(--primary-color)', padding: '8px 18px' }}
-                            onClick={() => setShowStoreUrlModal(true)}
-                        >
-                            <Globe size={18} /> Agregar desde URL
-                        </button>
-                        <button type="button" className="btn-premium" style={{ background: 'var(--info-color)', padding: '8px 16px' }} title="Agregar productos no comprados de otra lista" onClick={() => setShowPreviousItemsModal(true)}>
-                            <PlusCircle size={20} color="white" />
-                        </button>
-                    </form>
-
-                    {showStoreUrlModal && (
+            {showStoreUrlModal && (
                         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px' }}>
                             <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '24px', position: 'relative' }}>
                                 <button onClick={() => setShowStoreUrlModal(false)} style={{ position: 'absolute', top: '14px', right: '14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '1.4rem' }}><X size={22} /></button>
@@ -1565,12 +1303,6 @@ function ShoppingListView() {
                         </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '32px' }}>
-                        <h5 style={{ margin: 0, fontWeight: 600 }}>Total Comprado: <span className="badge" style={{ background: 'var(--success-color)', fontSize: '1.2rem', padding: '6px 12px' }}>${budgetDetails.total_comprado.toFixed(2)}</span></h5>
-                    </div>
-                </div>
-            )}
-
             {showSaveTemplateModal && (
                 <div className="modal-backdrop" onClick={handleCloseSaveTemplateModal}>
                     <div className="modal-content" style={{ maxWidth: '520px', width: '95%', position: 'relative' }} onClick={e => e.stopPropagation()}>
@@ -1632,63 +1364,78 @@ function ShoppingListView() {
                 </div>
             )}
 
+            {/* Barra de acción rápida: siempre visible (fija abajo) */}
+            <QuickAddBar
+                isShoppingMode={isShoppingMode}
+                quickAddInputRef={quickAddInputRef}
+                value={newItem}
+                onChange={(e) => {
+                    const value = e.target.value;
+                    setNewItem(value);
+                    setHighlightedIndex(-1);
+                    setProductsPage(1);
+                    if (!value.trim() || !listDetails?.calendar?.family_id) {
+                        setProducts([]);
+                        return;
+                    }
+                    fetchProducts(value, 1);
+                }}
+                onSubmit={handleAdd}
+                onKeyDown={(e) => {
+                    if (products.length === 0) return;
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setHighlightedIndex((prev) => (prev + 1) % products.length);
+                    } else if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setHighlightedIndex((prev) => (prev - 1 + products.length) % products.length);
+                    } else if (e.key === "Enter" && highlightedIndex >= 0) {
+                        e.preventDefault();
+                        const selected = products[highlightedIndex];
+                        if (selected) {
+                            setNewItem(selected.name);
+                            if (selected.last_price) {
+                                setNewPrice(selected.last_price);
+                            }
+                            setNewBrand(selected.brand);
+                            setNewCategory(selected.category);
+                            setProducts([]);
+                        }
+                    }
+                }}
+                highlightedIndex={highlightedIndex}
+                products={products}
+                onHighlight={setHighlightedIndex}
+                onSelectProduct={(p) => {
+                    setNewItem(p.name);
+                    if (p.last_price) { setNewPrice(p.last_price); }
+                    setNewBrand(p.brand);
+                    setNewCategory(p.category);
+                    setProducts([]);
+                }}
+                onOpenPrevious={() => setShowPreviousItemsModal(true)}
+                onOpenStoreUrl={() => setShowStoreUrlModal(true)}
+                quickAddItemName={quickAddItemName}
+                onQuickAddChange={setQuickAddItemName}
+                onQuickAddSubmit={handleQuickAdd}
+            />
+
             {familyId && (
-                <div className="grid-mobile-stack social-grid" style={{ gap: '20px', marginBottom: '24px' }}>
-                    <ChatPanel
-                        familyId={familyId}
-                        websocketMessage={lastMessage}
-                        sendWsEvent={sendJson}
-                        isConnected={isConnected}
-                        privateChatRecipient={privateChatRecipient}
-                        onSelectPrivateRecipient={setPrivateChatRecipient}
-                    />
-                    <MemberPresencePanel
-                        familyId={familyId}
-                        websocketMessage={lastMessage}
-                        onOpenPrivateChat={setPrivateChatRecipient}
-                        onJoinActivity={handleJoinActivity}
-                    />
-                    <ActivityFeedPanel events={recentEvents} />
-                </div>
+                <FamilySidebar
+                    show={showFamilySidebar}
+                    onClose={() => setShowFamilySidebar(false)}
+                    familyId={familyId}
+                    lastMessage={lastMessage}
+                    sendJson={sendJson}
+                    isConnected={isConnected}
+                    privateChatRecipient={privateChatRecipient}
+                    setPrivateChatRecipient={setPrivateChatRecipient}
+                    handleJoinActivity={handleJoinActivity}
+                    recentEvents={recentEvents}
+                />
             )}
 
-            {suggestedProducts.length > 0 || suggestionsLoading ? (
-                <div className="glass-panel suggested-products-container" style={{ padding: '24px', marginBottom: '24px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '16px', flexWrap: 'wrap' }}>
-                        <div>
-                            <h3 style={{ margin: 0, fontSize: '1.4rem' }}>Productos sugeridos</h3>
-                            <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)' }}>Añade rápidamente artículos usados con frecuencia por tu familia.</p>
-                        </div>
-                    </div>
-                    {suggestionsLoading ? (
-                        <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando sugerencias...</div>
-                    ) : suggestedProducts.length === 0 ? (
-                        <div style={{ padding: '16px 0', color: 'var(--text-secondary)' }}>No hay sugerencias disponibles todavía.</div>
-                    ) : (
-                        <div className="suggested-products-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
-                            {suggestedProducts.map(product => (
-                                <div key={product.id} className="glass-panel suggested-card" style={{ padding: '16px', display: 'grid', gap: '10px' }}>
-                                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                        <div style={{ width: '52px', height: '52px', borderRadius: '14px', overflow: 'hidden', background: 'rgba(255,255,255,0.08)' }}>
-                                            <img src={getImageSrc(product.shared_image?.file_path)} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                        </div>
-                                        <div>
-                                            <div style={{ fontWeight: 600 }}>{product.name}</div>
-                                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{product.brand || 'Marca no definida'} · {product.category || 'Categoría no definida'}</div>
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                                        <span style={{ fontWeight: 600 }}>{product.last_price ? `$${product.last_price.toFixed(2)}` : 'Precio desconocido'}</span>
-                                        <button className="btn-premium btn-primary" onClick={() => handleAddSuggestedProduct(product)} disabled={suggestionAddLoading === product.id}>
-                                            {suggestionAddLoading === product.id ? 'Agregando...' : 'Agregar'}
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            ) : null}
+            {/* Contenedor vacío (eliminé sugerencias) */}
 
             {favoriteProducts.length > 0 || favoritesLoading ? (
                 <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
@@ -1739,27 +1486,30 @@ function ShoppingListView() {
                 </div>
             ) : null}
 
-            {/* Filtering and View Options */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: '300px', position: 'relative' }} ref={filtersRef}>
-                    <input
-                        type="text"
-                        className="premium-input"
-                        placeholder="Buscar items..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        style={{ flex: 1 }}
-                    />
-                    <button className="btn-premium btn-secondary" onClick={() => setShowFilters(!showFilters)}>
-                        <Filter size={20} />
+            {/* Filtering and View Options (compacto) */}
+            <div style={{ display: 'grid', gap: '10px', marginBottom: '24px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative' }} ref={filtersRef}>
+                    <div style={{ flex: 1, position: 'relative', minWidth: 0 }}>
+                        <input
+                            type="text"
+                            className="premium-input"
+                            placeholder="Buscar items..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{ width: '100%', paddingLeft: '36px' }}
+                        />
+                        <Filter size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                    </div>
+                    <button className={`btn-premium ${showFilters ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setShowFilters(!showFilters)} style={{ padding: '8px 12px', flexShrink: 0 }} title="Filtros">
+                        <Filter size={18} />
                     </button>
                     <select
                         className="premium-input"
-                        style={{ width: '220px' }}
+                        style={{ width: 'auto', maxWidth: '150px', flexShrink: 0 }}
                         value={sortOption}
                         onChange={(e) => setSortOption(e.target.value)}
                     >
-                        <option value="default">Orden predeterminado</option>
+                        <option value="default">Orden</option>
                         <option value="name_asc">Nombre A→Z</option>
                         <option value="name_desc">Nombre Z→A</option>
                         <option value="qty_asc">Cantidad ↑</option>
@@ -1767,11 +1517,8 @@ function ShoppingListView() {
                         <option value="price_asc">Precio ↑</option>
                         <option value="price_desc">Precio ↓</option>
                     </select>
-                    <button className={`btn-premium ${groupByCategory ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '8px 16px' }} onClick={() => setGroupByCategory(prev => !prev)}>
-                        {groupByCategory ? 'Quitar agrupado' : 'Agrupar por categoría'}
-                    </button>
                     {showFilters && (
-                        <div className="glass-panel" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 100, width: '300px', padding: '16px' }}>
+                        <div className="glass-panel" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 100, width: 'min(300px, calc(100vw - 32px))', padding: '16px', boxSizing: 'border-box' }}>
                             <div style={{ marginBottom: '16px' }}>
                                 <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Estado</label>
                                 <select className="premium-input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -1798,16 +1545,21 @@ function ShoppingListView() {
                     )}
                 </div>
 
-                {!isShoppingMode && (
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button className={`btn-premium ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('list')} style={{ padding: '6px 16px' }}>
-                            Lista
-                        </button>
-                        <button className={`btn-premium ${viewMode === 'card' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('card')} style={{ padding: '6px 16px' }}>
-                            Tarjetas
-                        </button>
-                    </div>
-                )}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                    <button className={`btn-premium ${groupByCategory ? 'btn-primary' : 'btn-secondary'}`} style={{ padding: '6px 14px' }} onClick={() => setGroupByCategory(prev => !prev)}>
+                        {groupByCategory ? 'Quitar agrupado' : 'Agrupar por categoría'}
+                    </button>
+                    {!isShoppingMode && (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className={`btn-premium ${viewMode === 'list' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('list')} style={{ padding: '6px 16px' }}>
+                                Lista
+                            </button>
+                            <button className={`btn-premium ${viewMode === 'card' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('card')} style={{ padding: '6px 16px' }}>
+                                Tarjetas
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
 
             {selectedItems.size > 0 && (
@@ -1831,7 +1583,7 @@ function ShoppingListView() {
             {/* Items List */}
             <div>
                 {loading ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr'), gap: '16px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))' : '1fr'), gap: '16px' }}>
                         {Array.from({ length: 5 }).map((_, index) =>
                             isShoppingMode ? (
                                 <div key={index} className="glass-panel skeleton-box" style={{ height: '100px' }}></div>
@@ -1849,10 +1601,24 @@ function ShoppingListView() {
                         {groupedItems.map(group => (
                             <div key={group.category} style={{ display: 'grid', gap: '16px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                                    <h4 style={{ margin: 0, fontSize: '1.2rem' }}>{group.category}</h4>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <h4 style={{ margin: 0, fontSize: '1.2rem' }}>{group.category}</h4>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                            <button
+                                                className="category-move-btn"
+                                                title="Mover categoría arriba (según el recorrido de tu tienda)"
+                                                onClick={() => moveCategory(group.category, -1)}
+                                            ><ChevronUp size={12} /></button>
+                                            <button
+                                                className="category-move-btn"
+                                                title="Mover categoría abajo"
+                                                onClick={() => moveCategory(group.category, 1)}
+                                            ><ChevronDown size={12} /></button>
+                                        </div>
+                                    </div>
                                     <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{group.items.length} artículos</span>
                                 </div>
-                                <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr', gap: '24px' }}>
+                                <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: viewMode === 'card' ? 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))' : '1fr', gap: '24px' }}>
                                     <TransitionGroup component={null}>
                                         {group.items.map(item => renderItemCard(item))}
                                     </TransitionGroup>
@@ -1861,7 +1627,7 @@ function ShoppingListView() {
                         ))}
                     </div>
                 ) : (
-                    <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(300px, 1fr))' : '1fr'), gap: isShoppingMode ? '12px' : '24px' }}>
+                    <div className="grid-mobile-stack" style={{ display: 'grid', gridTemplateColumns: isShoppingMode ? '1fr' : (viewMode === 'card' ? 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))' : '1fr'), gap: isShoppingMode ? '12px' : '24px' }}>
                         <TransitionGroup component={null}>
                             {(isShoppingMode ? items : sortedItems).map(item => renderItemCard(item))}
                         </TransitionGroup>
@@ -1881,32 +1647,6 @@ function ShoppingListView() {
                 </div>
             )}
 
-            {/* List Comments */}
-            <div className="glass-panel" style={{ marginTop: '48px', padding: '24px' }}>
-                <h3 style={{ fontSize: '1.5rem', marginBottom: '24px' }}>Comentarios de la lista</h3>
-
-                {blame.length === 0 ? (
-                    <div className="alert-info" style={{ marginBottom: '24px' }}>Sin historial de comentarios</div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px', maxHeight: '300px', overflowY: 'auto', paddingRight: '8px' }}>
-                        {blame.map(b => (
-                            <div key={b.id} style={{ padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--border-radius-md)', borderLeft: '4px solid var(--primary-color)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                    <span style={{ fontWeight: 600 }}>{b.user && b.user.username ? b.user.username : 'Usuario'} {b.action}</span>
-                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{b.timestamp ? new Date(b.timestamp).toLocaleString() : ''}</span>
-                                </div>
-                                <div style={{ color: 'var(--text-primary)', lineHeight: 1.5 }}>{b.detalles}</div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <form onSubmit={handleListCommentSubmit} style={{ display: 'flex', gap: '12px' }}>
-                    <input type="text" className="premium-input" placeholder="Nuevo comentario para la lista" value={newListComment} onChange={e => setNewListComment(e.target.value)} />
-                    <button type="submit" className="btn-premium btn-primary" style={{ padding: '8px 24px' }}>Comentar</button>
-                </form>
-            </div>
-
             {/* Modals */}
             <PreviousItemsModal
                 show={showPreviousItemsModal}
@@ -1916,37 +1656,14 @@ function ShoppingListView() {
                 handleAddItems={handleAddItemsFromModal}
             />
 
-            {/* Budget Modal - Vanilla Implementation */}
-            {showBudgetModal && ReactDOM.createPortal(
-                <div className="modal-backdrop" onClick={() => setShowBudgetModal(false)}>
-                    <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h5 className="modal-title">Establecer Presupuesto</h5>
-                            <button className="modal-close" onClick={() => setShowBudgetModal(false)}><X size={24} /></button>
-                        </div>
-                        <div className="modal-body">
-                            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Monto del Presupuesto</label>
-                            <div style={{ display: 'flex', position: 'relative' }}>
-                                <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontWeight: 600, color: 'var(--text-secondary)' }}>$</div>
-                                <input
-                                    type="number"
-                                    className="premium-input"
-                                    style={{ paddingLeft: '32px' }}
-                                    placeholder="Ej: 500.00"
-                                    value={newBudget}
-                                    onChange={(e) => setNewBudget(e.target.value)}
-                                    autoFocus
-                                />
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button className="btn-premium btn-secondary" onClick={() => setShowBudgetModal(false)}>Cancelar</button>
-                            <button className="btn-premium btn-primary" onClick={handleBudgetUpdate}>Guardar Presupuesto</button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* Budget Modal */}
+            <BudgetModal
+                show={showBudgetModal}
+                onClose={() => setShowBudgetModal(false)}
+                value={newBudget}
+                onChange={setNewBudget}
+                onSave={handleBudgetUpdate}
+            />
 
             <PriceHistoryModal
                 show={showPriceHistoryModal}
@@ -1954,66 +1671,48 @@ function ShoppingListView() {
                 item={selectedItemForPriceHistory}
             />
 
-            {isShoppingMode && (
-                <div className="mobile-action-bar">
-                    <button className="btn-premium btn-secondary" type="button" onClick={() => setHidePurchased(!hidePurchased)}>
-                        {hidePurchased ? 'Mostrar comprados' : 'Ocultar comprados'}
-                    </button>
-                    <button className="btn-premium btn-primary" type="button" onClick={() => setShowStoreUrlModal(true)}>
-                        Agregar desde URL
-                    </button>
-                    <button className="btn-premium btn-secondary" type="button" onClick={() => setShowPreviousItemsModal(true)}>
-                        Productos recurrentes
-                    </button>
-                </div>
-            )}
 
-            {/* New Product Modal - Vanilla Implementation */}
-            {showNewProductModal && ReactDOM.createPortal(
-                <div className="modal-backdrop" onClick={() => setShowNewProductModal(false)}>
-                    <div className="modal-content" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h5 className="modal-title">Producto Nuevo</h5>
-                            <button className="modal-close" onClick={() => setShowNewProductModal(false)}><X size={24} /></button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="alert-info" style={{ marginBottom: '24px' }}>
-                                '{newItem}' parece ser un producto nuevo. Si lo deseas, puedes agregar una marca y categoría para ayudar a organizarlo.
-                            </div>
-
-                            <div style={{ marginBottom: '16px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Marca</label>
-                                <input type="text" className="premium-input" value={modalBrand} onChange={(e) => setModalBrand(e.target.value)} placeholder="Ej. Nestlé, Coca-Cola..." />
-                            </div>
-
-                            <div>
-                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Categoría</label>
-                                <input type="text" className="premium-input" value={modalCategory} onChange={(e) => setModalCategory(e.target.value)} placeholder="Ej. Lácteos, Bebidas..." />
-                            </div>
-                        </div>
-                        <div className="modal-footer" style={{ gap: '16px' }}>
-                            <button className="btn-premium btn-secondary" style={{ flex: 1, padding: '10px' }} onClick={() => {
-                                setShowNewProductModal(false);
-                                proceedWithAdd();
-                            }}>
-                                Agregar sin detalles
-                            </button>
-                            <button className="btn-premium btn-primary" style={{ flex: 1, padding: '10px' }} onClick={() => {
-                                setShowNewProductModal(false);
-                                proceedWithAdd(modalBrand, modalCategory);
-                            }}>
-                                Guardar y Agregar
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* New Product Modal */}
+            <NewProductModal
+                show={showNewProductModal}
+                onClose={() => setShowNewProductModal(false)}
+                productName={newItem}
+                brand={modalBrand}
+                onBrandChange={setModalBrand}
+                category={modalCategory}
+                onCategoryChange={setModalCategory}
+                onAddWithoutDetails={() => {
+                    setShowNewProductModal(false);
+                    proceedWithAdd();
+                }}
+                onAddWithDetails={() => {
+                    setShowNewProductModal(false);
+                    proceedWithAdd(modalBrand, modalCategory);
+                }}
+            />
 
             <ImageGalleryModal
                 show={showGalleryModal}
                 handleClose={() => setShowGalleryModal(false)}
                 handleSelectImage={handleImageSelect}
+            />
+
+            <ListSettingsSheet
+                show={showListSettings}
+                onClose={() => setShowListSettings(false)}
+                listDetails={listDetails}
+                budget={budget}
+                budgetDetails={budgetDetails}
+                budgetProgress={budgetProgress}
+                budgetVariant={budgetVariant}
+                onEditBudget={() => setShowBudgetModal(true)}
+                blame={blame}
+                newListComment={newListComment}
+                setNewListComment={setNewListComment}
+                onListCommentSubmit={handleListCommentSubmit}
+                onToggleStatus={handleListStatusChange}
+                onSaveTemplate={handleOpenSaveTemplateModal}
+                onApplyTemplates={handleOpenTemplates}
             />
 
         </div>

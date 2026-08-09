@@ -56,6 +56,9 @@ class ProductBase(BaseModel):
     store_name: Optional[str] = None
     last_price: Optional[float] = None
     is_favorite: Optional[bool] = False
+    peso_promedio: Optional[float] = None  # gramos por pieza (equivalencia unidad/peso)
+    precio_base: Optional[float] = None    # precio de referencia (por kg o por pieza)
+    precio_base_unit: Optional[str] = None  # 'kg' | 'pieza'
 
 class ProductCreate(ProductBase):
     shared_image_id: Optional[int] = None

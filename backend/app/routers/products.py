@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas, shared_images
 from ..deps import get_current_user, get_db, get_family_for_user, get_family_owner
+from ..utils import convert_to_grams, format_grams, calc_price_from_base
 
 router = APIRouter(tags=["products"])
 
@@ -236,3 +237,58 @@ async def update_product_image_from_url(
         })
 
     return product
+
+
+@router.get("/products/{product_id}/equivalencia")
+def get_product_equivalencia(
+    product_id: int,
+    cantidad: float = 1,
+    unit: str = "piezas",
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Devuelve la equivalencia de unidad→peso de un producto.
+
+    Ejemplo: cantidad=3, unit=piezas, peso_promedio=230 → { peso_g: 690, peso_formateado: '690 g' }
+    """
+    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if not current_user.is_admin:
+        get_family_for_user(product.family_id, current_user)
+
+    peso_g = convert_to_grams(cantidad, unit, product.peso_promedio)
+
+    # Precio total calculado: si hay precio_base (candado), usar el cálculo; si no,
+    # usar last_price como precio total de la cantidad consultada.
+    precio_total = None
+    if product.precio_base:
+        precio_total = calc_price_from_base(
+            cantidad, unit, product.precio_base, product.precio_base_unit, product.peso_promedio
+        )
+    elif product.last_price:
+        precio_total = product.last_price
+
+    # Precio por kg si hay peso conocido
+    precio_kg = None
+    if peso_g and precio_total:
+        precio_kg = (precio_total / peso_g) * 1000
+
+    return {
+        "product_id": product.id,
+        "name": product.name,
+        "cantidad": cantidad,
+        "unit": unit,
+        "peso_promedio": product.peso_promedio,  # g por pieza (puede ser None)
+        "peso_g": peso_g,
+        "peso_formateado": format_grams(peso_g),
+        "precio_base": product.precio_base,
+        "precio_base_unit": product.precio_base_unit,
+        "precio": precio_total,
+        "precio_por_kg": round(precio_kg, 2) if precio_kg else None,
+        "equivalencia": {
+            "1 pieza": format_grams(product.peso_promedio) if product.peso_promedio else None,
+            "100 g": None,
+        }
+    }
