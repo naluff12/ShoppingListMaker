@@ -16,6 +16,25 @@ from ..websockets import manager
 router = APIRouter(tags=["stores"])
 
 
+@router.get('/stores/search')
+async def search_store_products_endpoint(
+    q: str,
+    store: str = 'soriana',
+    limit: int = 8,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Busca productos DENTRO de una tienda con su precio real (soriana o conectores configurados)."""
+    from ..services.scraping import search_products_in_store
+    try:
+        results = await search_products_in_store(store, q, limit=min(limit, 12), db=db)
+        return {'store': store.lower(), 'results': results}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'Error buscando en {store}: {e}')
+
+
 @router.post('/stores/extract-product')
 async def extract_product_endpoint(
     request_data: dict = Body(...),
@@ -36,6 +55,29 @@ async def extract_product_endpoint(
     try:
         result = await extract_product_from_store_url(url, connector, db)
         return {'connector': connector.name if connector else None, 'data': result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/store-connectors/test-search", dependencies=[Depends(get_current_admin_user)])
+async def admin_test_store_search(
+    test_data: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Asistente: prueba la búsqueda de una tienda con la config actual (sin guardar).
+
+    test_data: {config: {...campos de búsqueda...}, q: 'arroz'}
+    Devuelve los resultados extraídos para validar antes de guardar el conector.
+    """
+    from ..services.scraping import connector_from_config, _search_generic_connector
+    config = test_data.get('config')
+    q = test_data.get('q', 'arroz')
+    if not config or not config.get('search_url'):
+        raise HTTPException(status_code=400, detail='Configura la URL de búsqueda (search_url) primero')
+    connector = connector_from_config(config)
+    try:
+        results = await _search_generic_connector(connector, q, limit=5)
+        return {'q': q, 'results': results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -110,7 +152,8 @@ async def add_item_by_store_url(
         list_id=list_id,
         comentario=item_data.get('comentario'),
         precio_estimado=extracted.get('price') or item_data.get('precio_estimado'),
-        precio_confirmado=item_data.get('precio_confirmado'),
+        # El precio extraído de la tienda es un precio real → confírmalo (si el usuario no mandó uno)
+        precio_confirmado=item_data.get('precio_confirmado') or extracted.get('price'),
         category=product.category,
         brand=product.brand
     )
@@ -202,3 +245,5 @@ async def admin_test_store_connector(
         return {'connector': connector.name if connector else None, 'data': result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+

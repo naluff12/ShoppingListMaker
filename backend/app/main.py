@@ -3,6 +3,7 @@
 Ensambla la aplicación FastAPI: lifespan (migración de esquema), CORS,
 archivos estáticos y los routers por dominio.
 """
+import json
 import logging
 import os
 import time
@@ -42,6 +43,251 @@ def ensure_database_schema():
                 conn.execute(text("ALTER TABLE products ADD COLUMN precio_base_unit VARCHAR(10) NULL"))
             conn.commit()
 
+    if inspector.has_table('image_search_configs'):
+        columns = [c['name'] for c in inspector.get_columns('image_search_configs')]
+        with engine.connect() as conn:
+            if 'result_type' not in columns:
+                conn.execute(text("ALTER TABLE image_search_configs ADD COLUMN result_type VARCHAR(20) DEFAULT 'images'"))
+            if 'json_name_path' not in columns:
+                conn.execute(text('ALTER TABLE image_search_configs ADD COLUMN json_name_path VARCHAR(100) NULL'))
+            if 'json_price_path' not in columns:
+                conn.execute(text('ALTER TABLE image_search_configs ADD COLUMN json_price_path VARCHAR(100) NULL'))
+            if 'json_description_path' not in columns:
+                conn.execute(text('ALTER TABLE image_search_configs ADD COLUMN json_description_path VARCHAR(100) NULL'))
+            if 'json_url_path' not in columns:
+                conn.execute(text('ALTER TABLE image_search_configs ADD COLUMN json_url_path VARCHAR(100) NULL'))
+            conn.commit()
+
+    if inspector.has_table('store_connector_configs'):
+        columns = [c['name'] for c in inspector.get_columns('store_connector_configs')]
+        with engine.connect() as conn:
+            for col, ddl in [
+                ('search_url', 'VARCHAR(500) NULL'),
+                ('search_params_config', 'TEXT NULL'),
+                ('search_response_type', "VARCHAR(20) NULL"),
+                ('search_list_path', 'VARCHAR(100) NULL'),
+                ('search_name_path', 'VARCHAR(100) NULL'),
+                ('search_price_path', 'VARCHAR(100) NULL'),
+                ('search_image_path', 'VARCHAR(100) NULL'),
+                ('search_url_path', 'VARCHAR(100) NULL'),
+                ('search_item_selector', 'VARCHAR(100) NULL'),
+                ('search_image_attribute', "VARCHAR(50) DEFAULT 'src'"),
+                ('price_pid_url', 'VARCHAR(500) NULL'),
+                ('price_pid_param', 'VARCHAR(50) NULL'),
+            ]:
+                if col not in columns:
+                    conn.execute(text(f'ALTER TABLE store_connector_configs ADD COLUMN {col} {ddl}'))
+            conn.commit()
+
+
+def seed_default_search_engines():
+    """Siembra los motores de búsqueda por defecto (idempotente: solo si la tabla está vacía)."""
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        if db.query(models.ImageSearchConfig).count() > 0:
+            logger.info("Search engines already seeded (%d).", db.query(models.ImageSearchConfig).count())
+            return
+        defaults = [
+            # 1) PRODUCTOS de despensa — API pública sin key (Open Food Facts)
+            dict(
+                name='OpenFoodFacts (productos)', base_url='https://world.openfoodfacts.org/cgi/search.pl',
+                result_type='products', response_type='json',
+                params_config=json.dumps([
+                    {'key': 'search_terms', 'value': '{{q}}'},
+                    {'key': 'search_simple', 'value': '1'},
+                    {'key': 'action', 'value': 'process'},
+                    {'key': 'json', 'value': '1'},
+                    {'key': 'page_size', 'value': '{{limit}}'},
+                    {'key': 'page', 'value': '{{page}}'},
+                ]),
+                results_per_page=12,
+                json_list_path='products', json_name_path='product_name',
+                json_preview_path='image_front_small_url', json_large_path='image_front_url',
+                json_description_path='generic_name', json_url_path='url',
+                is_active=True, is_default=True,
+            ),
+            # 2) Artículos/imágenes de Wikipedia ES — API pública sin key
+            dict(
+                name='Wikipedia (artículos)', base_url='https://es.wikipedia.org/w/api.php',
+                result_type='products', response_type='json',
+                params_config=json.dumps([
+                    {'key': 'action', 'value': 'query'},
+                    {'key': 'generator', 'value': 'search'},
+                    {'key': 'gsrsearch', 'value': '{{q}}'},
+                    {'key': 'gsrlimit', 'value': '{{limit}}'},
+                    {'key': 'prop', 'value': 'pageimages|extracts'},
+                    {'key': 'piprop', 'value': 'thumbnail'},
+                    {'key': 'pithumbsize', 'value': '400'},
+                    {'key': 'exintro', 'value': '1'},
+                    {'key': 'explaintext', 'value': '1'},
+                    {'key': 'format', 'value': 'json'},
+                ]),
+                results_per_page=10,
+                json_list_path='query.pages', json_name_path='title',
+                json_preview_path='thumbnail.source', json_large_path='thumbnail.source',
+                json_description_path='extract', json_url_path='canonicalurl',
+                is_active=False, is_default=False,
+            ),
+            # 3) Imágenes libres — Openverse (WordPress). No es tienda: inactivo por defecto
+            dict(
+                name='Openverse (imágenes)', base_url='https://api.openverse.org/v1/images/',
+                result_type='images', response_type='json',
+                params_config=json.dumps([
+                    {'key': 'q', 'value': '{{q}}'},
+                    {'key': 'page_size', 'value': '{{limit}}'},
+                ]),
+                results_per_page=20,
+                json_list_path='results', json_name_path='title',
+                json_preview_path='thumbnail', json_large_path='url',
+                json_url_path='foreign_landing_url',
+                is_active=False, is_default=False,
+            ),
+            # 4) Pixabay — requiere API key gratuita (ponerla en params_config)
+            dict(
+                name='Pixabay (imágenes)', base_url='https://pixabay.com/api/',
+                result_type='images', response_type='json',
+                params_config=json.dumps([
+                    {'key': 'key', 'value': 'PON_TU_API_KEY'},
+                    {'key': 'q', 'value': '{{q}}'},
+                    {'key': 'per_page', 'value': '{{limit}}'},
+                ]),
+                results_per_page=12,
+                json_list_path='hits',
+                json_preview_path='previewURL', json_large_path='largeImageURL',
+                is_active=False, is_default=False,
+            ),
+            # 5) Unsplash — requiere API key gratuita
+            dict(
+                name='Unsplash (imágenes)', base_url='https://api.unsplash.com/search/photos',
+                result_type='images', response_type='json',
+                params_config=json.dumps([
+                    {'key': 'client_id', 'value': 'PON_TU_API_KEY'},
+                    {'key': 'query', 'value': '{{q}}'},
+                    {'key': 'per_page', 'value': '{{limit}}'},
+                ]),
+                results_per_page=12,
+                json_list_path='results', json_name_path='alt_description',
+                json_preview_path='urls.small', json_large_path='urls.regular',
+                is_active=False, is_default=False,
+            ),
+            # 6) DuckDuckGo imágenes — sin key pero frágil (token vqd); útil como fallback manual
+            dict(
+                name='DuckDuckGo (imágenes)', base_url='https://duckduckgo.com/i.js',
+                result_type='images', response_type='json',
+                params_config=json.dumps([
+                    {'key': 'q', 'value': '{{q}}'},
+                    {'key': 'o', 'value': 'json'},
+                ]),
+                results_per_page=12,
+                json_list_path='results',
+                json_preview_path='thumbnail', json_large_path='image',
+                json_name_path='title',
+                is_active=False, is_default=False,
+            ),
+        ]
+        for cfg in defaults:
+            db.add(models.ImageSearchConfig(**cfg))
+        db.commit()
+        logger.info("Seeded %d default search engines.", len(defaults))
+    except Exception as e:
+        logger.warning("Could not seed search engines: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
+
+def seed_default_store_connectors():
+    """Siembra los conectores de tiendas por defecto (idempotente: solo si la tabla está vacía).
+
+    Soriana queda ACTIVA con motor de búsqueda completo (SFCC + precio por pid).
+    Las demás quedan como plantillas INACTIVAS: su search_url es un punto de partida
+    para el asistente del panel de conectores (prueba la búsqueda y ajusta paths/selectores).
+    """
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        if db.query(models.StoreConnectorConfig).count() > 0:
+            return
+        defaults = [
+            # 1) Soriana — motor completo (pipeline SFCC con precio por AJAX por pid)
+            dict(
+                name='Soriana', domain_match='soriana.com', response_type='json',
+                json_name_path='name', json_price_path='offers.price',
+                json_image_path='image',
+                search_url='https://www.soriana.com/on/demandware.store/Sites-Soriana-Site/es_MX/Search-Show?q={{q}}',
+                search_response_type='html',
+                search_item_selector='product-name',
+                price_pid_url='https://www.soriana.com/on/demandware.store/Sites-Soriana-Site/es_MX/Product-Show?pid={{pid}}&format=ajax',
+                price_pid_param='pid',
+                is_active=True, is_default=True,
+            ),
+            # 2) Walmart MX — Akamai anti-bot; plantilla para asistente
+            dict(
+                name='Walmart', domain_match='walmart.com.mx', response_type='json',
+                json_name_path='name', json_price_path='price',
+                search_url='https://www.walmart.com.mx/search?q={{q}}',
+                search_response_type='html',
+                search_item_selector='search-result-item',
+                is_active=False, is_default=False,
+            ),
+            # 3) Smart — plantilla (URL a confirmar con asistente)
+            dict(
+                name='Smart', domain_match='smart.com.mx', response_type='json',
+                json_name_path='name', json_price_path='price',
+                search_url='https://www.smart.com.mx/buscar?q={{q}}',
+                search_response_type='html',
+                search_item_selector='product-item',
+                is_active=False, is_default=False,
+            ),
+            # 4) HEB México — plantilla
+            dict(
+                name='HEB México', domain_match='heb.com.mx', response_type='json',
+                json_name_path='name', json_price_path='price',
+                search_url='https://www.heb.com.mx/busqueda?ft={{q}}',
+                search_response_type='html',
+                search_item_selector='product-tile',
+                is_active=False, is_default=False,
+            ),
+            # 5) MercadoLibre MX — plantilla (API pública bloqueada; HTML por JS)
+            dict(
+                name='MercadoLibre', domain_match='mercadolibre.com.mx', response_type='json',
+                json_name_path='title', json_price_path='price', json_image_path='thumbnail',
+                search_url='https://listado.mercadolibre.com.mx/{{q}}',
+                search_response_type='json',
+                search_list_path='results',
+                search_url_path='permalink',
+                is_active=False, is_default=False,
+            ),
+            # 6) Amazon MX — responde intermitente; plantilla con selectores HTML
+            dict(
+                name='Amazon México', domain_match='amazon.com.mx', response_type='json',
+                json_name_path='title', json_price_path='price',
+                search_url='https://www.amazon.com.mx/s?k={{q}}',
+                search_response_type='html',
+                search_item_selector='s-result-item',
+                is_active=False, is_default=False,
+            ),
+            # 7) Cyberpuerta — plantilla (tech)
+            dict(
+                name='Cyberpuerta', domain_match='cyberpuerta.mx', response_type='json',
+                json_name_path='name', json_price_path='price',
+                search_url='https://www.cyberpuerta.mx/Resultados/Listado/{{q}}',
+                search_response_type='html',
+                search_item_selector='emproduct',
+                is_active=False, is_default=False,
+            ),
+        ]
+        for cfg in defaults:
+            db.add(models.StoreConnectorConfig(**cfg))
+        db.commit()
+        logger.info("Seeded %d default store connectors.", len(defaults))
+    except Exception as e:
+        logger.warning("Could not seed store connectors: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,6 +298,8 @@ async def lifespan(app: FastAPI):
         try:
             models.Base.metadata.create_all(bind=engine)
             ensure_database_schema()
+            seed_default_search_engines()
+            seed_default_store_connectors()
             logger.info("Database tables created and schema ensured.")
             break
         except OperationalError as e:

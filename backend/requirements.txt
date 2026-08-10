@@ -12,3 +12,4 @@ pywebpush>=1.0
 cryptography
 pytz
 httpx
+curl_cffi

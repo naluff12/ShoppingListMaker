@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon, Search, Edit2 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
 import WebImageSearchModal from './WebImageSearchModal';
+import TruncatedText from './TruncatedText';
 import { API_BASE_URL } from './config';
 import { productApi } from './api';
 
@@ -133,7 +134,7 @@ const ShoppingListItem = ({
     const precioVivo = calcPrecioVivo();
 
     return (
-        <div className={`glass-panel shopping-list-item-compact ${item.status === 'comprado' ? 'item-comprado' : ''} ${isSelected ? 'item-selected' : ''}`} style={{ display: 'flex', flexDirection: 'column', padding: '8px', marginBottom: '8px', position: 'relative', zIndex: isEditing ? 1000 : 1 }}>
+        <div className={`glass-panel shopping-list-item-compact ${item.status === 'comprado' ? 'item-comprado' : ''} ${isSelected ? 'item-selected' : ''}`} style={{ display: 'flex', flexDirection: 'column', padding: '6px', marginBottom: '6px', position: 'relative', zIndex: isEditing ? 1000 : 1 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 {/* Grupo Izquierdo: Checkbox, Imagen, Nombre/Detalles */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
@@ -154,10 +155,10 @@ const ShoppingListItem = ({
                         <span className="slider round" style={{ borderRadius: '18px' }}></span>
                     </label>
                     
-                    <div style={{ width: '48px', flexShrink: 0, position: 'relative' }}>
+                    <div style={{ width: '40px', flexShrink: 0, position: 'relative' }}>
                         {item.product?.shared_image ? (
                             <>
-                                <div style={{ width: '48px', height: '48px', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
+                                <div style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
                                     <img
                                         src={getImageSrc(item.product.shared_image.file_path)}
                                         alt={item.nombre}
@@ -223,11 +224,11 @@ const ShoppingListItem = ({
                     </div>
                     
                     <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit' }} onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar detalles">
-                            {item.nombre}
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit' }} onDoubleClick={() => setEditingItem({ ...item })} title="Doble click para editar detalles">
+                            <TruncatedText text={item.nombre} maxChars={18} />
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            {item.product?.brand || 'Sin marca'} / {item.product?.category || 'Sin categoría'}
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <TruncatedText text={`${item.product?.brand || 'Sin marca'} / ${item.product?.category || 'Sin categoría'}`} maxChars={24} />
                         </div>
                         
                         {isEditing ? ReactDOM.createPortal(
@@ -434,7 +435,7 @@ const ShoppingListItem = ({
             </div>
 
             {/* Fila de controles (debajo de la imagen/detalles) */}
-            <div className="shopping-list-item-controls" style={{ display: 'flex', gap: '8px', marginTop: '10px', alignItems: 'center', position: 'relative' }} ref={actionsMenuRef}>
+            <div className="shopping-list-item-controls" style={{ display: 'flex', gap: '6px', marginTop: '6px', alignItems: 'center', position: 'relative' }} ref={actionsMenuRef}>
                 <button className="btn-premium" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--info-color)', width: '34px', height: '32px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} onClick={() => onShowItemBlame(item.id)} disabled={loadingItemBlame && showItemBlame === item.id} title="Comentarios del producto">
                     <MessageSquare size={14} />
                 </button>
@@ -451,14 +452,16 @@ const ShoppingListItem = ({
                     <MoreVertical size={14} />
                 </button>
                 {showActionsMenu && (
-                    <div className="glass-panel" style={{ position: 'absolute', right: 0, bottom: 'calc(100% + 8px)', zIndex: 200, minWidth: '180px', padding: '6px', display: 'flex', flexDirection: 'column' }}>
+                    <div className="glass-panel" style={{ position: 'absolute', right: 0, bottom: 'calc(100% + 8px)', zIndex: 200, minWidth: '180px', maxWidth: 'min(260px, calc(100vw - 24px))', padding: '6px', display: 'flex', flexDirection: 'column' }}>
                         {item.product?.shared_image && (
                             <div className="dropdown-item" onClick={handleViewClick} style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '0.9rem' }}><Eye size={14} style={{ marginRight: '10px', flexShrink: 0 }} /> Ver imagen</div>
                         )}
                         {item.product?.shared_image && (
                             <div className="dropdown-item" onClick={handleChangeClick} style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '0.9rem' }}><Camera size={14} style={{ marginRight: '10px', flexShrink: 0 }} /> Cambiar imagen</div>
                         )}
+                        {!item.product?.product_url && !item.product?.store_name && (
                         <div className="dropdown-item" onClick={() => { setShowWebSearchModal(true); setShowActionsMenu(false); }} style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '0.9rem' }}><Search size={14} style={{ marginRight: '10px', flexShrink: 0 }} /> Buscar en línea</div>
+                        )}
                         <div className="dropdown-item" onClick={handleGalleryClick} style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap', fontSize: '0.9rem' }}><ImageIcon size={14} style={{ marginRight: '10px', flexShrink: 0 }} /> De la galería</div>
                     </div>
                 )}

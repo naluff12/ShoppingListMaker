@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { Trash, MessageSquare, TrendingUp, MoreVertical, X, Check, Eye, Camera, Image as ImageIcon, Search, Edit2 } from 'lucide-react';
 import ImageUploader from './ImageUploader';
 import WebImageSearchModal from './WebImageSearchModal';
+import TruncatedText from './TruncatedText';
 import { API_BASE_URL } from './config';
 import { productApi } from './api';
 
@@ -109,7 +110,7 @@ const ShoppingItemCard = ({
     return (
         <div className={`glass-panel item-card ${item.status === 'comprado' ? 'item-comprado' : ''} ${isSelected ? 'item-selected' : ''}`}>
             <div className="item-card-header" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: '1.1rem', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nombre}</span>
+                <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: '1.1rem', textDecoration: item.status === 'comprado' ? 'line-through' : 'none', color: item.status === 'comprado' ? 'var(--text-muted)' : 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><TruncatedText text={item.nombre} maxChars={24} /></span>
                 <label className="switch" style={{ flexShrink: 0 }} title={item.status === 'comprado' ? 'Marcar como pendiente' : 'Marcar como comprado'}>
                     <input 
                         type="checkbox" 
@@ -182,13 +183,13 @@ const ShoppingItemCard = ({
                         )}
                     </div>
                     
-                    <div className="item-details" style={{ flex: 1 }}>
-                        <p style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                            {item.product?.brand || 'Sin marca'} / {item.product?.category || 'Sin categoría'}
+                    <div className="item-details" style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ margin: '0 0 8px 0', fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <TruncatedText text={`${item.product?.brand || 'Sin marca'} / ${item.product?.category || 'Sin categoría'}`} maxChars={30} />
                         </p>
                         {item.product?.store_name && (
-                            <p style={{ margin: '0 0 8px 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                                Tienda: <strong>{item.product.store_name}</strong>
+                            <p style={{ margin: '0 0 8px 0', fontSize: '0.82rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                Tienda: <TruncatedText text={item.product.store_name} maxChars={30} />
                             </p>
                         )}
                         {item.product?.product_url && (
@@ -384,14 +385,16 @@ const ShoppingItemCard = ({
                         <MoreVertical size={16} />
                     </button>
                     {showActionsMenu && (
-                        <div className="glass-panel" style={{ position: 'absolute', right: 0, bottom: 'calc(100% + 8px)', zIndex: 200, minWidth: '190px', padding: '6px', display: 'flex', flexDirection: 'column' }}>
+                        <div className="glass-panel" style={{ position: 'absolute', right: 0, bottom: 'calc(100% + 8px)', zIndex: 200, minWidth: '190px', maxWidth: 'min(260px, calc(100vw - 24px))', padding: '6px', display: 'flex', flexDirection: 'column' }}>
                             {item.product?.shared_image && (
                                 <div className="dropdown-item" onClick={handleViewClick} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Eye size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> Ver imagen</div>
                             )}
                             {item.product?.shared_image && (
                                 <div className="dropdown-item" onClick={handleChangeClick} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Camera size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> Cambiar imagen</div>
                             )}
+                            {!item.product?.product_url && !item.product?.store_name && (
                             <div className="dropdown-item" onClick={() => { setShowWebSearchModal(true); setShowActionsMenu(false); }} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><Search size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> Buscar en línea</div>
+                            )}
                             <div className="dropdown-item" onClick={handleGalleryClick} style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', cursor: 'pointer', whiteSpace: 'nowrap' }}><ImageIcon size={16} style={{ marginRight: '10px', flexShrink: 0 }} /> De la galería</div>
                         </div>
                     )}

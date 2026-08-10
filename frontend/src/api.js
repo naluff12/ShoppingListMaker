@@ -98,6 +98,8 @@ export const templateApi = {
 export const storeApi = {
     getConnectors: () => get('/api/stores/connectors?active_only=true'),
     extractProduct: (body) => post('/api/stores/extract-product', body),
+    search: (q, store = 'soriana', limit = 8) =>
+        get(`/api/stores/search?q=${encodeURIComponent(q)}&store=${encodeURIComponent(store)}&limit=${limit}`),
 };
 
 export default { listApi, productApi, familyApi, templateApi, storeApi };

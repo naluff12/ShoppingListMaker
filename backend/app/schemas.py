@@ -435,12 +435,17 @@ ListItem.model_rebuild()
 class ImageSearchConfigBase(BaseModel):
     name: str
     base_url: str
+    result_type: str = 'images'  # 'images' | 'products'
     params_config: Optional[str] = None # JSON string
     results_per_page: int = 20
     response_type: str = 'json'
     json_list_path: Optional[str] = None
     json_preview_path: Optional[str] = None
     json_large_path: Optional[str] = None
+    json_name_path: Optional[str] = None
+    json_price_path: Optional[str] = None
+    json_description_path: Optional[str] = None
+    json_url_path: Optional[str] = None
     image_selector: Optional[str] = None
     image_attribute: str = 'src'
     is_active: bool = True
@@ -469,6 +474,19 @@ class StoreConnectorConfigBase(BaseModel):
     html_image_selector: Optional[str] = None
     html_image_attribute: str = 'src'
     html_description_selector: Optional[str] = None
+    # Motor de búsqueda dentro de la tienda
+    search_url: Optional[str] = None
+    search_params_config: Optional[str] = None
+    search_response_type: Optional[str] = None
+    search_list_path: Optional[str] = None
+    search_name_path: Optional[str] = None
+    search_price_path: Optional[str] = None
+    search_image_path: Optional[str] = None
+    search_url_path: Optional[str] = None
+    search_item_selector: Optional[str] = None
+    search_image_attribute: str = 'src'
+    price_pid_url: Optional[str] = None
+    price_pid_param: Optional[str] = None
     is_active: bool = True
     is_default: bool = False
 

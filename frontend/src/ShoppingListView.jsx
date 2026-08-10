@@ -112,6 +112,13 @@ function ShoppingListView() {
     const [storePreview, setStorePreview] = useState(null);
     const [storePreviewLoading, setStorePreviewLoading] = useState(false);
     const [storePreviewError, setStorePreviewError] = useState(null);
+    // Búsqueda por tienda (precios reales de la tienda online)
+    const [storeSearchMode, setStoreSearchMode] = useState(false);
+    const [storeSearchStore, setStoreSearchStore] = useState('soriana');
+    const [storeSearchQuery, setStoreSearchQuery] = useState('');
+    const [storeSearchResults, setStoreSearchResults] = useState([]);
+    const [storeSearchLoading, setStoreSearchLoading] = useState(false);
+    const [storeSearchError, setStoreSearchError] = useState(null);
 
     const sendActivityUpdate = (action, listName) => {
         if (!sendJson || !familyId) return;
@@ -774,6 +781,50 @@ function ShoppingListView() {
         }
     };
 
+    const handleStoreSearch = async () => {
+        if (!storeSearchQuery.trim()) {
+            showToast('Escribe qué buscas (ej. arroz)', 'error');
+            return;
+        }
+        setStoreSearchLoading(true);
+        setStoreSearchResults([]);
+        setStoreSearchError(null);
+        try {
+            const data = await storeApi.search(storeSearchQuery, storeSearchStore, 8);
+            setStoreSearchResults(data.results || []);
+            if (!data.results || data.results.length === 0) {
+                setStoreSearchError(`No se encontraron productos en ${storeSearchStore} para esa búsqueda.`);
+            }
+        } catch (err) {
+            setStoreSearchError(err.message || 'Error al buscar en la tienda');
+        } finally {
+            setStoreSearchLoading(false);
+        }
+    };
+
+    const handleAddStoreResult = async (result) => {
+        setStoreUrlLoading(true);
+        try {
+            const newItem = await listApi.addByUrl({
+                list_id: listId,
+                url: result.url,
+                cantidad: newQuantity,
+                unit: newUnit,
+                comentario: newItemComment
+            });
+            setStoreSearchResults([]);
+            setStoreSearchQuery('');
+            setShowStoreUrlModal(false);
+            fetchListAndBlame();
+            fetchBudgetDetails();
+            showToast(newItem?._merged ? 'Producto ya estaba en la lista — cantidad actualizada' : `Producto agregado desde ${storeSearchStore} ($${result.price ?? '?'})`, newItem?._merged ? 'info' : 'success');
+        } catch (err) {
+            showToast(err.message || 'Error al agregar el producto', 'error');
+        } finally {
+            setStoreUrlLoading(false);
+        }
+    };
+
     const handleAddByUrl = async () => {
         if (!storeUrlInput.trim()) {
             showToast('Ingresa una URL de producto', 'error');
@@ -1229,7 +1280,80 @@ function ShoppingListView() {
                         <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px' }}>
                             <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '24px', position: 'relative' }}>
                                 <button onClick={() => setShowStoreUrlModal(false)} style={{ position: 'absolute', top: '14px', right: '14px', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '1.4rem' }}><X size={22} /></button>
-                                <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Agregar producto desde URL de tienda</h3>
+                                <h3 style={{ marginTop: 0, marginBottom: '16px' }}>Agregar producto de tienda</h3>
+                                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: 'rgba(255,255,255,0.04)', padding: '4px', borderRadius: '10px' }}>
+                                    <button type="button" onClick={() => setStoreSearchMode(false)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', background: !storeSearchMode ? 'var(--primary-color)' : 'transparent', color: !storeSearchMode ? '#fff' : 'var(--text-secondary)' }}>
+                                        Pegar URL
+                                    </button>
+                                    <button type="button" onClick={() => setStoreSearchMode(true)} style={{ flex: 1, padding: '8px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', background: storeSearchMode ? 'var(--primary-color)' : 'transparent', color: storeSearchMode ? '#fff' : 'var(--text-secondary)' }}>
+                                        🏬 Buscar en tienda
+                                    </button>
+                                </div>
+
+                                {storeSearchMode && (
+                                    <div style={{ marginBottom: '16px' }}>
+                                        <p style={{ margin: '0 0 10px 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                                            Busca el producto en la tienda online y agrégalo con su <strong>precio real</strong>.
+                                        </p>
+                                        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                                            <select
+                                                className="premium-input"
+                                                value={storeSearchStore}
+                                                onChange={(e) => { setStoreSearchStore(e.target.value); setStoreSearchResults([]); setStoreSearchError(null); }}
+                                                style={{ flex: 1, minWidth: '150px' }}
+                                            >
+                                                <option value="soriana">🏬 Soriana</option>
+                                                {storeConnectors.filter(c => c.search_url && c.is_active).map(c => (
+                                                    <option key={c.id} value={c.name}>{c.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                                            <input
+                                                type="text"
+                                                className="premium-input"
+                                                placeholder="Ej. arroz, leche, jabón..."
+                                                value={storeSearchQuery}
+                                                onChange={(e) => setStoreSearchQuery(e.target.value)}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleStoreSearch()}
+                                                style={{ flex: 1 }}
+                                            />
+                                            <button className="btn-premium btn-primary" onClick={handleStoreSearch} disabled={storeSearchLoading} style={{ padding: '10px 18px' }}>
+                                                {storeSearchLoading ? 'Buscando...' : 'Buscar'}
+                                            </button>
+                                        </div>
+                                        {storeSearchError && (
+                                            <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(220, 38, 38, 0.12)', color: 'var(--danger-color)', marginBottom: '12px', fontSize: '0.9rem' }}>
+                                                {storeSearchError}
+                                            </div>
+                                        )}
+                                        {storeSearchResults.length > 0 && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '340px', overflowY: 'auto', paddingRight: '4px' }}>
+                                                {storeSearchResults.map((r, i) => (
+                                                    <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '10px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(148, 163, 184, 0.12)' }}>
+                                                        {r.image_url ? (
+                                                            <img src={r.image_url} alt={r.name} style={{ width: '52px', height: '52px', objectFit: 'cover', borderRadius: '8px', flexShrink: 0 }} />
+                                                        ) : (
+                                                            <div style={{ width: '52px', height: '52px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🛒</div>
+                                                        )}
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <div style={{ fontWeight: 600, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</div>
+                                                            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--success-color)' }}>
+                                                                {r.price != null ? `$${r.price.toFixed(2)}` : 'Precio no disponible'}
+                                                            </div>
+                                                        </div>
+                                                        <button className="btn-premium btn-primary" onClick={() => handleAddStoreResult(r)} disabled={storeUrlLoading} style={{ padding: '8px 14px', fontSize: '0.82rem', flexShrink: 0 }}>
+                                                            {storeUrlLoading ? '...' : 'Agregar'}
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {!storeSearchMode && (
+                                <>
                                 <p style={{ margin: '0 0 16px 0', color: 'var(--text-secondary)' }}>Pega la URL del producto en la tienda online y el sistema intentará extraer nombre, precio e imagen.</p>
                                 <input
                                     type="text"
@@ -1298,6 +1422,8 @@ function ShoppingListView() {
                                             )}
                                         </div>
                                     </div>
+                                )}
+                                </>
                                 )}
                             </div>
                         </div>

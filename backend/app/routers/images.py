@@ -4,6 +4,7 @@ import re
 from typing import List, Optional
 
 import httpx
+from curl_cffi.requests import AsyncSession
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -83,43 +84,80 @@ async def search_images(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    """Proxies image search requests using configurable engines."""
+    """Proxies búsquedas de imágenes/productos con motores configurables.
+
+    - Si engine_id viene, usa SOLO ese motor.
+    - Si no, prueba los motores activos en orden (default primero) y devuelve
+      el primer motor que dé resultados (fallback self-healing).
+    """
+    from ..services.scraping import DEFAULT_HEADERS, extract_products_from_response
+
+    engines = []
     if engine_id:
-        config = crud.get_image_search_config(db, engine_id)
+        cfg = crud.get_image_search_config(db, engine_id)
+        if cfg and cfg.is_active:
+            engines = [cfg]
     else:
-        config = crud.get_default_image_search_config(db)
+        all_active = crud.get_image_search_configs(db, active_only=True)
+        # Default primero, luego por nombre
+        engines = sorted(all_active, key=lambda c: (not c.is_default, c.name))
 
-    if not config:
-        # Fallback to mock search if no config exists
-        return []
+    if not engines:
+        return {"engine": None, "result_type": "images", "results": [], "attempted": []}
 
-    parsed_base_url = _process_string_with_vars(config.base_url, q, {
-        "page": page,
-        "limit": config.results_per_page or 20,
-        "start": (page - 1) * (config.results_per_page or 20),
-        "offset": (page - 1) * (config.results_per_page or 20),
-        "end": (page - 1) * (config.results_per_page or 20) + (config.results_per_page or 20),
-    })
-    params = _build_search_params(config, q, page)
+    attempted = []
+    for config in engines:
+        try:
+            parsed_base_url = _process_string_with_vars(config.base_url, q, {
+                "page": page,
+                "limit": config.results_per_page or 20,
+                "start": (page - 1) * (config.results_per_page or 20),
+                "offset": (page - 1) * (config.results_per_page or 20),
+                "end": (page - 1) * (config.results_per_page or 20) + (config.results_per_page or 20),
+            })
+            params = _build_search_params(config, q, page)
 
-    try:
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            response = await client.get(parsed_base_url, params=params, timeout=15.0)
+            # Fingerprint TLS de Chrome para motores normales; Openverse requiere
+            # sesión sin impersonate + Accept JSON (su API es pública y no necesita fingir)
+            if 'openverse.org' in config.base_url:
+                async with AsyncSession(timeout=15.0) as client:
+                    response = await client.get(parsed_base_url, params=params, headers={'Accept': 'application/json', 'User-Agent': 'ShoppingListMaker/1.0'})
+            else:
+                async with AsyncSession(impersonate='chrome', timeout=15.0) as client:
+                    response = await client.get(parsed_base_url, params=params)
             response.raise_for_status()
 
             extraction_config = {
                 "json_list_path": config.json_list_path,
+                "json_name_path": config.json_name_path,
+                "json_price_path": config.json_price_path,
+                "json_description_path": config.json_description_path,
+                "json_url_path": config.json_url_path,
                 "json_preview_path": config.json_preview_path,
                 "json_large_path": config.json_large_path,
                 "image_selector": config.image_selector,
                 "image_attribute": config.image_attribute,
             }
 
-            return extract_images_from_client_response(config.response_type, response.text, extraction_config)
+            if config.result_type == 'products':
+                results = extract_products_from_response(config.response_type, response.text, extraction_config)
+            else:
+                results = extract_images_from_client_response(config.response_type, response.text, extraction_config)
 
-    except Exception as e:
-        print(f"Error in dynamic search: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+            if results:
+                return {
+                    "engine": config.name,
+                    "result_type": config.result_type,
+                    "results": results,
+                    "attempted": attempted + [config.name],
+                }
+            attempted.append(config.name)
+        except Exception as e:
+            print(f"Engine '{config.name}' failed: {e}")
+            attempted.append(config.name)
+            continue
+
+    return {"engine": None, "result_type": "images", "results": [], "attempted": attempted}
 
 
 @router.get("/images/gallery", response_model=List[schemas.SharedImage])

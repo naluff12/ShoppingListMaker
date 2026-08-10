@@ -392,17 +392,26 @@
 .item-text {
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 
 .item-name {
     font-size: 1.2rem;
     font-weight: 600;
     color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .item-subtitle {
     font-size: 0.9rem;
     color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .shopping-controls {
