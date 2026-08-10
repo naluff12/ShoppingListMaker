@@ -1,0 +1,103 @@
+/* Panel lateral de la familia: overlay + contenido deslizante. */
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1200;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sidebar-content {
+  width: min(420px, 100%);
+  height: 100%;
+  background: var(--bg-color, #0d1117);
+  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  animation: sidebar-in 0.22s ease;
+}
+
+@keyframes sidebar-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.sidebar-close-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-close-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Tabs del sidebar */
+.sidebar-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.sidebar-tab.active {
+  background: rgba(59, 130, 246, 0.18);
+  color: var(--primary-color);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.sidebar-header h3 {
+  margin: 0;
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* En móviles el panel ocupa todo el ancho */
+@media (max-width: 480px) {
+  .sidebar-overlay {
+    justify-content: stretch;
+  }
+  .sidebar-content {
+    width: 100%;
+  }
+}

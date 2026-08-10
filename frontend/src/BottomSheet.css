@@ -1,0 +1,97 @@
+/* Bottom sheet móvil: overlay + panel deslizable desde abajo. */
+
+.bottom-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: sheet-fade 0.2s ease;
+}
+
+@keyframes sheet-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.bottom-sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 85vh;
+  background: var(--bg-secondary, #161b22);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  animation: sheet-up 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  overflow: hidden;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.bottom-sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 10px auto 0;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px 8px;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.bottom-sheet-body {
+  padding: 8px 20px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Fila de configuración dentro del sheet */
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* En desktop el sheet se ve centrado */
+@media (min-width: 769px) {
+  .bottom-sheet-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+  .bottom-sheet {
+    border-radius: 20px;
+    max-height: 80vh;
+  }
+}

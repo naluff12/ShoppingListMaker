@@ -2,3 +2,6 @@
 /uploads/images/*
 package-lock.json
 .env
+docker-compose.override.yml
+__pycache__/
+*.pyc

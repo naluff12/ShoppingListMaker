@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Minus, Check, ShoppingCart, Info, Clock, Save } from 'lucide-react';
 import { API_BASE_URL } from './config';
+import TruncatedText from './TruncatedText';
 
 const ShoppingModeItem = ({ 
     item, 
@@ -123,8 +124,12 @@ const ShoppingModeItem = ({
                     />
                 </div>
                 <div className="item-text">
-                    <span className="item-name">{item.nombre}</span>
-                    <span className="item-subtitle">{item.product?.brand || 'Sin marca'}</span>
+                    <span className="item-name" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                        <TruncatedText text={item.nombre} maxChars={24} />
+                    </span>
+                    <span className="item-subtitle" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                        <TruncatedText text={item.product?.brand || 'Sin marca'} maxChars={30} />
+                    </span>
                 </div>
             </div>
 

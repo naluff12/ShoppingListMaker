@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Lock, AlertCircle, CheckCircle, Save } from 'lucide-react';
 import { API_BASE_URL } from './config';
+import PushNotificationToggle from './PushNotificationToggle.jsx';
 
 function UserProfile() {
   const [user, setUser] = useState(null);
@@ -163,6 +164,8 @@ function UserProfile() {
           </div>
         </form>
       </div>
+
+      <PushNotificationToggle user={user} />
 
       <div className="glass-panel" style={{ padding: '32px' }}>
         <h3 style={{ fontSize: '1.5rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--danger-color)' }}>

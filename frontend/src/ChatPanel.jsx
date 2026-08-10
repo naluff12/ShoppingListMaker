@@ -204,25 +204,36 @@ function ChatPanel({ familyId, websocketMessage, sendWsEvent, isConnected, priva
 
             {chatMode === 'private' && (
                 <>
-                    <div className="chat-private-member-list" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '12px', marginBottom: '12px' }}>
-                        {privateMembers.map((member) => (
-                            <button
-                                key={member.id}
-                                type="button"
-                                className={`btn-premium btn-compact ${privateChatRecipient?.id === member.id ? 'btn-primary' : 'btn-secondary'}`}
-                                onClick={() => onSelectPrivateRecipient(member)}
-                                style={{ whiteSpace: 'nowrap' }}
-                            >
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                    <Lock size={14} /> {member.nombre || member.username}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                    {!privateChatRecipient && (
-                        <div style={{ marginBottom: '12px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                            Selecciona un miembro para iniciar el chat privado.
+                    {privateMembers.length === 0 ? (
+                        <div style={{ marginBottom: '12px', padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                            No hay otros miembros en tu familia para un chat privado.
                         </div>
+                    ) : (
+                        <>
+                            <div style={{ marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                {privateChatRecipient ? `Chat con ${privateChatRecipient.nombre || privateChatRecipient.username}` : 'Elige a quién escribirle:'}
+                            </div>
+                            <div className="chat-private-member-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                                {privateMembers.map((member) => (
+                                    <button
+                                        key={member.id}
+                                        type="button"
+                                        className={`btn-premium btn-compact ${privateChatRecipient?.id === member.id ? 'btn-primary' : 'btn-secondary'}`}
+                                        onClick={() => onSelectPrivateRecipient(member)}
+                                        style={{ justifyContent: 'flex-start', width: '100%', padding: '10px 14px' }}
+                                    >
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+                                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: member.is_online ? 'var(--success-color)' : 'var(--text-muted)', flexShrink: 0 }} />
+                                            <span style={{ flex: 1, textAlign: 'left' }}>{member.nombre || member.username}</span>
+                                            <span style={{ fontSize: '0.78rem', color: member.is_online ? 'var(--success-color)' : 'var(--text-muted)' }}>
+                                                {member.is_online ? 'En línea' : 'Desconectado'}
+                                            </span>
+                                            <Lock size={14} style={{ flexShrink: 0 }} />
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </>
             )}

@@ -1,8 +1,45 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Optional, TypeVar, Generic
+from urllib.parse import urlparse
 from datetime import date, datetime
+import re
 
 T = TypeVar('T')
+
+_WEBPUSH_B64 = re.compile(r'^[A-Za-z0-9_-]+$')
+
+
+def _validate_webpush_key(value: str, field_name: str) -> str:
+    if not value or len(value) > 512 or not _WEBPUSH_B64.fullmatch(value):
+        raise ValueError(f'{field_name} no tiene un formato Web Push válido')
+    return value
+
+
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str = Field(min_length=16, max_length=256)
+    auth: str = Field(min_length=8, max_length=256)
+
+    @field_validator('p256dh', 'auth')
+    @classmethod
+    def validate_key(cls, value: str, info):
+        return _validate_webpush_key(value, info.field_name)
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str = Field(min_length=20, max_length=2048)
+    keys: PushSubscriptionKeys
+
+    @field_validator('endpoint')
+    @classmethod
+    def validate_endpoint(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme != 'https' or not parsed.netloc:
+            raise ValueError('El endpoint push debe ser una URL HTTPS válida')
+        return value
+
+
+class PushSubscriptionResponse(BaseModel):
+    subscribed: bool
 
 class Page(BaseModel, Generic[T]):
     items: List[T]
@@ -56,6 +93,9 @@ class ProductBase(BaseModel):
     store_name: Optional[str] = None
     last_price: Optional[float] = None
     is_favorite: Optional[bool] = False
+    peso_promedio: Optional[float] = None  # gramos por pieza (equivalencia unidad/peso)
+    precio_base: Optional[float] = None    # precio de referencia (por kg o por pieza)
+    precio_base_unit: Optional[str] = None  # 'kg' | 'pieza'
 
 class ProductCreate(ProductBase):
     shared_image_id: Optional[int] = None
@@ -432,12 +472,17 @@ ListItem.model_rebuild()
 class ImageSearchConfigBase(BaseModel):
     name: str
     base_url: str
+    result_type: str = 'images'  # 'images' | 'products'
     params_config: Optional[str] = None # JSON string
     results_per_page: int = 20
     response_type: str = 'json'
     json_list_path: Optional[str] = None
     json_preview_path: Optional[str] = None
     json_large_path: Optional[str] = None
+    json_name_path: Optional[str] = None
+    json_price_path: Optional[str] = None
+    json_description_path: Optional[str] = None
+    json_url_path: Optional[str] = None
     image_selector: Optional[str] = None
     image_attribute: str = 'src'
     is_active: bool = True
@@ -466,6 +511,19 @@ class StoreConnectorConfigBase(BaseModel):
     html_image_selector: Optional[str] = None
     html_image_attribute: str = 'src'
     html_description_selector: Optional[str] = None
+    # Motor de búsqueda dentro de la tienda
+    search_url: Optional[str] = None
+    search_params_config: Optional[str] = None
+    search_response_type: Optional[str] = None
+    search_list_path: Optional[str] = None
+    search_name_path: Optional[str] = None
+    search_price_path: Optional[str] = None
+    search_image_path: Optional[str] = None
+    search_url_path: Optional[str] = None
+    search_item_selector: Optional[str] = None
+    search_image_attribute: str = 'src'
+    price_pid_url: Optional[str] = None
+    price_pid_param: Optional[str] = None
     is_active: bool = True
     is_default: bool = False
 

@@ -43,6 +43,7 @@ class User(Base):
     blame = relationship("Blame", back_populates="user")
     items_creados = relationship("ListItem", back_populates="creado_por")
     notifications = relationship("Notification", foreign_keys='[Notification.user_id]', back_populates="user")
+    push_subscriptions = relationship("PushSubscription", back_populates="user", cascade="all, delete-orphan")
 
 class Calendar(Base):
     __tablename__ = 'calendars'
@@ -127,6 +128,9 @@ class Product(Base):
     product_url = Column(String(255), nullable=True)
     store_name = Column(String(100), nullable=True)
     last_price = Column(Float, nullable=True)
+    peso_promedio = Column(Float, nullable=True)  # gramos por pieza (equivalencia unidad/peso)
+    precio_base = Column(Float, nullable=True)     # precio de referencia (por kg o por pieza)
+    precio_base_unit = Column(String(10), nullable=True)  # 'kg' | 'pieza'
     created_at = Column(DateTime, default=tz_util.now)
     updated_at = Column(DateTime, default=tz_util.now, onupdate=tz_util.now)
 
@@ -247,6 +251,10 @@ class ImageSearchConfig(Base):
     name = Column(String(100), nullable=False)
     base_url = Column(String(255), nullable=False)
     
+    # 'images' = solo imágenes (comportamiento original)
+    # 'products' = productos con nombre/precio/imagen/descripción/url
+    result_type = Column(Enum('images', 'products', name='search_result_type', native_enum=False), default='images')
+    
     # Dynamic parameters configuration (JSON string)
     # Format: [{"key": "q", "value": "{{q}}"}, {"key": "start", "value": "{{start}}"}, ...]
     params_config = Column(Text, nullable=True) 
@@ -258,6 +266,11 @@ class ImageSearchConfig(Base):
     json_list_path = Column(String(100), nullable=True) 
     json_preview_path = Column(String(100), nullable=True) 
     json_large_path = Column(String(100), nullable=True) 
+    # For products: paths a nombre/precio/descripción/url dentro de cada item
+    json_name_path = Column(String(100), nullable=True)
+    json_price_path = Column(String(100), nullable=True)
+    json_description_path = Column(String(100), nullable=True)
+    json_url_path = Column(String(100), nullable=True)
     
     # For HTML
     image_selector = Column(String(100), nullable=True) 
@@ -282,7 +295,41 @@ class StoreConnectorConfig(Base):
     html_image_selector = Column(String(100), nullable=True)
     html_image_attribute = Column(String(50), default='src')
     html_description_selector = Column(String(100), nullable=True)
+
+    # --- Motor de BÚSQUEDA dentro de la tienda (productos con precio) ---
+    # URL de búsqueda con plantillas {{q}} y {{limit}} (ej. .../buscar?q={{q}})
+    search_url = Column(String(500), nullable=True)
+    search_params_config = Column(Text, nullable=True)  # JSON [{"key":"q","value":"{{q}}"}, ...]
+    search_response_type = Column(Enum('json', 'html', name='store_search_response_type', native_enum=False), nullable=True)
+    # JSON: rutas dentro de la lista de resultados
+    search_list_path = Column(String(100), nullable=True)
+    search_name_path = Column(String(100), nullable=True)
+    search_price_path = Column(String(100), nullable=True)
+    search_image_path = Column(String(100), nullable=True)
+    search_url_path = Column(String(100), nullable=True)
+    # HTML: selector del item y atributos
+    search_item_selector = Column(String(100), nullable=True)
+    search_image_attribute = Column(String(50), default='src')
+    # Precio por producto (tiendas SFCC-style que cargan precio por AJAX):
+    # plantilla con {{pid}} (ej. .../Product-Show?pid={{pid}}&format=ajax)
+    price_pid_url = Column(String(500), nullable=True)
+    price_pid_param = Column(String(50), nullable=True)  # nombre del parámetro (ej. 'pid')
+
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, default=tz_util.now)
+
+
+class PushSubscription(Base):
+    """Suscripción Web Push asociada a un usuario y dispositivo."""
+    __tablename__ = 'push_subscriptions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(Text, nullable=False)
+    auth = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=tz_util.now)
+
+    user = relationship("User", back_populates="push_subscriptions")
 

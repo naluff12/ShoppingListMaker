@@ -6,6 +6,8 @@ import { API_BASE_URL } from './config';
 const WebImageSearchModal = ({ show, handleClose, productName, productId, onImageSelected }) => {
     const [query, setQuery] = useState(productName || '');
     const [results, setResults] = useState([]);
+    const [resultEngine, setResultEngine] = useState(null);
+    const [resultType, setResultType] = useState('images');
     const [engines, setEngines] = useState([]);
     const [selectedEngineId, setSelectedEngineId] = useState('');
     const [page, setPage] = useState(1);
@@ -80,10 +82,14 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
             });
             clearTimeout(timeoutId);
             if (response.ok) {
-                setResults(await response.json());
+                const data = await response.json();
+                // Nuevo contrato: {engine, result_type, results, attempted} | viejo: array
+                setResults(Array.isArray(data) ? data : (data.results || []));
+                setResultEngine(!Array.isArray(data) ? (data.engine || null) : null);
+                setResultType(!Array.isArray(data) ? (data.result_type || 'images') : 'images');
                 setPage(targetPage);
             } else {
-                setError('Error al buscar imágenes. Intenta de nuevo.');
+                setError('Error al buscar. Intenta de nuevo.');
             }
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -196,7 +202,7 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px', gap: '16px' }}>
                             <div style={{ width: 48, height: 48, border: '4px solid rgba(255,255,255,0.35)', borderTopColor: 'var(--primary-color)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                             <div style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: '1.1rem' }}>
-                                {loadingStage === 'searching' && 'Buscando imágenes...'}
+                                {loadingStage === 'searching' && 'Buscando...'}
                                 {loadingStage === 'downloading' && 'Procesando y guardando imagen...'}
                                 {!loadingStage && 'Cargando...'}
                             </div>
@@ -209,17 +215,47 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
                         </div>
                     )}
 
+                    {resultEngine && !loading && results.length > 0 && (
+                        <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span className="badge" style={{ background: 'rgba(59,130,246,0.12)', color: 'var(--info-color)', padding: '4px 10px', fontSize: '0.75rem' }}>
+                                Motor: {resultEngine}
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                {resultType === 'products' ? 'Resultados de producto' : 'Resultados de imagen'} · toca uno para usar su imagen
+                            </span>
+                        </div>
+                    )}
+
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
                         {!loading && results.map(img => (
                             <div 
                                 key={img.id} 
                                 className="glass-panel" 
-                                style={{ padding: '4px', cursor: 'pointer', border: '2px solid transparent', transition: 'all 0.2s' }}
-                                onClick={() => handleSelectImage(img.largeImageURL)}
-                                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--primary-color)'}
+                                style={{ padding: '4px', cursor: 'pointer', border: '2px solid transparent', transition: 'all 0.2s', display: 'flex', flexDirection: 'column' }}
+                                onClick={() => (img.largeImageURL || img.previewURL) && handleSelectImage(img.largeImageURL || img.previewURL)}
+                                onMouseEnter={e => e.currentTarget.style.borderColor = (img.largeImageURL || img.previewURL) ? 'var(--primary-color)' : 'transparent'}
                                 onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}
                             >
-                                <img src={img.previewURL} alt="Resultado" style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '4px' }} />
+                                {(img.previewURL || img.largeImageURL) ? (
+                                    <img src={img.previewURL || img.largeImageURL} alt={img.name || 'Resultado'} style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '4px' }} />
+                                ) : (
+                                    <div style={{ width: '100%', height: '100px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: 'var(--text-muted)' }}>Sin imagen</div>
+                                )}
+                                {img.name && (
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={img.name}>
+                                        {img.name}
+                                    </div>
+                                )}
+                                {img.price != null && (
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--success-color)', fontWeight: 600, marginTop: '2px' }}>
+                                        ${img.price}
+                                    </div>
+                                )}
+                                {img.description && (
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                        {img.description}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -247,7 +283,7 @@ const WebImageSearchModal = ({ show, handleClose, productName, productId, onImag
 
                     {!loading && results.length === 0 && query && (
                         <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>
-                            No se encontraron imágenes. Intenta con otro término.
+                            No se encontraron resultados. Intenta con otro término o cambia de motor.
                         </div>
                     )}
                 </div>
