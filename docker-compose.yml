@@ -44,5 +44,15 @@ services:
     depends_on:
       - backend
 
+  # Navegador headless (Playwright) para tiendas que requieren JS/anti-bot
+  # (Walmart/Akamai, MercadoLibre, Smart, HEB, Cyberpuerta, Amazon).
+  browser:
+    build: ./browser
+    container_name: browser_shopping
+    restart: unless-stopped
+    expose:
+      - "8580"
+    shm_size: "1gb"
+
 volumes:
   db_data:

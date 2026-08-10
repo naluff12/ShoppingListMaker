@@ -249,24 +249,24 @@ def seed_default_store_connectors():
                 search_item_selector='product-tile',
                 is_active=False, is_default=False,
             ),
-            # 5) MercadoLibre MX — plantilla (API pública bloqueada; HTML por JS)
+            # 5) MercadoLibre MX — HTML renderizado por JS: activo con driver + navegador headless
             dict(
                 name='MercadoLibre', domain_match='mercadolibre.com.mx', response_type='json',
                 json_name_path='title', json_price_path='price', json_image_path='thumbnail',
                 search_url='https://listado.mercadolibre.com.mx/{{q}}',
-                search_response_type='json',
-                search_list_path='results',
+                search_response_type='html',
+                search_item_selector='poly-component',
                 search_url_path='permalink',
-                is_active=False, is_default=False,
+                is_active=True, is_default=False,
             ),
-            # 6) Amazon MX — responde intermitente; plantilla con selectores HTML
+            # 6) Amazon MX — HTML renderizado (intermitente): driver por data-asin + navegador
             dict(
                 name='Amazon México', domain_match='amazon.com.mx', response_type='json',
                 json_name_path='title', json_price_path='price',
                 search_url='https://www.amazon.com.mx/s?k={{q}}',
                 search_response_type='html',
                 search_item_selector='s-result-item',
-                is_active=False, is_default=False,
+                is_active=True, is_default=False,
             ),
             # 7) Cyberpuerta — plantilla (tech)
             dict(

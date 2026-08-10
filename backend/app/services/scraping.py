@@ -6,6 +6,7 @@ desde los routers de imágenes y tiendas sin duplicación.
 import html
 import json
 import re
+import os
 import asyncio
 import random
 from html.parser import HTMLParser
@@ -492,119 +493,138 @@ def resolve_store_connector(db, url):
             return c
     return crud.get_default_store_connector(db)
 
-
 async def extract_product_from_store_url(url: str, connector: Optional[StoreConnectorConfig], db):
     if not url:
         raise ValueError('URL is required')
 
-    response = await fetch_url_with_retry(url)
-    text = response.text
+    def parse(text: str) -> dict:
+        # Self-healing: si la tienda nos bloqueó (challenge/captcha), se avisa
+        # claro al final; aquí solo se parsea el HTML que recibimos.
+        blocked_signal = detect_antiblock(text)
+        product_name = None
+        price = None
+        image_url = None
+        description = None
+        store_name = connector.name if connector else None
 
-    # Self-healing: si la tienda nos bloqueó (challenge/captcha), avisar claro
-    blocked_signal = detect_antiblock(text)
-    if blocked_signal:
-        raise ValueError(
-            f"La tienda solicitó verificación anti-bot (detectado: '{blocked_signal}'). "
-            f"Prueba con otra tienda o agrega el producto manualmente."
-        )
+        # 1) JSON-LD (schema.org) — fuente más confiable en tiendas grandes
+        jsonld = extract_jsonld_products(text)
+        if jsonld:
+            product_name = jsonld[0].get('name')
+            price = jsonld[0].get('price')
+            image_url = jsonld[0].get('image_url')
+            description = jsonld[0].get('description')
 
-    product_name = None
-    price = None
-    image_url = None
-    description = None
-    store_name = connector.name if connector else None
+        # 2) Microdatos (itemprop)
+        if not (product_name and price):
+            micro = extract_microdata_products(text)
+            if micro:
+                product_name = product_name or micro[0].get('name')
+                price = price or micro[0].get('price')
+                image_url = image_url or micro[0].get('image_url')
 
-    # 1) JSON-LD (schema.org) — fuente más confiable en tiendas grandes
-    jsonld = extract_jsonld_products(text)
-    if jsonld:
-        product_name = jsonld[0].get('name')
-        price = jsonld[0].get('price')
-        image_url = jsonld[0].get('image_url')
-        description = jsonld[0].get('description')
+        # 3) Conector configurado (JSON paths)
+        if connector and connector.response_type == 'json':
+            try:
+                json_data = json.loads(text)
+                product_name = product_name or extract_value_from_json(json_data, connector.json_name_path)
+                price = price or normalize_price_string(extract_value_from_json(json_data, connector.json_price_path))
+                image_url = image_url or extract_value_from_json(json_data, connector.json_image_path)
+                description = description or extract_value_from_json(json_data, connector.json_description_path)
+            except Exception:
+                pass
 
-    # 2) Microdatos (itemprop)
-    if not (product_name and price):
-        micro = extract_microdata_products(text)
-        if micro:
-            product_name = product_name or micro[0].get('name')
-            price = price or micro[0].get('price')
-            image_url = image_url or micro[0].get('image_url')
+        # 4) Selectores HTML del conector
+        if not product_name and connector and connector.html_name_selector:
+            names = extract_text_from_html(connector.html_name_selector, text, attr='text')
+            product_name = names[0] if names else None
 
-    # 3) Conector configurado (JSON paths)
-    if connector and connector.response_type == 'json':
-        try:
-            json_data = json.loads(text)
-            product_name = product_name or extract_value_from_json(json_data, connector.json_name_path)
-            price = price or normalize_price_string(extract_value_from_json(json_data, connector.json_price_path))
-            image_url = image_url or extract_value_from_json(json_data, connector.json_image_path)
-            description = description or extract_value_from_json(json_data, connector.json_description_path)
-        except Exception:
-            pass
+        if not price and connector and connector.html_price_selector:
+            values = extract_text_from_html(connector.html_price_selector, text, attr='text')
+            price = normalize_price_string(values[0]) if values else None
 
-    # 4) Selectores HTML del conector
-    if not product_name and connector and connector.html_name_selector:
-        names = extract_text_from_html(connector.html_name_selector, text, attr='text')
-        product_name = names[0] if names else None
+        if not image_url and connector and connector.html_image_selector:
+            values = extract_text_from_html(connector.html_image_selector, text, attr=connector.html_image_attribute or 'src')
+            image_url = values[0] if values else None
 
-    if not price and connector and connector.html_price_selector:
-        values = extract_text_from_html(connector.html_price_selector, text, attr='text')
-        price = normalize_price_string(values[0]) if values else None
+        if not description and connector and connector.html_description_selector:
+            values = extract_text_from_html(connector.html_description_selector, text, attr='text')
+            description = values[0] if values else None
 
-    if not image_url and connector and connector.html_image_selector:
-        values = extract_text_from_html(connector.html_image_selector, text, attr=connector.html_image_attribute or 'src')
-        image_url = values[0] if values else None
-
-    if not description and connector and connector.html_description_selector:
-        values = extract_text_from_html(connector.html_description_selector, text, attr='text')
-        description = values[0] if values else None
-
-    # 5) Fallback genérico: meta tags → title → primer <img> → regex de precio
-    if not product_name:
-        product_name = extract_meta_value(text, 'og:title') or extract_meta_value(text, 'twitter:title')
+        # 5) Fallback genérico: meta tags → title → primer <img> → regex de precio
         if not product_name:
-            title_match = re.search(r'<title>(.*?)</title>', text, re.IGNORECASE | re.DOTALL)
-            if title_match:
-                product_name = title_match.group(1).strip()
-        if product_name:
-            product_name = html.unescape(product_name)
-            # Limpiar sufijos de tienda: "Producto | Gran Barata", "Producto - Walmart"
-            for sep in (' | ', ' - ', ' — '):
-                if sep in product_name:
-                    parts = product_name.split(sep)
-                    # El sufijo típico de tienda es corto y sin dígitos
-                    if len(parts) > 1 and len(parts[-1]) <= 30 and not re.search(r'\d', parts[-1]):
-                        product_name = parts[0].strip()
-                    break
+            product_name = extract_meta_value(text, 'og:title') or extract_meta_value(text, 'twitter:title')
+            if not product_name:
+                title_match = re.search(r'<title>(.*?)</title>', text, re.IGNORECASE | re.DOTALL)
+                if title_match:
+                    product_name = title_match.group(1).strip()
+            if product_name:
+                product_name = html.unescape(product_name)
+                # Limpiar sufijos de tienda: "Producto | Gran Barata", "Producto - Walmart"
+                for sep in (' | ', ' - ', ' — '):
+                    if sep in product_name:
+                        parts = product_name.split(sep)
+                        # El sufijo típico de tienda es corto y sin dígitos
+                        if len(parts) > 1 and len(parts[-1]) <= 30 and not re.search(r'\d', parts[-1]):
+                            product_name = parts[0].strip()
+                        break
 
-    if not image_url:
-        image_url = extract_meta_value(text, 'og:image') or extract_meta_value(text, 'twitter:image')
         if not image_url:
-            img_matches = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', text, re.IGNORECASE)
-            image_url = img_matches[0] if img_matches else None
+            image_url = extract_meta_value(text, 'og:image') or extract_meta_value(text, 'twitter:image')
+            if not image_url:
+                img_matches = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', text, re.IGNORECASE)
+                image_url = img_matches[0] if img_matches else None
 
-    if not price:
-        # Algunas tiendas exponen el precio en meta tags
-        price = (normalize_price_string(extract_meta_value(text, 'og:price:amount'))
-                 or normalize_price_string(extract_meta_value(text, 'product:price:amount'))
-                 or normalize_price_string(extract_meta_value(text, 'og:price')))
         if not price:
-            price_match = re.search(r'[\$€¥]\s*\d+[\d,\.]*', text)
-            price = normalize_price_string(price_match.group(0) if price_match else None)
+            # Algunas tiendas exponen el precio en meta tags
+            price = (normalize_price_string(extract_meta_value(text, 'og:price:amount'))
+                     or normalize_price_string(extract_meta_value(text, 'product:price:amount'))
+                     or normalize_price_string(extract_meta_value(text, 'og:price')))
+            if not price:
+                price_match = re.search(r'[\$€¥]\s*\d+[\d,\.]*', text)
+                price = normalize_price_string(price_match.group(0) if price_match else None)
 
-    if not description:
-        description = extract_meta_value(text, 'description')
+        if not description:
+            description = extract_meta_value(text, 'description')
 
-    if image_url and image_url.startswith('/'):
-        image_url = urljoin(url, image_url)
+        if image_url and image_url.startswith('/'):
+            image_url = urljoin(url, image_url)
 
-    return {
-        'name': product_name,
-        'price': price,
-        'image_url': image_url,
-        'description': description,
-        'store_name': store_name or urlparse(url).netloc,
-        'product_url': url
-    }
+        result = {
+            'name': product_name,
+            'price': price,
+            'image_url': image_url,
+            'description': description,
+            'store_name': store_name or urlparse(url).netloc,
+            'product_url': url
+        }
+        result['_blocked'] = blocked_signal
+        return result
+
+    server_text = (await fetch_url_with_retry(url)).text
+    data = parse(server_text)
+
+    # Fallback con navegador headless: tiendas que bloquean server-side
+    # (MercadoLibre, Amazon, Walmart...) o SPA sin contenido en el HTML inicial.
+    # Se dispara si falta nombre O precio (el shell server-side a veces trae el
+    # <title> pero no el precio, p.ej. MercadoLibre).
+    if (not data.get('name') or data.get('_blocked') or not data.get('price')) and BROWSER_URL:
+        rendered = await browser_render(url, wait_ms=5000)
+        if rendered:
+            data2 = parse(rendered)
+            if data2.get('name'):
+                data = data2
+
+    if not data.get('name'):
+        blocked = detect_antiblock(server_text)
+        if blocked:
+            raise ValueError(
+                f"La tienda solicitó verificación anti-bot (detectado: '{blocked}'). "
+                f"Prueba con otra tienda o agrega el producto manualmente."
+            )
+    data.pop('_blocked', None)
+    return data
+
 
 
 def connector_from_config(config: dict) -> SimpleNamespace:
@@ -651,6 +671,33 @@ STORE_ALIASES = {
 
 SORIANA_SEARCH_URL = 'https://www.soriana.com/on/demandware.store/Sites-Soriana-Site/es_MX/Search-Show'
 SORIANA_PRODUCT_AJAX = 'https://www.soriana.com/on/demandware.store/Sites-Soriana-Site/es_MX/Product-Show'
+
+# Navegador headless (Playwright) para tiendas que bloquean server-side
+BROWSER_URL = os.getenv('BROWSER_URL', 'http://browser:8580/render')
+
+
+async def browser_render(url: str, wait_ms: int = 4000, selector=None) -> Optional[str]:
+    """Renderiza una URL en un navegador headless y devuelve su HTML.
+
+    Usado como fallback cuando una tienda devuelve anti-bot o una SPA sin
+    contenido server-side (Walmart/Akamai, MercadoLibre, Smart, Cyberpuerta...).
+    Devuelve None si el servicio de navegador no está disponible.
+    """
+    if not BROWSER_URL:
+        return None
+    try:
+        payload = {'url': url, 'wait_ms': wait_ms}
+        if selector:
+            payload['selector'] = selector
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            r = await client.post(BROWSER_URL, json=payload)
+            r.raise_for_status()
+            data = r.json()
+            if data.get('ok') and data.get('html'):
+                return data['html']
+    except Exception:
+        pass
+    return None
 
 
 async def _search_soriana_products(q: str, limit: int = 8) -> List[dict]:
@@ -738,6 +785,70 @@ def _first_positive_price(html_text: str) -> Optional[float]:
     return None
 
 
+def _extract_mercadolibre_products(html_text: str, limit: int = 8) -> List[dict]:
+    """Driver MercadoLibre: items poly-component con nombre (alt), precio, imagen y URL."""
+    results = []
+    seen = set()
+    # Cada item de resultados tiene un <img class="poly-component__picture" ... alt="Nombre" ... src="...">
+    for m in re.finditer(r'<img[^>]*class="poly-component__picture"[^>]*alt="([^"]+)"', html_text):
+        start = m.start()
+        window = html_text[start:start + 4000]
+        img = re.search(r'src="(https://http2\.mlstatic\.com/[^"]+)"', window)
+        frac = re.search(r'class="[^"]*andes-money-amount__fraction[^"]*"[^>]*>([\d.,]+)<', window)
+        cents = re.search(r'class="[^"]*andes-money-amount__cents[^"]*"[^>]*>(\d+)<', window)
+        link = re.search(r'href="(https://www\.mercadolibre\.com\.mx/[^"]+)"', window)
+        if not frac or not link:
+            continue
+        price = frac.group(1)
+        if cents:
+            price += '.' + cents.group(1)
+        # URL canónica: sin query de tracking ni fragmento
+        url = re.sub(r'[?#].*$', '', link.group(1))
+        if url in seen:
+            continue
+        seen.add(url)
+        results.append({
+            'name': html.unescape(m.group(1).strip()),
+            'price': _first_positive_price(f'${price}') if price else None,
+            'image_url': img.group(1) if img else None,
+            'url': url,
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _extract_amazon_products(html_text: str, limit: int = 8) -> List[dict]:
+    """Driver Amazon MX: items s-result-item por data-asin con título, precio e imagen."""
+    results = []
+    seen = set()
+    for m in re.finditer(r'data-asin="([A-Z0-9]{10})"', html_text):
+        asin = m.group(1)
+        if asin in seen:
+            continue
+        seen.add(asin)
+        start = m.start()
+        window = html_text[start:start + 6000]
+        # Primer h2 > span del bloque (evita el header de resultados)
+        name = re.search(r'<h2[^>]*>\s*<span[^>]*>([^<]{4,150})</span>', window)
+        price = re.search(r'class="a-offscreen">\$([\d.,]+)<', window)
+        img = re.search(r'class="s-image"[^>]*src="([^"]+)"', window)
+        link = re.search(r'href="([^"]*/dp/[A-Z0-9]{10}[^"]*)"', window)
+        if not name and not price:
+            continue
+        dp_path = re.sub(r'[?#].*$', '', link.group(1)) if link else f'/dp/{asin}'
+        url = f'https://www.amazon.com.mx{dp_path}'
+        results.append({
+            'name': html.unescape(name.group(1).strip()) if name else None,
+            'price': _first_positive_price(f'${price.group(1)}') if price else None,
+            'image_url': img.group(1) if img else None,
+            'url': url,
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
 async def search_products_in_store(store: str, q: str, limit: int = 8, db=None) -> List[dict]:
     """Busca productos con precio dentro de una tienda soportada.
 
@@ -778,6 +889,8 @@ async def _search_generic_connector(connector, q: str, limit: int = 8) -> List[d
 
     Soporta respuestas JSON (paths) o HTML (selector de item), y precio por
     producto vía price_pid_url (SFCC-style) cuando la lista no trae precios.
+    Para tiendas con estructura conocida (MercadoLibre, Amazon) usa un driver
+    de extracción especializado.
     """
     from urllib.parse import quote, urlparse
 
@@ -803,21 +916,38 @@ async def _search_generic_connector(connector, q: str, limit: int = 8) -> List[d
         response.raise_for_status()
         text = response.text
 
-    resp_type = connector.search_response_type or 'json'
-    if resp_type == 'json':
-        results = extract_products_from_response('json', text, {
-            'json_list_path': connector.search_list_path,
-            'json_name_path': connector.search_name_path,
-            'json_price_path': connector.search_price_path,
-            'json_preview_path': connector.search_image_path,
-            'json_large_path': connector.search_image_path,
-            'json_url_path': connector.search_url_path,
-        })
-    else:
-        results = extract_products_from_response('html', text, {
+    domain = (connector.domain_match or connector.name or '').lower()
+
+    def extract_from(html_text):
+        # Drivers especializados por estructura conocida (funcionan con el DOM
+        # renderizado y con el HTML server-side cuando existe)
+        if 'mercadolibre' in domain:
+            return _extract_mercadolibre_products(html_text, limit)
+        if 'amazon' in domain:
+            return _extract_amazon_products(html_text, limit)
+        resp_type = connector.search_response_type or 'json'
+        if resp_type == 'json':
+            return extract_products_from_response('json', html_text, {
+                'json_list_path': connector.search_list_path,
+                'json_name_path': connector.search_name_path,
+                'json_price_path': connector.search_price_path,
+                'json_preview_path': connector.search_image_path,
+                'json_large_path': connector.search_image_path,
+                'json_url_path': connector.search_url_path,
+            })
+        return extract_products_from_response('html', html_text, {
             'image_selector': connector.search_item_selector,
             'image_attribute': connector.search_image_attribute,
         })
+
+    results = extract_from(text)
+
+    # Fallback con navegador headless si el server-side no devuelve nada
+    # (SPAs sin contenido, o tiendas con anti-bot).
+    if not results:
+        rendered = await browser_render(search_url, selector=connector.search_item_selector)
+        if rendered:
+            results = extract_from(rendered)
     results = results[:limit]
 
     # Precios por pid (tiendas que cargan precio por AJAX por producto)
