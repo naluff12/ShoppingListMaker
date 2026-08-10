@@ -2,6 +2,9 @@ from sqlalchemy import func, desc, or_
 from sqlalchemy.orm import Session, joinedload
 from typing import Optional
 from datetime import datetime, date, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 from . import models, schemas, security
 from .utils import calc_price_from_base
 
@@ -989,6 +992,15 @@ def create_notification_for_family_members(db: Session, family_id: int, message:
             )
             db.add(notification)
     db.commit()
+    # Enviar notificaciones push a todos los miembros (excepto creador)
+    try:
+        from .services.push_service import send_push_to_family
+        sent, total = send_push_to_family(db, family_id, message, link, created_by_id)
+        if sent > 0:
+            logger.info(f"Push notifications sent to family {family_id}: {sent}/{total}")
+    except Exception as e:
+        logger.warning(f"Could not send push notifications: {e}")
+        # No fallar la operación principal si las push fallan
 
 def get_notifications_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100):
     query = db.query(models.Notification).filter(models.Notification.user_id == user_id).order_by(models.Notification.created_at.desc())

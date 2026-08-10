@@ -34,7 +34,12 @@ class Handler(BaseHTTPRequestHandler):
             if not url:
                 resp = {"ok": False, "error": "url required"}
             else:
-                ctx = _browser.new_context(user_agent=UA, locale="es-MX")
+                ctx = _browser.new_context(
+                    user_agent=UA, locale="es-MX",
+                    viewport={"width": 1280, "height": 800},
+                    timezone_id="America/Mexico_City",
+                    extra_http_headers={"Accept-Language": "es-MX,es;q=0.9"},
+                )
                 page = ctx.new_page()
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=30000)
@@ -45,6 +50,12 @@ class Handler(BaseHTTPRequestHandler):
                             pass
                     else:
                         page.wait_for_timeout(wait_ms)
+                    # Scroll al final para disparar loading="lazy" de imágenes
+                    try:
+                        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                        page.wait_for_timeout(1200)
+                    except Exception:
+                        pass
                     html = page.content()
                     title = page.title()
                     resp = {"ok": True, "html": html, "title": title}

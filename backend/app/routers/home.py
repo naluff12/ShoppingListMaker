@@ -12,6 +12,65 @@ from ..websockets import manager
 router = APIRouter(tags=["home", "notifications", "chat"])
 
 
+@router.get("/notifications/vapid-public-key")
+def get_vapid_public_key(current_user: models.User = Depends(get_current_user)):
+    """Devuelve la clave pública necesaria para suscribir este navegador a Web Push."""
+    import os
+    return {"public_key": os.getenv("VAPID_PUBLIC_KEY", "")}
+
+
+@router.post("/notifications/subscribe", response_model=schemas.PushSubscriptionResponse)
+def subscribe_push(
+    payload: schemas.PushSubscriptionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Registra o actualiza una suscripción push para el usuario/dispositivo."""
+    subscription = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == payload.endpoint
+    ).first()
+    if subscription:
+        subscription.user_id = current_user.id
+        subscription.p256dh = payload.keys.p256dh
+        subscription.auth = payload.keys.auth
+    else:
+        db.add(models.PushSubscription(
+            user_id=current_user.id,
+            endpoint=payload.endpoint,
+            p256dh=payload.keys.p256dh,
+            auth=payload.keys.auth,
+        ))
+    db.commit()
+    return {"subscribed": True}
+
+
+@router.delete("/notifications/subscribe", response_model=schemas.PushSubscriptionResponse)
+def unsubscribe_push(
+    payload: schemas.PushSubscriptionCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    subscription = db.query(models.PushSubscription).filter(
+        models.PushSubscription.endpoint == payload.endpoint,
+        models.PushSubscription.user_id == current_user.id,
+    ).first()
+    if subscription:
+        db.delete(subscription)
+        db.commit()
+    return {"subscribed": False}
+
+
+@router.get("/notifications/push-status")
+def push_status(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    count = db.query(models.PushSubscription).filter(
+        models.PushSubscription.user_id == current_user.id
+    ).count()
+    return {"subscribed": count > 0}
+
+
 # --- HOME / HISTORIAL ---
 @router.get("/home/last-lists", response_model=List[schemas.ShoppingListResponse])
 def get_last_lists(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):

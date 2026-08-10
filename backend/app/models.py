@@ -43,6 +43,7 @@ class User(Base):
     blame = relationship("Blame", back_populates="user")
     items_creados = relationship("ListItem", back_populates="creado_por")
     notifications = relationship("Notification", foreign_keys='[Notification.user_id]', back_populates="user")
+    push_subscriptions = relationship("PushSubscription", back_populates="user", cascade="all, delete-orphan")
 
 class Calendar(Base):
     __tablename__ = 'calendars'
@@ -317,4 +318,18 @@ class StoreConnectorConfig(Base):
     is_active = Column(Boolean, default=True)
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, default=tz_util.now)
+
+
+class PushSubscription(Base):
+    """Suscripción Web Push asociada a un usuario y dispositivo."""
+    __tablename__ = 'push_subscriptions'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(Text, nullable=False)
+    auth = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=tz_util.now)
+
+    user = relationship("User", back_populates="push_subscriptions")
 

@@ -13,7 +13,11 @@ export default defineConfig(({ mode }) => {
         plugins: [
             react(),
             VitePWA({
+                strategies: 'injectManifest',
+                srcDir: 'src',
+                filename: 'sw.js',
                 registerType: 'autoUpdate',
+                injectRegister: 'auto',
                 includeAssets: ['img_placeholder.png'],
                 manifest: {
                     name: 'Lista del Súper — compras compartidas',

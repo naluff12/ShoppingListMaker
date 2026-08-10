@@ -11,7 +11,7 @@ import asyncio
 import random
 from html.parser import HTMLParser
 from types import SimpleNamespace
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, unquote
 from typing import List, Optional
 
 import httpx
@@ -849,6 +849,57 @@ def _extract_amazon_products(html_text: str, limit: int = 8) -> List[dict]:
     return results
 
 
+def _extract_heb_products(html_text: str, limit: int = 8) -> List[dict]:
+    """Driver HEB México (Next.js): items <a href="/slug-123/p"> con nombre, precio e imagen."""
+    results = []
+    seen = set()
+    blocks = html_text.split('class="block w-full text-inherit no-underline"')
+    for block in blocks[1:]:
+        link = re.search(r'href="(/[^"]*-(\d+)/p)"', block)
+        if not link:
+            continue
+        slug_url = link.group(1)
+        if slug_url in seen:
+            continue
+        seen.add(slug_url)
+        # Nombre: primer texto con mayúscula inicial largo, o alt de imagen de producto
+        name = None
+        texts = re.findall(r'>([A-ZÁÉÍÓÚÑ][^<>]{15,90})<', block)
+        if texts:
+            name = texts[0].strip()
+        if not name:
+            alt = re.search(r'alt="([^"]{4,80})"', block)
+            if alt and 'HEB PRIME' not in alt.group(1):
+                name = alt.group(1).strip()
+        # Precio: el real está en span con clase text-gray-900 (precio actual);
+        # los demás $X.XX del bloque son precios anteriores/descuentos
+        price = None
+        price_m = re.search(r'text-gray-900">\$?\s*(\d[\d,]*\.?\d*)<', block)
+        if price_m:
+            try:
+                price = float(price_m.group(1).replace(',', ''))
+            except ValueError:
+                price = None
+        # Imagen: ctfassets o styrk.io (a través de /_next/image?url=...)
+        img = None
+        img_m = re.search(r'<img[^>]*src="(https://[^"]*(?:ctfassets|styrk\.io)[^"]*)"[^>]*>', block)
+        if img_m:
+            img = html.unescape(img_m.group(1))
+            # Des-URL-encodear el ?url= interno de _next/image si aplica
+            m2 = re.search(r'url=([^&]+)', img)
+            if m2:
+                img = unquote(m2.group(1))
+        results.append({
+            'name': html.unescape(name) if name else None,
+            'price': price,
+            'image_url': img,
+            'url': f'https://www.heb.com.mx{slug_url}',
+        })
+        if len(results) >= limit:
+            break
+    return results
+
+
 async def search_products_in_store(store: str, q: str, limit: int = 8, db=None) -> List[dict]:
     """Busca productos con precio dentro de una tienda soportada.
 
@@ -925,6 +976,8 @@ async def _search_generic_connector(connector, q: str, limit: int = 8) -> List[d
             return _extract_mercadolibre_products(html_text, limit)
         if 'amazon' in domain:
             return _extract_amazon_products(html_text, limit)
+        if 'heb.com' in domain:
+            return _extract_heb_products(html_text, limit)
         resp_type = connector.search_response_type or 'json'
         if resp_type == 'json':
             return extract_products_from_response('json', html_text, {
@@ -948,6 +1001,17 @@ async def _search_generic_connector(connector, q: str, limit: int = 8) -> List[d
         rendered = await browser_render(search_url, selector=connector.search_item_selector)
         if rendered:
             results = extract_from(rendered)
+    elif BROWSER_URL and any(not r.get('image_url') for r in results):
+        # Enriquecer con imágenes: el server-side a veces trae la lista pero
+        # sin imágenes (loading="lazy" requiere render del navegador, p.ej. HEB).
+        rendered = await browser_render(search_url, selector=connector.search_item_selector)
+        if rendered:
+            enriched = extract_from(rendered)
+            if enriched:
+                by_url = {r.get('url'): r for r in enriched if r.get('url')}
+                for r in results:
+                    if not r.get('image_url') and r.get('url') in by_url:
+                        r['image_url'] = by_url[r['url']].get('image_url')
     results = results[:limit]
 
     # Precios por pid (tiendas que cargan precio por AJAX por producto)

@@ -58,6 +58,21 @@ def ensure_database_schema():
                 conn.execute(text('ALTER TABLE image_search_configs ADD COLUMN json_url_path VARCHAR(100) NULL'))
             conn.commit()
 
+    if inspector.has_table('push_subscriptions'):
+        columns = [c['name'] for c in inspector.get_columns('push_subscriptions')]
+        with engine.connect() as conn:
+            if 'user_id' not in columns:
+                conn.execute(text('ALTER TABLE push_subscriptions ADD COLUMN user_id INTEGER NOT NULL'))
+            if 'endpoint' not in columns:
+                conn.execute(text('ALTER TABLE push_subscriptions ADD COLUMN endpoint TEXT NOT NULL'))
+            if 'p256dh' not in columns:
+                conn.execute(text('ALTER TABLE push_subscriptions ADD COLUMN p256dh TEXT NOT NULL'))
+            if 'auth' not in columns:
+                conn.execute(text('ALTER TABLE push_subscriptions ADD COLUMN auth TEXT NOT NULL'))
+            if 'created_at' not in columns:
+                conn.execute(text('ALTER TABLE push_subscriptions ADD COLUMN created_at DATETIME NULL'))
+            conn.commit()
+
     if inspector.has_table('store_connector_configs'):
         columns = [c['name'] for c in inspector.get_columns('store_connector_configs')]
         with engine.connect() as conn:
@@ -200,9 +215,7 @@ def seed_default_search_engines():
 def seed_default_store_connectors():
     """Siembra los conectores de tiendas por defecto (idempotente: solo si la tabla está vacía).
 
-    Soriana queda ACTIVA con motor de búsqueda completo (SFCC + precio por pid).
-    Las demás quedan como plantillas INACTIVAS: su search_url es un punto de partida
-    para el asistente del panel de conectores (prueba la búsqueda y ajusta paths/selectores).
+    Solo las tiendas funcionales (Soriana, HEB, MercadoLibre, Amazon) se crean activas.
     """
     from .database import SessionLocal
     db = SessionLocal()
@@ -222,34 +235,16 @@ def seed_default_store_connectors():
                 price_pid_param='pid',
                 is_active=True, is_default=True,
             ),
-            # 2) Walmart MX — Akamai anti-bot; plantilla para asistente
-            dict(
-                name='Walmart', domain_match='walmart.com.mx', response_type='json',
-                json_name_path='name', json_price_path='price',
-                search_url='https://www.walmart.com.mx/search?q={{q}}',
-                search_response_type='html',
-                search_item_selector='search-result-item',
-                is_active=False, is_default=False,
-            ),
-            # 3) Smart — plantilla (URL a confirmar con asistente)
-            dict(
-                name='Smart', domain_match='smart.com.mx', response_type='json',
-                json_name_path='name', json_price_path='price',
-                search_url='https://www.smart.com.mx/buscar?q={{q}}',
-                search_response_type='html',
-                search_item_selector='product-item',
-                is_active=False, is_default=False,
-            ),
-            # 4) HEB México — plantilla
+            # 2) HEB México — Next.js; búsqueda real en /search?q= (driver _extract_heb_products)
             dict(
                 name='HEB México', domain_match='heb.com.mx', response_type='json',
                 json_name_path='name', json_price_path='price',
-                search_url='https://www.heb.com.mx/busqueda?ft={{q}}',
+                search_url='https://www.heb.com.mx/search?q={{q}}',
                 search_response_type='html',
-                search_item_selector='product-tile',
-                is_active=False, is_default=False,
+                search_item_selector='block w-full text-inherit no-underline',
+                is_active=True, is_default=False,
             ),
-            # 5) MercadoLibre MX — HTML renderizado por JS: activo con driver + navegador headless
+            # 3) MercadoLibre MX — HTML renderizado por JS: activo con driver + navegador headless
             dict(
                 name='MercadoLibre', domain_match='mercadolibre.com.mx', response_type='json',
                 json_name_path='title', json_price_path='price', json_image_path='thumbnail',
@@ -259,7 +254,7 @@ def seed_default_store_connectors():
                 search_url_path='permalink',
                 is_active=True, is_default=False,
             ),
-            # 6) Amazon MX — HTML renderizado (intermitente): driver por data-asin + navegador
+            # 4) Amazon MX — HTML renderizado (intermitente): driver por data-asin + navegador
             dict(
                 name='Amazon México', domain_match='amazon.com.mx', response_type='json',
                 json_name_path='title', json_price_path='price',
@@ -268,15 +263,7 @@ def seed_default_store_connectors():
                 search_item_selector='s-result-item',
                 is_active=True, is_default=False,
             ),
-            # 7) Cyberpuerta — plantilla (tech)
-            dict(
-                name='Cyberpuerta', domain_match='cyberpuerta.mx', response_type='json',
-                json_name_path='name', json_price_path='price',
-                search_url='https://www.cyberpuerta.mx/Resultados/Listado/{{q}}',
-                search_response_type='html',
-                search_item_selector='emproduct',
-                is_active=False, is_default=False,
-            ),
+            # (Walmart, Smart, Cyberpuerta, Liverpool, Coppel, Sanborns se omiten — siempre fallan)
         ]
         for cfg in defaults:
             db.add(models.StoreConnectorConfig(**cfg))
@@ -284,6 +271,28 @@ def seed_default_store_connectors():
         logger.info("Seeded %d default store connectors.", len(defaults))
     except Exception as e:
         logger.warning("Could not seed store connectors: %s", e)
+        db.rollback()
+    finally:
+        db.close()
+
+
+def ensure_active_store_connectors():
+    """Garantiza que las tiendas funcionales (Soriana, HEB, MercadoLibre, Amazon) estén
+    activas en cada arranque, aún si la base ya estaba poblada.
+    """
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        connectors = db.query(models.StoreConnectorConfig).all()
+        functional_domains = ['soriana.com', 'heb.com.mx', 'mercadolibre.com.mx', 'amazon.com.mx']
+        for c in connectors:
+            if c.domain_match and any(func in c.domain_match.lower() for func in functional_domains):
+                if not c.is_active:
+                    logger.info(f"Activando tienda funcional: {c.name} ({c.domain_match})")
+                    c.is_active = True
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Could not enforce active store connectors: {e}")
         db.rollback()
     finally:
         db.close()
@@ -300,6 +309,7 @@ async def lifespan(app: FastAPI):
             ensure_database_schema()
             seed_default_search_engines()
             seed_default_store_connectors()
+            ensure_active_store_connectors()
             logger.info("Database tables created and schema ensured.")
             break
         except OperationalError as e:

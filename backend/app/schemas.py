@@ -1,8 +1,45 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import List, Optional, TypeVar, Generic
+from urllib.parse import urlparse
 from datetime import date, datetime
+import re
 
 T = TypeVar('T')
+
+_WEBPUSH_B64 = re.compile(r'^[A-Za-z0-9_-]+$')
+
+
+def _validate_webpush_key(value: str, field_name: str) -> str:
+    if not value or len(value) > 512 or not _WEBPUSH_B64.fullmatch(value):
+        raise ValueError(f'{field_name} no tiene un formato Web Push válido')
+    return value
+
+
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str = Field(min_length=16, max_length=256)
+    auth: str = Field(min_length=8, max_length=256)
+
+    @field_validator('p256dh', 'auth')
+    @classmethod
+    def validate_key(cls, value: str, info):
+        return _validate_webpush_key(value, info.field_name)
+
+
+class PushSubscriptionCreate(BaseModel):
+    endpoint: str = Field(min_length=20, max_length=2048)
+    keys: PushSubscriptionKeys
+
+    @field_validator('endpoint')
+    @classmethod
+    def validate_endpoint(cls, value: str) -> str:
+        parsed = urlparse(value)
+        if parsed.scheme != 'https' or not parsed.netloc:
+            raise ValueError('El endpoint push debe ser una URL HTTPS válida')
+        return value
+
+
+class PushSubscriptionResponse(BaseModel):
+    subscribed: bool
 
 class Page(BaseModel, Generic[T]):
     items: List[T]
